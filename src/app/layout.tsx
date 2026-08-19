@@ -7,6 +7,7 @@ config.autoAddCss = false;
 
 import { ThemeProvider } from "@/components/theme-provider";
 import { QueryProvider } from "@/lib/query-provider";
+import { ThemeTokens } from "@/components/theme-tokens";
 
 /**
  * The font is NOT loaded through next/font here.
@@ -36,6 +37,8 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <QueryProvider>
+            {/* Pulls colours + font from the backend onto :root. */}
+            <ThemeTokens />
             {children}
             <Toaster position="top-right" offset="80px" richColors />
           </QueryProvider>

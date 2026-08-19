@@ -5,11 +5,46 @@ Project: **event_client_single** — the portal a client lands in after signing 
 A stripped dashboard template wired to the **Event Management admin backend**.
 One module — **Event Categories** — is built end to end as the pattern. Copy it.
 
-## Design tokens
+## Design tokens — fetched from the API, not hardcoded
 
-Colour and type come from the **Website Builder**
-(`Event_Managment_Website_Builder/src/app/globals.css`) so the two portals read as one
-product:
+**Rule: colour and font always come from the backend.** Never hardcode a hex value in a
+component.
+
+```
+GET /website-builder/theme-settings
+→ primary_color, secondary_color, accent_color,
+  background_color, text_color, font_family, border_radius
+```
+
+The route sits under `optionalCompanyAuth`, so it answers without a session — which
+matters, because this panel has no login of its own.
+
+| Piece | File |
+|---|---|
+| The fetch | `src/hooks/use-theme-settings.ts` |
+| Applying it | `src/components/theme-tokens.tsx` — writes CSS variables onto `:root` |
+| Mounted | `src/app/layout.tsx`, inside `QueryProvider` |
+
+`<ThemeTokens/>` renders nothing. It sets `--primary`, `--accent`, `--background`,
+`--foreground`, `--radius` and `--app-font`, so every component keeps reading
+`bg-primary` / `text-muted-foreground` and none of them needs to know the palette is
+remote. One fetch re-skins the whole panel.
+
+Three guards worth keeping when you extend it:
+
+- **Malformed values are ignored, not written.** A null or a non-hex leaves the CSS
+  fallback standing rather than blanking the token.
+- **`border_radius` must carry a unit.** A bare `8` would produce `--radius: 8` and
+  silently break every corner in the app, so the value is unit-checked.
+- **An unknown `font_family` falls back to the system stack.** Writing an arbitrary family
+  name for which no `@font-face` exists lands the whole UI on a serif.
+
+### The fallback palette
+
+The values in `src/app/globals.css` are the **fallback** — what renders for the moment
+before the request lands, and if it never does. They are kept in step with the **Website
+Builder** (`Event_Managment_Website_Builder/src/app/globals.css`) so the two portals read
+as one product:
 
 | Token | Value |
 |---|---|
