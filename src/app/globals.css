@@ -1,11 +1,27 @@
 @import "tailwindcss";
 
+/* Inter, self-hosted — the same variable file and @font-face the Website
+   Builder uses, so the two portals render identical type. Self-hosted rather
+   than next/font so the declaration is byte-identical across both apps. */
+@font-face {
+  font-family: "Inter";
+  src: url("/fonts/InterVariable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
 @plugin "tailwindcss-animate";
 
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --font-poppins: var(--font-poppins);
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -45,74 +61,98 @@
 }
 
 :root {
-  --background: hsl(225 15% 96%);
-  --foreground: hsl(222.2 84% 4.9%);
-  --card: hsl(0 0% 100%);
-  --card-foreground: hsl(222.2 84% 4.9%);
-  --popover: hsl(0 0% 100%);
-  --popover-foreground: hsl(222.2 84% 4.9%);
-  --primary: hsl(228 64% 51%);
-  --primary-foreground: hsl(210 40% 98%);
-  --secondary: hsl(210 40% 96.1%);
-  --secondary-foreground: hsl(222.2 47.4% 11.2%);
-  --muted: hsl(210 40% 96.1%);
-  --muted-foreground: hsl(215.4 16.3% 46.9%);
-  --accent: hsl(210 40% 96.1%);
-  --accent-foreground: hsl(222.2 47.4% 11.2%);
-  --destructive: hsl(0 84.2% 60.2%);
-  --destructive-foreground: hsl(210 40% 98%);
-  --border: hsl(214.3 32% 91%);
-  --input: hsl(214.3 32% 91%);
-  --ring: hsl(228 64% 51%);
-  --chart-1: hsl(12 76% 61%);
-  --chart-2: hsl(173 58% 39%);
-  --chart-3: hsl(197 37% 24%);
-  --chart-4: hsl(43 74% 66%);
-  --chart-5: hsl(27 87% 67%);
-  --radius: 0.75rem;
-  --sidebar: hsl(0 0% 100%);
-  --sidebar-foreground: hsl(240 5.3% 26.1%);
-  --sidebar-primary: hsl(240 5.9% 10%);
-  --sidebar-primary-foreground: hsl(0 0% 98%);
-  --sidebar-accent: hsl(240 4.8% 95.9%);
-  --sidebar-accent-foreground: hsl(240 5.9% 10%);
-  --sidebar-border: hsl(240 5.9% 90%);
-  --sidebar-ring: hsl(217.2 91.2% 59.8%);
+  /* ── Website Builder palette (src/app/globals.css there) ──────────────────
+     Values copied verbatim so this portal and the builder are visually one
+     product. Change them here and nowhere else. */
+  --brand: #2457d6;              /* --color-primary */
+  --brand-hover: #1e46b5;        /* --color-primary-hover */
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --info: #0891b2;
+
+  --background: #f6f8fb;         /* --color-background */
+  --foreground: #0f172a;         /* --color-text */
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+  --primary: #2457d6;
+  --primary-foreground: #ffffff;
+  --secondary: #f1f5f9;
+  --secondary-foreground: #0f172a;
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;   /* --color-text-secondary */
+  --accent: #0f9f8f;             /* --color-accent (teal) */
+  --accent-foreground: #ffffff;
+  --destructive: #ef4444;        /* --color-danger */
+  --destructive-foreground: #ffffff;
+  --border: #e2e8f0;             /* --color-border */
+  --input: #e2e8f0;
+  --ring: #2457d6;
+
+  --chart-1: #2457d6;
+  --chart-2: #0f9f8f;
+  --chart-3: #f59e0b;
+  --chart-4: #0891b2;
+  --chart-5: #8b5cf6;
+
+  /* Builder radii: card 6px, button 6px, input 4px. --radius drives the
+     shadcn scale, so lg=6px keeps buttons and cards on the builder's corner. */
+  --radius: 6px;
+
+  --sidebar: #ffffff;
+  --sidebar-foreground: #334155;
+  --sidebar-primary: #2457d6;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #eef2fb;
+  --sidebar-accent-foreground: #2457d6;
+  --sidebar-border: #e2e8f0;
+  --sidebar-ring: #2457d6;
 }
 
 .dark {
-  --background: hsl(222.2 84% 4.9%);
-  --foreground: hsl(210 40% 98%);
-  --card: hsl(222.2 84% 4.9%);
-  --card-foreground: hsl(210 40% 98%);
-  --popover: hsl(222.2 84% 4.9%);
-  --popover-foreground: hsl(210 40% 98%);
-  --primary: hsl(228 64% 51%);
-  --primary-foreground: hsl(210 40% 98%);
-  --secondary: hsl(217.2 32.6% 17.5%);
-  --secondary-foreground: hsl(210 40% 98%);
-  --muted: hsl(217.2 32.6% 17.5%);
-  --muted-foreground: hsl(215 20.2% 65.1%);
-  --accent: hsl(217.2 32.6% 17.5%);
-  --accent-foreground: hsl(210 40% 98%);
-  --destructive: hsl(0 62.8% 30.6%);
-  --destructive-foreground: hsl(210 40% 98%);
-  --border: hsl(217.2 32.6% 17.5%);
-  --input: hsl(217.2 32.6% 17.5%);
-  --ring: hsl(228 64% 51%);
-  --chart-1: hsl(220 70% 50%);
-  --chart-2: hsl(160 60% 45%);
-  --chart-3: hsl(30 80% 55%);
-  --chart-4: hsl(280 65% 60%);
-  --chart-5: hsl(340 75% 55%);
-  --sidebar: hsl(240 5.9% 10%);
-  --sidebar-foreground: hsl(240 4.8% 95.9%);
-  --sidebar-primary: hsl(224.3 76.3% 48%);
-  --sidebar-primary-foreground: hsl(0 0% 100%);
-  --sidebar-accent: hsl(240 3.7% 15.9%);
-  --sidebar-accent-foreground: hsl(240 4.8% 95.9%);
-  --sidebar-border: hsl(240 3.7% 15.9%);
-  --sidebar-ring: hsl(217.2 91.2% 59.8%);
+  /* The builder is light-only; these keep the same hues working on a dark
+     ground rather than inventing a second brand. */
+  --brand: #5b83ea;
+  --brand-hover: #7396ee;
+  --success: #4ade80;
+  --warning: #fbbf24;
+  --info: #22d3ee;
+
+  --background: #0b1120;
+  --foreground: #e2e8f0;
+  --card: #111a2e;
+  --card-foreground: #e2e8f0;
+  --popover: #111a2e;
+  --popover-foreground: #e2e8f0;
+  --primary: #5b83ea;
+  --primary-foreground: #0b1120;
+  --secondary: #1c2740;
+  --secondary-foreground: #e2e8f0;
+  --muted: #1c2740;
+  --muted-foreground: #94a3b8;   /* --color-text-muted */
+  --accent: #2bbfae;
+  --accent-foreground: #0b1120;
+  --destructive: #f87171;
+  --destructive-foreground: #0b1120;
+  --border: #23304d;
+  --input: #23304d;
+  --ring: #5b83ea;
+
+  --chart-1: #5b83ea;
+  --chart-2: #2bbfae;
+  --chart-3: #fbbf24;
+  --chart-4: #22d3ee;
+  --chart-5: #a78bfa;
+
+  --sidebar: #111a2e;
+  --sidebar-foreground: #cbd5e1;
+  --sidebar-primary: #5b83ea;
+  --sidebar-primary-foreground: #0b1120;
+  --sidebar-accent: #1c2740;
+  --sidebar-accent-foreground: #e2e8f0;
+  --sidebar-border: #23304d;
+  --sidebar-ring: #5b83ea;
 }
 
 @layer base {
@@ -122,10 +162,10 @@
 
   body {
     @apply bg-background text-foreground;
-    font-family: var(--font-poppins), sans-serif !important;
-    font-weight: 500;
-    -webkit-font-smoothing: subpixel-antialiased;
-    -moz-osx-font-smoothing: auto;
+    font-family: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-weight: 400;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   button,

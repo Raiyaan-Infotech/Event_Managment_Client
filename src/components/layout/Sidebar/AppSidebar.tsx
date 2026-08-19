@@ -2,25 +2,9 @@
 
 import * as React from "react"
 import Link from "next/link"
-import Image from "next/image"
 import { usePathname } from "next/navigation"
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
-import {
-    faDesktop,
-    faChartBar,
-    faPaperPlane,
-    faAt,
-    faDollarSign,
-    faUsers,
-    faExclamationCircle,
-    faBriefcase,
-    faThLarge,
-    faCog,
-    faLock,
-    faLifeRing,
-    faChevronDown,
-    faCalendarAlt,
-} from "@fortawesome/free-solid-svg-icons"
+import { faChevronDown, faGift, faCrown, faHeadset } from "@fortawesome/free-solid-svg-icons"
 
 import {
     Collapsible,
@@ -39,14 +23,21 @@ import {
     SidebarMenuSubButton,
     SidebarMenuSubItem,
     SidebarGroup,
-    SidebarGroupLabel,
     useSidebar,
 } from "@/components/ui/sidebar"
-import { Card, CardContent } from "@/components/ui/card"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-
+import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 import { navMain } from "@/lib/navigation"
 
+/**
+ * Client portal sidebar.
+ *
+ * Two differences from the template's version, both driven by the design:
+ *  - Items are flat by default. Only an entry that actually has children gets
+ *    a chevron and a collapsible; the template rendered a chevron on every row
+ *    including ones with nothing to expand.
+ *  - The footer carries the upgrade and help cards, hidden when collapsed.
+ */
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     const pathname = usePathname()
     const { state } = useSidebar()
@@ -54,87 +45,128 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     const [openMenu, setOpenMenu] = React.useState<string | null>(null)
     const [mounted, setMounted] = React.useState(false)
 
-    React.useEffect(() => {
-        setMounted(true)
-    }, [])
+    React.useEffect(() => setMounted(true), [])
+    if (!mounted) return null
 
-    if (!mounted) {
-        return null
-    }
+    const isActive = (url: string) => pathname === url
 
     return (
-        <Sidebar collapsible="icon" className="border-r border-border/50 bg-sidebar" {...props}>
-            <SidebarHeader className={`sticky top-0 z-50 h-[56px] border-b border-border/50 flex flex-col justify-center bg-sidebar/95 backdrop-blur-sm transition-all duration-300 ${isCollapsed ? "px-1.5" : "pl-3 pr-4"}`}>
-                <Link href="/dashboard" className={`flex items-center no-underline relative w-full h-10 overflow-hidden ${isCollapsed ? "justify-center" : "justify-start"}`}>
-                    {/* Logo (Visible when collapsed) */}
-                    <div className={`h-9 w-9 shrink-0 border-none rounded-sm overflow-hidden shadow-[0_4px_12px_rgba(52,84,209,0.3)] relative transition-all duration-300 flex items-center justify-center
-                        ${isCollapsed ? "opacity-100 scale-100 translate-x-0 rotate-0" : "opacity-0 scale-50 -translate-x-10 -rotate-12 absolute"}`}>
-                        <Image
-                            src="/ra_logo.png"
-                            alt="Logo"
-                            fill
-                            priority
-                            className="object-cover rounded-none"
-                        />
-                    </div>
-
-                    {/* Text (Visible when expanded) */}
-                    <div className={`flex flex-col transition-all duration-300 h-full justify-center whitespace-nowrap
-                        ${!isCollapsed ? "opacity-100 translate-x-0" : "opacity-0 translate-x-10 absolute pointer-events-none"}`}>
-                        <h1 className="text-[19px] font-extrabold tracking-tight text-sidebar-foreground m-0 p-0 leading-none">
-                            Raiyaan Infotech
-                        </h1>
-                        <p className="text-[10px] font-bold uppercase tracking-[1px] text-muted-foreground m-0 p-0 mt-1">
-                            Admin Panel
-                        </p>
-                    </div>
+        <Sidebar collapsible="icon" className="border-r border-border bg-sidebar" {...props}>
+            <SidebarHeader
+                className={cn(
+                    "sticky top-0 z-50 h-[64px] border-b border-border flex flex-col justify-center bg-sidebar",
+                    isCollapsed ? "px-1.5" : "px-4"
+                )}
+            >
+                <Link
+                    href="/dashboard"
+                    className={cn("flex items-center gap-2.5 no-underline", isCollapsed && "justify-center")}
+                >
+                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-primary text-primary-foreground shadow-sm">
+                        <FontAwesomeIcon icon={faGift} className="!size-[16px]" />
+                    </span>
+                    {!isCollapsed && (
+                        <span className="text-[17px] font-bold tracking-tight leading-none whitespace-nowrap">
+                            <span className="text-foreground">Event</span>{" "}
+                            <span className="text-primary">Invite</span>
+                        </span>
+                    )}
                 </Link>
             </SidebarHeader>
-            <SidebarContent className={`py-4 bg-sidebar transition-all duration-300 ${isCollapsed ? "px-1" : "px-4"}`}>
+
+            <SidebarContent className={cn("py-4 bg-sidebar", isCollapsed ? "px-1" : "px-3")}>
                 <SidebarGroup className="p-0">
-                    {/* <SidebarGroupLabel className="group-data-[collapsible=icon]:hidden px-3 mb-5 text-[12px] font-extrabold uppercase tracking-[1.5px] text-muted-foreground/60">
-                        Navigation
-                    </SidebarGroupLabel> */}
                     <SidebarMenu className="gap-1">
                         {navMain.map((item) => {
-                            const isGroupActive = item.items?.some((sub) => sub.url === pathname) || pathname === item.url
+                            const hasChildren = (item.items?.length ?? 0) > 0
+                            const groupActive =
+                                isActive(item.url) || item.items?.some((s) => isActive(s.url))
+
+                            const buttonClasses = cn(
+                                "h-[38px] rounded-md transition-colors !outline-none !ring-0 focus-visible:ring-0",
+                                groupActive
+                                    ? "bg-sidebar-accent text-sidebar-accent-foreground font-semibold"
+                                    : "bg-transparent text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
+                                isCollapsed ? "px-0 justify-center" : "px-3"
+                            )
+
+                            // A row with nothing to expand is a plain link — no
+                            // chevron, no collapsible, one click to navigate.
+                            if (!hasChildren) {
+                                return (
+                                    <SidebarMenuItem key={item.title}>
+                                        <SidebarMenuButton asChild tooltip={item.title} className={buttonClasses}>
+                                            <Link href={item.url} className="flex items-center gap-2.5">
+                                                {item.icon && (
+                                                    <FontAwesomeIcon
+                                                        icon={item.icon}
+                                                        className={cn(
+                                                            "!size-[15px] shrink-0",
+                                                            groupActive ? "text-primary" : "text-sidebar-foreground/60"
+                                                        )}
+                                                    />
+                                                )}
+                                                <span className="text-[13px] group-data-[collapsible=icon]:hidden">
+                                                    {item.title}
+                                                </span>
+                                            </Link>
+                                        </SidebarMenuButton>
+                                    </SidebarMenuItem>
+                                )
+                            }
 
                             return (
                                 <Collapsible
                                     key={item.title}
                                     asChild
                                     open={openMenu === item.title}
-                                    onOpenChange={(isOpen) => setOpenMenu(isOpen ? item.title : null)}
+                                    onOpenChange={(o) => setOpenMenu(o ? item.title : null)}
                                     className="group/collapsible"
                                 >
                                     <SidebarMenuItem>
                                         <CollapsibleTrigger asChild>
-                                            <SidebarMenuButton
-                                                tooltip={item.title}
-                                                className={`h-[34px] rounded-sm transition-all duration-200 group/btn bg-transparent hover:bg-sidebar-accent dark:hover:bg-[#1b55e2] hover:text-sidebar-accent-foreground dark:hover:text-white !outline-none !ring-0 focus-visible:ring-0 active:bg-transparent ${isGroupActive ? "text-sidebar-accent-foreground font-bold bg-sidebar-accent" : "text-sidebar-foreground/70 hover:text-sidebar-accent-foreground"} group-data-[state=open]/collapsible:text-sidebar-accent-foreground dark:group-data-[state=open]/collapsible:text-white group-data-[state=open]/collapsible:bg-sidebar-accent dark:group-data-[state=open]/collapsible:bg-[#1b55e2] ${isCollapsed ? "px-0 justify-center" : "px-3.5"}`}
-                                            >
-                                                <div className={`flex items-center justify-center ${isCollapsed ? "w-full px-1" : "gap-0.5"}`}>
-                                                    {item.icon && <FontAwesomeIcon icon={item.icon} className={`!size-[14px] transition-colors ${isGroupActive ? "text-sidebar-accent-foreground" : "text-sidebar-foreground/70 group-hover/btn:text-sidebar-accent-foreground group-data-[state=open]/collapsible:text-sidebar-accent-foreground"}`} />}
+                                            <SidebarMenuButton tooltip={item.title} className={buttonClasses}>
+                                                <div className="flex items-center gap-2.5">
+                                                    {item.icon && (
+                                                        <FontAwesomeIcon
+                                                            icon={item.icon}
+                                                            className={cn(
+                                                                "!size-[15px] shrink-0",
+                                                                groupActive ? "text-primary" : "text-sidebar-foreground/60"
+                                                            )}
+                                                        />
+                                                    )}
                                                 </div>
-                                                <span className="text-[12px] font-semibold group-data-[collapsible=icon]:hidden">{item.title}</span>
+                                                <span className="text-[13px] group-data-[collapsible=icon]:hidden">
+                                                    {item.title}
+                                                </span>
                                                 {!isCollapsed && (
-                                                    <FontAwesomeIcon icon={faChevronDown} className={`ml-auto !size-3 transition-transform duration-300 group-data-[state=open]/collapsible:rotate-180 ${isGroupActive ? "text-sidebar-accent-foreground" : "text-sidebar-foreground/70 group-data-[state=open]/collapsible:text-sidebar-accent-foreground"}`} />
+                                                    <FontAwesomeIcon
+                                                        icon={faChevronDown}
+                                                        className="ml-auto !size-3 text-sidebar-foreground/50 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180"
+                                                    />
                                                 )}
                                             </SidebarMenuButton>
                                         </CollapsibleTrigger>
                                         <CollapsibleContent>
-                                            <SidebarMenuSub className="ml-4 border-l-0 px-0 py-1 space-y-0">
-                                                {item.items?.map((subItem) => (
-                                                    <SidebarMenuSubItem key={subItem.title}>
-                                                        <SidebarMenuSubButton asChild isActive={pathname === subItem.url} className={`h-8 ${pathname === subItem.url ? "bg-sidebar-accent dark:bg-[#1b55e2]" : "bg-transparent"} hover:bg-sidebar-accent dark:hover:bg-[#1b55e2] !outline-none !ring-0 focus-visible:ring-0 active:bg-transparent rounded-sm`}>
+                                            <SidebarMenuSub className="ml-5 border-l border-border px-0 py-1">
+                                                {item.items?.map((sub) => (
+                                                    <SidebarMenuSubItem key={sub.title}>
+                                                        <SidebarMenuSubButton
+                                                            asChild
+                                                            isActive={isActive(sub.url)}
+                                                            className="h-8 rounded-md !outline-none !ring-0"
+                                                        >
                                                             <Link
-                                                                href={subItem.url}
-                                                                className={`flex items-center h-full pl-3 pr-4 py-1 !text-[12px] !font-semibold transition-all rounded-sm !outline-none !ring-0 ${pathname === subItem.url
-                                                                    ? "text-primary font-bold dark:text-white"
-                                                                    : "text-sidebar-foreground/70 hover:text-sidebar-accent-foreground dark:hover:text-white"
-                                                                    }`}
+                                                                href={sub.url}
+                                                                className={cn(
+                                                                    "flex h-full items-center pl-3 pr-3 !text-[12.5px]",
+                                                                    isActive(sub.url)
+                                                                        ? "text-primary font-semibold"
+                                                                        : "text-sidebar-foreground/70 hover:text-sidebar-accent-foreground"
+                                                                )}
                                                             >
-                                                                <span>{subItem.title}</span>
+                                                                {sub.title}
                                                             </Link>
                                                         </SidebarMenuSubButton>
                                                     </SidebarMenuSubItem>
@@ -148,20 +180,36 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     </SidebarMenu>
                 </SidebarGroup>
             </SidebarContent>
-            {/* <SidebarFooter className="p-4 group-data-[collapsible=icon]:hidden">
-                <Card className="rounded-2xl bg-slate-50 p-4 border-slate-100 shadow-none">
-                    <CardContent className="p-0 space-y-3">
-                        <div className="flex items-center gap-3">
-                            <div className="relative">
-                                <div className="h-2 w-2 rounded-full bg-emerald-500" />
-                                <div className="absolute inset-0 h-2 w-2 rounded-full bg-emerald-500 animate-ping opacity-75" />
-                            </div>
-                            <span className="text-[12px] font-bold text-slate-900">Systems Operational</span>
-                        </div>
-                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Last updated: 2 mins ago</p>
-                    </CardContent>
-                </Card>
-            </SidebarFooter> */}
+
+            <SidebarFooter className="gap-3 p-3 group-data-[collapsible=icon]:hidden">
+                <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 text-center">
+                    <span className="mx-auto grid h-9 w-9 place-items-center rounded-full bg-primary/10">
+                        <FontAwesomeIcon icon={faCrown} className="!size-[15px] text-primary" />
+                    </span>
+                    <p className="mt-2.5 text-[13px] font-bold text-foreground">Upgrade to Premium</p>
+                    <p className="mt-1 text-[11.5px] leading-snug text-muted-foreground">
+                        Unlock premium templates, advanced analytics and more.
+                    </p>
+                    <Button size="sm" className="mt-3 h-8 w-full rounded-md text-[12px] font-semibold">
+                        Upgrade Now
+                    </Button>
+                </div>
+
+                <div className="flex items-center gap-3 rounded-lg border border-border bg-secondary/60 p-3">
+                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-background">
+                        <FontAwesomeIcon icon={faHeadset} className="!size-[13px] text-primary" />
+                    </span>
+                    <div className="min-w-0">
+                        <p className="text-[12.5px] font-semibold text-foreground">Need Help?</p>
+                        <p className="text-[11.5px] text-muted-foreground">
+                            Visit{" "}
+                            <Link href="/dashboard/help" className="text-primary hover:underline">
+                                Help Center
+                            </Link>
+                        </p>
+                    </div>
+                </div>
+            </SidebarFooter>
         </Sidebar>
     )
 }

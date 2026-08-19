@@ -1,7 +1,30 @@
-# How to add a module
+# Event Client Portal — how to add a module
 
-This panel is a stripped dashboard template wired to the **Event Management admin backend**.
+Project: **event_client_single** — the portal a client lands in after signing in.
+
+A stripped dashboard template wired to the **Event Management admin backend**.
 One module — **Event Categories** — is built end to end as the pattern. Copy it.
+
+## Design tokens
+
+Colour and type come from the **Website Builder** ()
+so the two portals read as one product:
+
+| Token | Value |
+|---|---|
+| Primary |  (hover ) |
+| Accent |  |
+| Success / Warning / Danger / Info |  /  /  /  |
+| Background / Card / Border |  /  /  |
+| Text / Secondary / Muted |  /  /  |
+| Radius | 6px |
+| Font | **Inter**, self-hosted from `/public/fonts/InterVariable.woff2` |
+
+They live in  under . Change them there and nowhere else.
+
+> The font is deliberately **not** loaded via . Google serves a different Inter
+> build with different subsetting, so the two portals would not match. The 
+> block is copied verbatim from the builder.
 
 ---
 
