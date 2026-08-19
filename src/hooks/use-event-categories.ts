@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { api, ApiError, type Paginated } from '@/lib/api-client';
+import { api, ApiError, type ListResult } from '@/lib/api-client';
 
 /**
  * ── SAMPLE MODULE ────────────────────────────────────────────────────────────
@@ -56,7 +56,7 @@ export function useEventCategories(params: ListParams = {}) {
     return useQuery({
         queryKey: [...KEY, 'list', params],
         queryFn: () =>
-            api.get<Paginated<EventCategory>>(ENDPOINT, {
+            api.getList<EventCategory>(ENDPOINT, {
                 search: params.search,
                 is_active: params.is_active === '' ? undefined : params.is_active,
                 page: params.page ?? 1,
@@ -70,7 +70,12 @@ export function useEventCategories(params: ListParams = {}) {
 export function useEventCategory(id: number | null) {
     return useQuery({
         queryKey: [...KEY, 'detail', id],
-        queryFn: () => api.get<EventCategory>(`${ENDPOINT}/${id}`),
+        // getById answers { data: { eventCategory: {...} } } — the detail
+        // endpoints nest under a named key while the list ones do not.
+        queryFn: async () => {
+            const res = await api.get<{ eventCategory: EventCategory } | EventCategory>(`${ENDPOINT}/${id}`);
+            return (res as { eventCategory?: EventCategory }).eventCategory ?? (res as EventCategory);
+        },
         // Without this an id of null would fire GET /event-categories/null.
         enabled: !!id,
     });

@@ -345,7 +345,7 @@ export default function EventCategoriesPage() {
                             <p className="text-[13px] text-muted-foreground">
                                 Page <span className="font-bold text-foreground">{pagination.page}</span> of{' '}
                                 <span className="font-bold text-foreground">{pagination.totalPages}</span>
-                                <span className="hidden sm:inline"> · {pagination.total} total</span>
+                                <span className="hidden sm:inline"> · {pagination.totalItems} total</span>
                             </p>
                             <div className="flex gap-2">
                                 <Button

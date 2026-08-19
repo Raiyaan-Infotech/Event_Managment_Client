@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { ApiError } from "@/lib/api-client";
 import {
     useEventCategoryOptions,
     useEventTypeOptions,
@@ -142,8 +143,14 @@ export default function CreateEventPage() {
         });
     }, [menuRows]);
 
-    const selectedCategory = categories.data?.data.find((c) => String(c.id) === form.category_id);
-    const selectedType = types.data?.data.find((t) => String(t.id) === form.type_id);
+    // `?? []` on every list read: getList already normalises, but a render must
+    // never depend on a network response having the shape we expect.
+    const categoryRows = categories.data?.data ?? [];
+    const typeRows = types.data?.data ?? [];
+    const religionRows = religions.data?.data ?? [];
+
+    const selectedCategory = categoryRows.find((c) => String(c.id) === form.category_id);
+    const selectedType = typeRows.find((t) => String(t.id) === form.type_id);
     const selectedTheme = THEMES.find((t) => t.id === form.theme_id);
 
     const validate = (target: number) => {
@@ -249,12 +256,33 @@ export default function CreateEventPage() {
                         {/* ── Step 1 — real taxonomy ─────────────────────────── */}
                         {step === 1 && (
                             <div className="grid max-w-xl gap-5">
+                                {/* An empty dropdown with no explanation reads as a broken
+                                    form. The taxonomy endpoints require a session, and this
+                                    panel has no login of its own, so 401 is the likely
+                                    failure — say so instead of showing nothing. */}
+                                {categories.isError && (
+                                    <div className="rounded-md border border-warning/40 bg-warning/10 px-4 py-3">
+                                        <p className="text-[12.5px] font-semibold text-foreground">
+                                            {categories.error instanceof ApiError && categories.error.isAuthError
+                                                ? "You are not signed in"
+                                                : "Could not load event categories"}
+                                        </p>
+                                        <p className="mt-0.5 text-[12px] text-muted-foreground">
+                                            {categories.error instanceof ApiError && categories.error.isAuthError
+                                                ? "Event categories need a signed-in session. Sign in, then reopen this page."
+                                                : categories.error instanceof Error
+                                                    ? categories.error.message
+                                                    : "Unknown error."}
+                                        </p>
+                                    </div>
+                                )}
+
                                 <Field label="Event Category" required error={errors.category_id}>
                                     <TaxonomySelect
                                         value={form.category_id}
                                         onChange={(v) => setField("category_id", v)}
                                         loading={categories.isLoading}
-                                        rows={categories.data?.data}
+                                        rows={categoryRows}
                                         placeholder="Select event category"
                                         invalid={errors.category_id}
                                     />
@@ -265,7 +293,7 @@ export default function CreateEventPage() {
                                         value={form.type_id}
                                         onChange={(v) => setField("type_id", v)}
                                         loading={types.isLoading}
-                                        rows={types.data?.data}
+                                        rows={typeRows}
                                         disabled={!categoryId}
                                         placeholder={categoryId ? "Select event type" : "Select a category first"}
                                         invalid={errors.type_id}
@@ -277,7 +305,7 @@ export default function CreateEventPage() {
                                         value={form.religion_id}
                                         onChange={(v) => setField("religion_id", v)}
                                         loading={religions.isLoading}
-                                        rows={religions.data?.data}
+                                        rows={religionRows}
                                         disabled={!typeId}
                                         placeholder={typeId ? "Select religion" : "Select an event type first"}
                                     />

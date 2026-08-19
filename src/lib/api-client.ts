@@ -26,15 +26,26 @@ export interface ApiEnvelope<T> {
     data: T;
 }
 
-/** List endpoints add pagination alongside the rows. */
-export interface Paginated<T> {
+/**
+ * List endpoints put `pagination` as a SIBLING of `data`, not inside it:
+ *
+ *   { success, message, data: [ ...rows ], pagination: {...}, timestamp }
+ *
+ * so `api.get()` (which unwraps `.data`) hands back the plain array. Use
+ * `api.getList()` when the pagination block is needed too.
+ */
+export interface Pagination {
+    page: number;
+    limit: number;
+    totalItems: number;
+    totalPages: number;
+    hasNextPage: boolean;
+    hasPrevPage: boolean;
+}
+
+export interface ListResult<T> {
     data: T[];
-    pagination?: {
-        page: number;
-        limit: number;
-        total: number;
-        totalPages: number;
-    };
+    pagination: Pagination | null;
 }
 
 export class ApiError extends Error {
@@ -70,7 +81,7 @@ function buildUrl(path: string, query?: Query) {
     return qs ? `${url}?${qs}` : url;
 }
 
-async function request<T>(method: string, path: string, body?: unknown, query?: Query): Promise<T> {
+async function request<T>(method: string, path: string, body?: unknown, query?: Query, raw = false): Promise<T> {
     let res: Response;
     try {
         res = await fetch(buildUrl(path, query), {
@@ -97,6 +108,10 @@ async function request<T>(method: string, path: string, body?: unknown, query?: 
         throw new ApiError(res.status, message, payload);
     }
 
+    // `raw` keeps the whole envelope, because pagination lives beside `data`
+    // rather than inside it and would be thrown away by the unwrap.
+    if (raw) return payload as T;
+
     // Unwrap the { success, message, data } envelope so callers deal in data.
     const env = payload as ApiEnvelope<T> | null;
     return (env && 'data' in env ? env.data : (payload as T));
@@ -114,6 +129,24 @@ function safeParse(text: string): unknown {
 
 export const api = {
     get: <T>(path: string, query?: Query) => request<T>('GET', path, undefined, query),
+
+    /**
+     * A list endpoint, returning rows AND pagination.
+     *
+     * `data` is normalised to an array even when the endpoint answers with
+     * something unexpected, so a caller can always `.map()` without guarding —
+     * an undefined here is what produced the "cannot read 'find' of undefined"
+     * crash when this was typed as a nested object.
+     */
+    getList: async <T>(path: string, query?: Query): Promise<ListResult<T>> => {
+        const env = await request<{ data?: T[]; pagination?: Pagination }>(
+            'GET', path, undefined, query, true
+        );
+        return {
+            data: Array.isArray(env?.data) ? env.data : [],
+            pagination: env?.pagination ?? null,
+        };
+    },
     post: <T>(path: string, body?: unknown) => request<T>('POST', path, body),
     put: <T>(path: string, body?: unknown) => request<T>('PUT', path, body),
     patch: <T>(path: string, body?: unknown) => request<T>('PATCH', path, body),

@@ -8,6 +8,7 @@ config.autoAddCss = false;
 import { ThemeProvider } from "@/components/theme-provider";
 import { QueryProvider } from "@/lib/query-provider";
 import { ThemeTokens } from "@/components/theme-tokens";
+import { GlobalLoader } from "@/components/global-loader";
 
 /**
  * The font is NOT loaded through next/font here.
@@ -39,6 +40,8 @@ export default function RootLayout({
           <QueryProvider>
             {/* Pulls colours + font from the backend onto :root. */}
             <ThemeTokens />
+            {/* Global loading rule — see components/global-loader.tsx */}
+            <GlobalLoader />
             {children}
             <Toaster position="top-right" offset="80px" richColors />
           </QueryProvider>

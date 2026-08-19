@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { api, type Paginated } from '@/lib/api-client';
+import { api, type ListResult } from '@/lib/api-client';
 
 /**
  * The three-level event taxonomy plus the menu catalogue, straight from the
@@ -39,7 +39,7 @@ const ACTIVE = { is_active: 1, limit: 100, sort_by: 'sort_order', sort_order: 'A
 export function useEventCategoryOptions() {
     return useQuery({
         queryKey: ['event-categories', 'options'],
-        queryFn: () => api.get<Paginated<TaxonomyRow>>('/event-categories', { ...ACTIVE }),
+        queryFn: () => api.getList<TaxonomyRow>('/event-categories', { ...ACTIVE }),
         staleTime: 5 * 60 * 1000,
     });
 }
@@ -48,7 +48,7 @@ export function useEventTypeOptions(categoryId: number | null) {
     return useQuery({
         queryKey: ['event-types', 'options', categoryId],
         queryFn: () =>
-            api.get<Paginated<TaxonomyRow>>('/event-types', { ...ACTIVE, event_category_id: categoryId }),
+            api.getList<TaxonomyRow>('/event-types', { ...ACTIVE, event_category_id: categoryId }),
         enabled: !!categoryId,
         staleTime: 5 * 60 * 1000,
     });
@@ -58,7 +58,7 @@ export function useReligionOptions(categoryId: number | null, typeId: number | n
     return useQuery({
         queryKey: ['religions', 'options', categoryId, typeId],
         queryFn: () =>
-            api.get<Paginated<TaxonomyRow>>('/religions', {
+            api.getList<TaxonomyRow>('/religions', {
                 ...ACTIVE,
                 event_category_id: categoryId,
                 event_type_id: typeId,
@@ -83,7 +83,7 @@ export function useEventMenuOptions(params: {
     return useQuery({
         queryKey: ['event-menus', 'options', categoryId, typeId, religionId],
         queryFn: () =>
-            api.get<Paginated<EventMenuRow>>('/event-menus', {
+            api.getList<EventMenuRow>('/event-menus', {
                 ...ACTIVE,
                 event_category_id: categoryId,
                 event_type_id: typeId,
