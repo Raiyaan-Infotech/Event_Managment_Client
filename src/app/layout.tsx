@@ -7,6 +7,7 @@ import { config } from "@fortawesome/fontawesome-svg-core";
 config.autoAddCss = false;
 
 import { ThemeProvider } from "@/components/theme-provider";
+import { QueryProvider } from "@/lib/query-provider";
 
 const poppins = Poppins({
   subsets: ["latin"],
@@ -33,8 +34,10 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          {children}
-          <Toaster position="top-right" offset="80px" richColors />
+          <QueryProvider>
+            {children}
+            <Toaster position="top-right" offset="80px" richColors />
+          </QueryProvider>
         </ThemeProvider>
       </body>
     </html>

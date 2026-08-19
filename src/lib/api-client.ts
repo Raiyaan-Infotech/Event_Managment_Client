@@ -1,0 +1,121 @@
+/**
+ * The single point where this panel talks to the Event Management backend.
+ *
+ * Every hook goes through `api.get/post/put/patch/del` — nothing calls `fetch`
+ * directly. That way the base URL, the auth mode and the error shape are
+ * decided in one file instead of being re-invented per module.
+ *
+ * AUTH — this panel has no login screen of its own. The visitor signs in
+ * elsewhere and arrives here with the backend's session cookie already set, so
+ * every request sends `credentials: 'include'` and carries that cookie. Two
+ * consequences worth knowing:
+ *
+ *   1. The backend's CORS whitelist (FRONTEND_URL in the backend .env) must
+ *      contain this panel's exact origin, or the browser drops the response
+ *      before your code ever sees it. localhost:3005 is already listed.
+ *   2. A missing/expired cookie surfaces as a 401. `ApiError.isAuthError` lets
+ *      a caller show "your session has expired" rather than a generic failure.
+ */
+
+const BASE_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api/v1').replace(/\/$/, '');
+
+/** The envelope every endpoint in this backend returns. */
+export interface ApiEnvelope<T> {
+    success: boolean;
+    message?: string;
+    data: T;
+}
+
+/** List endpoints add pagination alongside the rows. */
+export interface Paginated<T> {
+    data: T[];
+    pagination?: {
+        page: number;
+        limit: number;
+        total: number;
+        totalPages: number;
+    };
+}
+
+export class ApiError extends Error {
+    readonly status: number;
+    readonly payload: unknown;
+
+    constructor(status: number, message: string, payload?: unknown) {
+        super(message);
+        this.name = 'ApiError';
+        this.status = status;
+        this.payload = payload;
+    }
+
+    /** 401/403 — not signed in, or signed in without the right permission. */
+    get isAuthError() {
+        return this.status === 401 || this.status === 403;
+    }
+}
+
+type Query = Record<string, string | number | boolean | null | undefined>;
+
+/** Drops empty values so `?search=` never reaches the backend as a real filter. */
+function buildUrl(path: string, query?: Query) {
+    const url = `${BASE_URL}${path.startsWith('/') ? path : `/${path}`}`;
+    if (!query) return url;
+
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(query)) {
+        if (value === undefined || value === null || value === '') continue;
+        params.append(key, String(value));
+    }
+    const qs = params.toString();
+    return qs ? `${url}?${qs}` : url;
+}
+
+async function request<T>(method: string, path: string, body?: unknown, query?: Query): Promise<T> {
+    let res: Response;
+    try {
+        res = await fetch(buildUrl(path, query), {
+            method,
+            // Sends the backend session cookie cross-origin. Without this the
+            // request is anonymous and every protected route answers 401.
+            credentials: 'include',
+            headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+            body: body === undefined ? undefined : JSON.stringify(body),
+        });
+    } catch {
+        // fetch only rejects on network/CORS failure — never on a 4xx/5xx.
+        throw new ApiError(0, 'Cannot reach the server. Check that the backend is running.');
+    }
+
+    // 204 and other empty bodies would make res.json() throw.
+    const text = await res.text();
+    const payload = text ? safeParse(text) : null;
+
+    if (!res.ok) {
+        const message =
+            (payload as { message?: string } | null)?.message ||
+            `Request failed (${res.status})`;
+        throw new ApiError(res.status, message, payload);
+    }
+
+    // Unwrap the { success, message, data } envelope so callers deal in data.
+    const env = payload as ApiEnvelope<T> | null;
+    return (env && 'data' in env ? env.data : (payload as T));
+}
+
+function safeParse(text: string): unknown {
+    try {
+        return JSON.parse(text);
+    } catch {
+        // An HTML error page (a proxy 502, or a wrong BASE_URL hitting a web
+        // server) would otherwise throw an unreadable SyntaxError.
+        return { message: text.slice(0, 200) };
+    }
+}
+
+export const api = {
+    get: <T>(path: string, query?: Query) => request<T>('GET', path, undefined, query),
+    post: <T>(path: string, body?: unknown) => request<T>('POST', path, body),
+    put: <T>(path: string, body?: unknown) => request<T>('PUT', path, body),
+    patch: <T>(path: string, body?: unknown) => request<T>('PATCH', path, body),
+    del: <T>(path: string) => request<T>('DELETE', path),
+};

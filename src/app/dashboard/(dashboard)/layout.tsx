@@ -1,56 +1,43 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { Suspense } from "react";
+
 import { AppSidebar } from "@/components/layout/Sidebar/AppSidebar";
 import Header from "@/components/layout/Header/Header";
 import Breadcrumb from "@/components/layout/Breadcrumb/Breadcrumb";
 import Footer from "@/components/layout/Footer/Footer";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
-import { cn } from "@/lib/utils";
 
+/**
+ * The template shipped this layout with per-route special cases (chat, email,
+ * tasks, notes, storage, calendar) that switched it into a full-height,
+ * non-scrolling shell. Those demo routes are gone, so the branching went with
+ * them — every page is now a normal scrolling document page.
+ *
+ * If a full-height app-style screen is needed later (a chat or calendar built
+ * against the real backend), reintroduce the branch here rather than fighting
+ * the scroll container from inside the page.
+ */
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const pathname = usePathname();
-  const isChatPage = pathname?.startsWith("/dashboard/apps/chat");
-  const isEmailPage = pathname?.startsWith("/dashboard/apps/email");
-  const isTasksPage = pathname?.startsWith("/dashboard/apps/tasks");
-  const isNotesPage = pathname?.startsWith("/dashboard/apps/notes");
-  const isStoragePage = pathname?.startsWith("/dashboard/apps/storage");
-  const isCalendarPage = pathname?.startsWith("/dashboard/apps/calendar");
-  const isEventCreatePage = pathname?.startsWith("/dashboard/event/create");
-  const isAppPage = isChatPage || isEmailPage || isTasksPage || isNotesPage || isStoragePage || isCalendarPage || isEventCreatePage;
-
   return (
     <SidebarProvider>
       <AppSidebar />
-      <SidebarInset
-        className={cn(
-          "bg-background flex flex-col min-w-0 transition-all duration-300",
-          isAppPage ? "h-[100dvh] overflow-hidden" : "min-h-screen"
-        )}
-      >
+      <SidebarInset className="bg-background flex flex-col min-w-0 min-h-screen transition-all duration-300">
         <Header />
-        <div
-          className={cn(
-            "flex-1 flex flex-col min-w-0 overflow-hidden",
-            !isAppPage && "overflow-y-auto"
-          )}
-        >
-          {(!isAppPage || isEventCreatePage) && (
+        <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+          {/* Breadcrumb reads useSearchParams(), which opts a page out of
+              prerendering unless it sits behind a Suspense boundary. */}
+          <Suspense fallback={<div className="h-[52px]" />}>
             <Breadcrumb />
-          )}
-          <div
-            className={cn(
-              "flex-1 min-w-0 flex flex-col min-h-0",
-              isAppPage ? "overflow-hidden" : "px-4 sm:px-6 lg:px-8 pt-6 pb-6"
-            )}
-          >
+          </Suspense>
+          <div className="flex-1 min-w-0 flex flex-col min-h-0 px-4 sm:px-6 lg:px-8 pt-6 pb-6">
             {children}
           </div>
-          {!isAppPage && <Footer />}
+          <Footer />
         </div>
       </SidebarInset>
     </SidebarProvider>
