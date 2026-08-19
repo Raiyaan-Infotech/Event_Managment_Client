@@ -7,24 +7,30 @@ One module — **Event Categories** — is built end to end as the pattern. Copy
 
 ## Design tokens
 
-Colour and type come from the **Website Builder** ()
-so the two portals read as one product:
+Colour and type come from the **Website Builder**
+(`Event_Managment_Website_Builder/src/app/globals.css`) so the two portals read as one
+product:
 
 | Token | Value |
 |---|---|
-| Primary |  (hover ) |
-| Accent |  |
-| Success / Warning / Danger / Info |  /  /  /  |
-| Background / Card / Border |  /  /  |
-| Text / Secondary / Muted |  /  /  |
+| Primary | `#2457d6` (hover `#1e46b5`) |
+| Accent | `#0f9f8f` |
+| Success / Warning / Danger / Info | `#22c55e` / `#f59e0b` / `#ef4444` / `#0891b2` |
+| Background / Card / Border | `#f6f8fb` / `#ffffff` / `#e2e8f0` |
+| Text / Secondary / Muted | `#0f172a` / `#64748b` / `#94a3b8` |
 | Radius | 6px |
 | Font | **Inter**, self-hosted from `/public/fonts/InterVariable.woff2` |
 
-They live in  under . Change them there and nowhere else.
+They live in `src/app/globals.css` under `:root`. Change them there and nowhere else —
+every component reads the token, never a literal colour.
 
-> The font is deliberately **not** loaded via . Google serves a different Inter
-> build with different subsetting, so the two portals would not match. The 
-> block is copied verbatim from the builder.
+> The font is deliberately **not** loaded via `next/font`. Google serves a different Inter
+> build with different subsetting, so the two portals would not match. The `@font-face`
+> block is copied verbatim from the builder, as is the `.woff2` file itself.
+
+> **Note on the mockup:** the supplied dashboard design was pink. It is built here in the
+> Website Builder's blue per the instruction to reuse those values. To go back to pink,
+> change `--primary` / `--ring` / `--sidebar-primary` in `:root` — nothing else.
 
 ---
 
