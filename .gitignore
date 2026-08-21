@@ -32,6 +32,9 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# ...except the template. `.env*` above swallows it silently, and an
+# .env.example nobody can commit is an .env.example that does not exist.
+!.env.example
 
 # vercel
 .vercel
