@@ -47,6 +47,7 @@ import {
     type InviteSource,
 } from "@/hooks/use-client-events";
 import { ApiError } from "@/lib/api-client";
+import { SignInPrompt } from '@/components/common/sign-in-prompt';
 
 /**
  * Analytics — built to the supplied design, backed by real tables.
@@ -201,9 +202,10 @@ export default function AnalyticsPage() {
                     </p>
                     <p className="max-w-sm text-[13px] text-muted-foreground">
                         {isAuth
-                            ? "Sign in on the website, then reopen this page."
+                            ? "Your session has ended. Sign in again to carry on."
                             : analytics.error instanceof Error ? analytics.error.message : "Unknown error."}
                     </p>
+                    {isAuth && <SignInPrompt className="mt-2" />}
                 </CardContent>
             </Card>
         );

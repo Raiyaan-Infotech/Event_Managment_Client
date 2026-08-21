@@ -29,6 +29,7 @@ import { EventQr } from "@/components/common/event-qr";
 import { useClientEvent, useDeleteEvent, type DerivedStatus } from "@/hooks/use-client-events";
 import { useGuestStats, useGuests } from "@/hooks/use-guests";
 import { ApiError } from "@/lib/api-client";
+import { SignInPrompt } from '@/components/common/sign-in-prompt';
 
 /**
  * Event Details — the View Event screen.
@@ -138,9 +139,10 @@ export function EventDetail({ eventId }: { eventId: number }) {
                     </p>
                     <p className="max-w-sm text-[13px] text-muted-foreground">
                         {isAuth
-                            ? "Sign in on the website, then reopen this page."
+                            ? "Your session has ended. Sign in again to carry on."
                             : "This event does not exist, or it is not on your account."}
                     </p>
+                    {isAuth && <SignInPrompt className="mt-2" />}
                     <Button asChild variant="outline" size="sm" className="mt-2 h-9 text-[12.5px]">
                         <Link href="/dashboard/events">Back to My Events</Link>
                     </Button>

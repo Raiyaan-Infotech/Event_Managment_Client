@@ -29,7 +29,7 @@ Two variables, both listed in [`.env.example`](.env.example).
 | Variable | Local | Live |
 |---|---|---|
 | `NEXT_PUBLIC_API_URL` | `http://localhost:5001/api/v1` | `https://event-management-admin-backend.onrender.com/api/v1` |
-| `NEXT_PUBLIC_SITE_URL` | `http://localhost:3005` | your deployed origin, no trailing slash |
+| `NEXT_PUBLIC_SITE_URL` | `http://localhost:3010` | `https://event-managment-public-website.vercel.app` |
 
 Three things that are not obvious and each cost real time:
 
@@ -39,8 +39,10 @@ Three things that are not obvious and each cost real time:
    BUILD time.** Changing them in Vercel does nothing until you redeploy. It
    also means neither may ever hold a secret — anyone can read them in
    devtools.
-3. **`NEXT_PUBLIC_SITE_URL` cannot be guessed by the app.** A stale value sends
-   invitees to the wrong host, silently.
+3. **`NEXT_PUBLIC_SITE_URL` is the tenant's WEBSITE, not this portal.** It is
+   where an unauthenticated visitor is sent to sign in and where Log out
+   returns them. Pointing it at this portal loops forever. If unset, the code
+   falls back to the live builder site rather than nowhere.
 
 ---
 

@@ -46,6 +46,7 @@ import {
     isDarkTemplate,
 } from "@/lib/event-templates";
 import { EventQr } from "@/components/common/event-qr";
+import { SignInPrompt } from '@/components/common/sign-in-prompt';
 
 /**
  * The six-step event wizard, used by BOTH routes.
@@ -417,9 +418,12 @@ export function EventWizard({
                     <p className="text-[15px] font-semibold text-foreground">Event not found</p>
                     <p className="text-[13px] text-muted-foreground">
                         {existing.error instanceof ApiError && existing.error.isAuthError
-                            ? "Sign in on the website, then reopen this page."
+                            ? "Your session has ended. Sign in again to carry on."
                             : "It may have been deleted."}
                     </p>
+                    {existing.error instanceof ApiError && existing.error.isAuthError && (
+                        <SignInPrompt className="mt-2" />
+                    )}
                     <Button asChild variant="outline" size="sm" className="mt-2 h-9 text-[12.5px]">
                         <Link href="/dashboard/events">Back to My Events</Link>
                     </Button>
@@ -538,13 +542,16 @@ export function EventWizard({
                                         </p>
                                         <p className="mt-0.5 text-[12px] text-muted-foreground">
                                             {options.error instanceof ApiError && options.error.isAuthError
-                                                ? "Sign in on the website, then reopen this page."
+                                                ? "Your session has ended. Sign in again to carry on."
                                                 : opts?.reason
                                                     ? opts.reason
                                                     : options.error instanceof Error
                                                         ? options.error.message
                                                         : "Unknown error."}
                                         </p>
+                                        {options.error instanceof ApiError && options.error.isAuthError && (
+                                            <SignInPrompt className="mt-2.5" />
+                                        )}
                                     </div>
                                 )}
 

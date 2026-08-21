@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { api, ApiError } from '@/lib/api-client';
+import { WEBSITE_URL } from '@/lib/site';
 
 /**
  * The signed-in client and what their plan allows.
@@ -163,8 +164,15 @@ export function useLogout() {
         // signed-in shell they cannot leave is the worse outcome.
         onSettled: () => {
             qc.clear();
-            const site = process.env.NEXT_PUBLIC_SITE_URL;
-            if (site) window.location.assign(site);
+            // Back to the WEBSITE, never to this portal — returning here just
+            // hits the auth gate and bounces to sign-in, which reads as the
+            // logout having failed.
+            //
+            // With no website configured there is nowhere correct to go, so the
+            // page reloads instead. The gate then renders its "not configured"
+            // screen, which names the missing variable — better than navigating
+            // to a hardcoded guess that may be a stale domain.
+            if (WEBSITE_URL) window.location.assign(WEBSITE_URL);
             else window.location.reload();
         },
         onError: (e) => {

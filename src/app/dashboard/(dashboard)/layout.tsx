@@ -7,6 +7,7 @@ import Header from "@/components/layout/Header/Header";
 import Breadcrumb from "@/components/layout/Breadcrumb/Breadcrumb";
 import Footer from "@/components/layout/Footer/Footer";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
+import { ClientAuthGate } from "@/components/common/client-auth-gate";
 
 /**
  * The template shipped this layout with per-route special cases (chat, email,
@@ -24,6 +25,10 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   return (
+    /* Nothing below renders until the backend confirms a session. Without this
+       the whole signed-in shell painted for anyone who found the URL, and each
+       panel discovered its own 401 separately — see ClientAuthGate. */
+    <ClientAuthGate>
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset className="bg-background flex flex-col min-w-0 min-h-screen transition-all duration-300">
@@ -41,5 +46,6 @@ export default function DashboardLayout({
         </div>
       </SidebarInset>
     </SidebarProvider>
+    </ClientAuthGate>
   );
 }

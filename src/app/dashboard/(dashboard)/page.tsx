@@ -42,6 +42,7 @@ import {
     type DerivedStatus,
 } from "@/hooks/use-client-events";
 import { ApiError } from "@/lib/api-client";
+import { SignInPrompt } from '@/components/common/sign-in-prompt';
 
 /**
  * Client dashboard — every number and every card on this page comes from the
@@ -241,8 +242,9 @@ export default function DashboardPage() {
                     <div>
                         <p className="text-[12.5px] font-semibold text-foreground">You are not signed in</p>
                         <p className="mt-0.5 text-[12px] text-muted-foreground">
-                            Sign in on the website, then reopen this page.
+                            Your session has ended. Sign in again to carry on.
                         </p>
+                        <SignInPrompt className="mt-2.5" />
                     </div>
                 </div>
             )}

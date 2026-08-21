@@ -55,6 +55,7 @@ import {
     type Guest, type GuestTab, type RsvpStatus, type ResponseType,
 } from "@/hooks/use-guests";
 import { ApiError } from "@/lib/api-client";
+import { SignInPrompt } from '@/components/common/sign-in-prompt';
 
 /**
  * Guests — the module's list screen.
@@ -206,8 +207,9 @@ export default function GuestsPage() {
                         <div>
                             <p className="text-[12.5px] font-semibold text-foreground">You are not signed in</p>
                             <p className="mt-0.5 text-[12px] text-muted-foreground">
-                                Sign in on the website, then reopen this page.
+                                Your session has ended. Sign in again to carry on.
                             </p>
+                            <SignInPrompt className="mt-2.5" />
                         </div>
                     </CardContent>
                 </Card>
