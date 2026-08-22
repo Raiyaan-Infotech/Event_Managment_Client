@@ -43,7 +43,18 @@ export interface ClientProfile {
     mobile: string | null;
     avatar_url: string | null;
     is_active: number;
+    /**
+     * The plan this client is assigned to, joined by `/client/me`.
+     *
+     * Null means there is no USABLE plan — either none was ever assigned, or the
+     * one it pointed at has since been deleted. `subscription_plan_id` below is
+     * what separates those two, and ClientPlanGate reports them differently.
+     * A deactivated plan is returned rather than nulled, deliberately, so the
+     * client can be told why their options disappeared.
+     */
     plan: ClientPlan | null;
+    /** The raw column. Set with `plan: null` means the plan row is gone. */
+    subscription_plan_id: number | null;
     /** Template slugs hearted on the Templates screen. Null until first saved. */
     favourite_templates: string[] | null;
 }

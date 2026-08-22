@@ -25,7 +25,6 @@ import {
     SidebarGroup,
     useSidebar,
 } from "@/components/ui/sidebar"
-import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
 import { navMain } from "@/lib/navigation"
@@ -309,9 +308,15 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                             ? "Your current subscription. What you can create is set by this plan."
                             : "Contact us to have a subscription plan assigned to your account."}
                     </p>
-                    <Button asChild size="sm" className="mt-3 h-8 w-full rounded-md text-[12px] font-semibold">
-                        <Link href="/dashboard/billing">View Plan</Link>
-                    </Button>
+                    {/*
+                      There was a "View Plan" button here linking to
+                      /dashboard/billing, which does not exist — it fell through
+                      to the [...slug] catch-all. Removed rather than pointed
+                      somewhere else: this card already shows the plan's name and
+                      what it governs, which is everything that page would have
+                      said, and a plan cannot be changed from the portal anyway.
+                      Reinstate it if a real billing screen is ever built.
+                    */}
                 </div>
 
                 <div className="flex items-center gap-3 rounded-lg border border-border bg-secondary/60 p-3">

@@ -8,6 +8,7 @@ import Breadcrumb from "@/components/layout/Breadcrumb/Breadcrumb";
 import Footer from "@/components/layout/Footer/Footer";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { ClientAuthGate } from "@/components/common/client-auth-gate";
+import { ClientPlanGate } from "@/components/common/client-plan-gate";
 
 /**
  * The template shipped this layout with per-route special cases (chat, email,
@@ -29,6 +30,9 @@ export default function DashboardLayout({
        the whole signed-in shell painted for anyone who found the URL, and each
        panel discovered its own 401 separately — see ClientAuthGate. */
     <ClientAuthGate>
+    {/* Inside the auth gate, never outside it: the plan is read off the signed-in
+        client, so there is nothing to check until a session is confirmed. */}
+    <ClientPlanGate>
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset className="bg-background flex flex-col min-w-0 min-h-screen transition-all duration-300">
@@ -46,6 +50,7 @@ export default function DashboardLayout({
         </div>
       </SidebarInset>
     </SidebarProvider>
+    </ClientPlanGate>
     </ClientAuthGate>
   );
 }
