@@ -31,6 +31,14 @@ import type { TemplateOption } from '@/hooks/use-client-portal';
 
 export interface InvitationData {
     name?: string | null;
+    /**
+     * The two host lines. When both are set the card prints them either side of
+     * an ampersand, the way the admin's own preview draws Rahul & Priya; with
+     * neither it falls back to the event name, which is what every event
+     * created before these fields existed has.
+     */
+    hostOne?: string | null;
+    hostTwo?: string | null;
     tagline?: string | null;
     description?: string | null;
     /** `YYYY-MM-DD`. */
@@ -42,6 +50,7 @@ export interface InvitationData {
     venueAddress?: string | null;
     organizer?: string | null;
     contact?: string | null;
+    footerNote?: string | null;
     /** The client's chosen accent, from wizard step 4. */
     primaryColor?: string | null;
 }
@@ -245,10 +254,19 @@ const normaliseOrder = (order?: string[] | null): ComponentKey[] => {
 export function InvitationCard({
     template,
     data,
+    componentsOverride,
+    orderOverride,
     className,
 }: {
     template: TemplateOption;
     data: InvitationData;
+    /**
+     * The client's per-event override of which components show, and in what
+     * order. Undefined or null means "inherit from the template" — which is
+     * what every event that has never been customised means.
+     */
+    componentsOverride?: Record<string, number | boolean> | null;
+    orderOverride?: string[] | null;
     className?: string;
 }) {
     /**
@@ -265,11 +283,21 @@ export function InvitationCard({
     const contentRef = useRef<HTMLDivElement | null>(null);
     const [fit, setFit] = useState(1);
 
-    const order = normaliseOrder(template.component_order);
-    // Absent means on, matching the admin preview: a key a template never stored
-    // is not the same as one deliberately switched off.
+    // The event's own order when it has one, the template's otherwise.
+    const order = normaliseOrder(orderOverride?.length ? orderOverride : template.component_order);
+
+    /**
+     * Whether a component shows.
+     *
+     * The event's override wins outright when present — it is the client's
+     * decision for this one invitation. With no override the template decides,
+     * which keeps an uncustomised event following the design as the admin edits
+     * it. Absent means on in both cases: a key that was never stored is not the
+     * same as one deliberately switched off.
+     */
     const on = (key: ComponentKey) => {
-        const v = template.components?.[key];
+        const source = componentsOverride ?? template.components;
+        const v = source?.[key];
         return v === undefined || !!Number(v);
     };
 
@@ -365,9 +393,28 @@ export function InvitationCard({
         ),
         host_names: (
             <div className="text-center leading-tight" style={{ fontFamily: headingFont }}>
-                <div className="text-[22px] font-bold italic break-words" style={{ color: nameColour }}>
-                    {data.name || 'Your Event Name'}
-                </div>
+                {/* Two hosts print on their own lines round an ampersand, as the
+                    admin preview draws them. With neither filled in, the event
+                    name stands in — which is all an older event has. */}
+                {data.hostOne || data.hostTwo ? (
+                    <>
+                        <div className="text-[20px] font-bold italic break-words" style={{ color: nameColour }}>
+                            {data.hostOne || data.hostTwo}
+                        </div>
+                        {data.hostOne && data.hostTwo && (
+                            <>
+                                <div className="my-0.5 text-[10px]" style={{ color: accentInk }}>&amp;</div>
+                                <div className="text-[20px] font-bold italic break-words" style={{ color: nameColour }}>
+                                    {data.hostTwo}
+                                </div>
+                            </>
+                        )}
+                    </>
+                ) : (
+                    <div className="text-[22px] font-bold italic break-words" style={{ color: nameColour }}>
+                        {data.name || 'Your Event Name'}
+                    </div>
+                )}
                 {data.tagline && (
                     <div className="mt-1 text-[8.5px] break-words" style={{ color: ink, opacity: 0.8, fontFamily: bodyFont }}>
                         {data.tagline}
@@ -447,9 +494,9 @@ export function InvitationCard({
             </div>
         ),
         footer_note: (
-            <div className="text-center text-[7px] tracking-wide opacity-70"
+            <div className="text-center text-[7px] tracking-wide opacity-70 break-words"
                 style={{ fontFamily: bodyFont, color: ink }}>
-                Thank you for being part of our story.
+                {data.footerNote || 'Thank you for being part of our story.'}
             </div>
         ),
         decoration_elements: (

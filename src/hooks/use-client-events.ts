@@ -61,6 +61,9 @@ export interface ClientEvent {
     religion_id: number | null;
 
     name: string;
+    /** The two host lines the invitation prints either side of an ampersand. */
+    host_one: string | null;
+    host_two: string | null;
     tagline: string | null;
     description: string | null;
     start_date: string | null;
@@ -70,6 +73,10 @@ export interface ClientEvent {
     timezone: string | null;
     venue_name: string | null;
     venue_address: string | null;
+    organizer: string | null;
+    contact_phone: string | null;
+    contact_email: string | null;
+    footer_note: string | null;
     privacy: 'private' | 'public' | 'unlisted';
     status: EventStatus;
     /** Computed server-side from the dates — this is what the UI badges. */
@@ -78,6 +85,16 @@ export interface ClientEvent {
     menu_ids: number[];
     theme_id: string | null;
     primary_color: string | null;
+
+    /**
+     * The client's per-event override of the template's component set / order.
+     *
+     * NULL on either means "inherit whatever the template says" — which is what
+     * every event created before this feature means, and why the renderer has
+     * to treat null as inheritance rather than as an empty design.
+     */
+    components: Record<string, number> | null;
+    component_order: string[] | null;
 
     /**
      * The encrypted QR payload. This string IS what the QR image encodes,

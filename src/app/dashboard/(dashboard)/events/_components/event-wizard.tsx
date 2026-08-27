@@ -10,11 +10,11 @@ import {
     faCircleInfo,
     faCalendarDays,
     faClock,
-    faDownload,
     faQrcode,
     faLink,
     faEnvelope,
     faPalette,
+    faGripVertical,
 } from "@fortawesome/free-solid-svg-icons";
 import { faWhatsapp as faWhatsappBrand } from "@fortawesome/free-brands-svg-icons";
 import { Button } from "@/components/ui/button";
@@ -46,8 +46,10 @@ import {
     templateBackground,
     isDarkTemplate,
 } from "@/lib/event-templates";
+import { downloadNodeAsImage, downloadQrAsPng, fileSlug } from "@/lib/export-invitation";
 import { EventQr } from "@/components/common/event-qr";
 import { InvitationCard } from "@/components/common/invitation-card";
+import { DownloadMenu, type DownloadKind } from "@/components/common/invitation-download";
 import { SignInPrompt } from '@/components/common/sign-in-prompt';
 
 /**
@@ -121,6 +123,8 @@ interface FormState {
     type_id: string;
     religion_id: string;
     name: string;
+    host_one: string;
+    host_two: string;
     tagline: string;
     description: string;
     start_date: string;
@@ -128,6 +132,12 @@ interface FormState {
     start_time: string;
     end_time: string;
     timezone: string;
+    venue_name: string;
+    venue_address: string;
+    organizer: string;
+    contact_phone: string;
+    contact_email: string;
+    footer_note: string;
     privacy: string;
     status: string;
     theme_id: string;
@@ -136,12 +146,40 @@ interface FormState {
 
 const EMPTY: FormState = {
     category_id: "", type_id: "", religion_id: "",
-    name: "", tagline: "", description: "",
+    name: "", host_one: "", host_two: "", tagline: "", description: "",
     start_date: "", end_date: "", start_time: "", end_time: "",
-    timezone: TIME_ZONES[0], privacy: "private", status: "upcoming",
+    timezone: TIME_ZONES[0],
+    venue_name: "", venue_address: "",
+    organizer: "", contact_phone: "", contact_email: "", footer_note: "",
+    privacy: "private", status: "upcoming",
     // Blank, not a hardcoded slug: the theme catalogue is whatever the client's
     // PLAN grants, so nothing can be preselected until those templates load.
     theme_id: "", primary_color: PRIMARY_SWATCHES[0],
+};
+
+/** The invitation components, canonical order. Mirrors the backend's list. */
+const COMPONENT_KEYS = [
+    "event_title", "host_names", "date_time", "venue", "event_qr_code", "organizer",
+    "event_photos", "contact_details", "invitation_message", "social_icons",
+    "footer_note", "decoration_elements",
+] as const;
+
+type ComponentKey = (typeof COMPONENT_KEYS)[number];
+
+
+const COMPONENT_LABELS: Record<ComponentKey, string> = {
+    event_title: "Event Title",
+    host_names: "Host / Couple Names",
+    date_time: "Date & Time",
+    venue: "Venue",
+    event_qr_code: "Event QR Code",
+    organizer: "Organizer / Hosted By",
+    event_photos: "Event Photos",
+    contact_details: "Contact Details",
+    invitation_message: "Invitation Message",
+    social_icons: "Social Media Icons",
+    footer_note: "Footer (Thanks / Note)",
+    decoration_elements: "Decoration Elements",
 };
 
 export function EventWizard({
@@ -163,6 +201,30 @@ export function EventWizard({
     const [form, setForm] = useState<FormState>(EMPTY);
     const [errors, setErrors] = useState<Record<string, boolean>>({});
     const [menus, setMenus] = useState<Record<number, boolean>>({});
+
+    /**
+     * The client's own component overrides for THIS event.
+     *
+     * Null means "inherit from the template" — the state the wizard starts in
+     * and the state Reset returns to. Only once the client actually touches a
+     * toggle or drags a chip do these become a real override that is sent, so
+     * an untouched event keeps following the template as the admin edits it.
+     */
+    const [compOverride, setCompOverride] = useState<Record<ComponentKey, boolean> | null>(null);
+    const [orderOverride, setOrderOverride] = useState<ComponentKey[] | null>(null);
+    const [dragKey, setDragKey] = useState<ComponentKey | null>(null);
+
+    /**
+     * Download.
+     *
+     * `previewWrapRef` wraps step 5's preview and `qrWrapRef` step 6's code; the
+     * capture targets `[data-invitation-card]` INSIDE the wrapper rather than
+     * the wrapper itself, so the caption and the button around it are not part
+     * of the image. Same marker the admin panel's export uses.
+     */
+    const previewWrapRef = useRef<HTMLDivElement>(null);
+    const qrWrapRef = useRef<HTMLDivElement>(null);
+    const [downloading, setDownloading] = useState<DownloadKind | null>(null);
     /** The saved row. Null until step 5 succeeds; step 6 renders from it. */
     const [created, setCreated] = useState<ClientEvent | null>(null);
 
@@ -202,6 +264,8 @@ export function EventWizard({
             type_id: row.event_type_id ? String(row.event_type_id) : "",
             religion_id: row.religion_id ? String(row.religion_id) : "",
             name: row.name ?? "",
+            host_one: row.host_one ?? "",
+            host_two: row.host_two ?? "",
             tagline: row.tagline ?? "",
             description: row.description ?? "",
             start_date: row.start_date ?? "",
@@ -211,6 +275,12 @@ export function EventWizard({
             start_time: (row.start_time ?? "").slice(0, 5),
             end_time: (row.end_time ?? "").slice(0, 5),
             timezone: row.timezone || TIME_ZONES[0],
+            venue_name: row.venue_name ?? "",
+            venue_address: row.venue_address ?? "",
+            organizer: row.organizer ?? "",
+            contact_phone: row.contact_phone ?? "",
+            contact_email: row.contact_email ?? "",
+            footer_note: row.footer_note ?? "",
             privacy: row.privacy ?? "private",
             status: row.status ?? "upcoming",
             theme_id: row.theme_id || "",
@@ -220,6 +290,22 @@ export function EventWizard({
         const picked: Record<number, boolean> = {};
         for (const id of row.menu_ids ?? []) picked[id] = true;
         setMenus(picked);
+
+        // Restore an override only if the row HAS one. A null stays null, so
+        // an event that was following its template carries on following it.
+        if (row.components) {
+            setCompOverride(
+                Object.fromEntries(
+                    COMPONENT_KEYS.map((k) => [k, !!Number(row.components?.[k] ?? 1)])
+                ) as Record<ComponentKey, boolean>
+            );
+        }
+        if (row.component_order?.length) {
+            const given = row.component_order.filter(
+                (k): k is ComponentKey => (COMPONENT_KEYS as readonly string[]).includes(k)
+            );
+            setOrderOverride([...given, ...COMPONENT_KEYS.filter((k) => !given.includes(k))]);
+        }
     }, [isEdit, existing.data]);
 
     // Functional updater — a picker or async field would otherwise write back a
@@ -339,8 +425,88 @@ export function EventWizard({
     const artwork = resolveArtwork(form.theme_id, opts?.templates);
     const selectedTheme = artwork.kind === "legacy" ? artwork.theme : undefined;
 
-    // Which components a template shows is decided inside InvitationCard, from
-    // the template's own `components` map — the wizard no longer needs to know.
+    /**
+     * What the template says, before any override — the baseline the toggles
+     * start from and the thing "Reset to template" returns to.
+     */
+    const templateComponents = useMemo(() => {
+        const map = {} as Record<ComponentKey, boolean>;
+        for (const key of COMPONENT_KEYS) {
+            const v = artwork.kind === "template" ? artwork.template.components?.[key] : undefined;
+            // Absent means on, matching every other renderer.
+            map[key] = v === undefined || !!Number(v);
+        }
+        return map;
+    }, [artwork]);
+
+    const templateOrder = useMemo(() => {
+        const given = (artwork.kind === "template" ? artwork.template.component_order ?? [] : [])
+            .filter((k): k is ComponentKey => (COMPONENT_KEYS as readonly string[]).includes(k));
+        return [...given, ...COMPONENT_KEYS.filter((k) => !given.includes(k))];
+    }, [artwork]);
+
+    // The override when the client has made one, the template otherwise.
+    const effectiveComponents = compOverride ?? templateComponents;
+    const effectiveOrder = orderOverride ?? templateOrder;
+    const hasOverride = compOverride !== null || orderOverride !== null;
+
+    /** Switching one component starts an override from the template's baseline. */
+    const toggleComponent = (key: ComponentKey, value: boolean) => {
+        setCompOverride((prev) => ({ ...(prev ?? templateComponents), [key]: value }));
+    };
+
+    /** Drop `dragKey` in front of `target`, seeding from the template's order. */
+    const moveComponent = (target: ComponentKey) => {
+        if (!dragKey || dragKey === target) return;
+        const base = [...(orderOverride ?? templateOrder)];
+        const from = base.indexOf(dragKey);
+        const to = base.indexOf(target);
+        if (from < 0 || to < 0) return;
+        base.splice(from, 1);
+        base.splice(to, 0, dragKey);
+        setOrderOverride(base);
+    };
+
+    const resetComponents = () => {
+        setCompOverride(null);
+        setOrderOverride(null);
+    };
+
+    /**
+     * Capture the invitation card, or the QR, and hand the file to the browser.
+     *
+     * The event may not be saved yet on step 5, so the filename falls back to
+     * whatever has been typed — a file called "invitation.png" tells whoever
+     * opens the downloads folder nothing.
+     */
+    const downloadInvitation = async (kind: DownloadKind) => {
+        if (downloading) return;
+        const baseName = fileSlug(created?.name ?? form.name, "invitation");
+
+        setDownloading(kind);
+        try {
+            if (kind === "qr") {
+                const wrap = qrWrapRef.current;
+                if (!wrap) throw new Error("The QR code is not ready yet.");
+                await downloadQrAsPng(wrap, baseName);
+            } else {
+                const card = (step === 6 ? qrWrapRef : previewWrapRef).current
+                    ?.querySelector<HTMLElement>("[data-invitation-card]")
+                    // Step 6 has no card of its own, so fall back to the one
+                    // step 5 rendered — it is still mounted in the same tree.
+                    ?? previewWrapRef.current?.querySelector<HTMLElement>("[data-invitation-card]");
+                if (!card) throw new Error("There is no invitation to download yet.");
+                await downloadNodeAsImage(card, baseName, kind);
+            }
+            toast.success("Invitation downloaded.");
+        } catch (error) {
+            toast.error(
+                error instanceof Error ? error.message : "Could not download the invitation."
+            );
+        } finally {
+            setDownloading(null);
+        }
+    };
 
     /**
      * If the selected template stops being on offer — the category changed, or
@@ -387,6 +553,30 @@ export function EventWizard({
             toast.error("Please fill all mandatory fields.");
             return false;
         }
+
+        /**
+         * Format checks, reported separately from the mandatory-field toast.
+         *
+         * Both are OPTIONAL fields, so an empty one is fine — this only fires on
+         * something that was typed and is malformed. The server rejects the same
+         * two, and catching it here saves a round trip that would land the user
+         * back on a step they had already left.
+         */
+        if (target > 2) {
+            const phone = form.contact_phone.trim();
+            const email = form.contact_email.trim();
+            if (phone && !/^[\d\s+()-]{6,30}$/.test(phone)) {
+                setErrors({ contact_phone: true });
+                toast.error("Please enter a valid contact number.");
+                return false;
+            }
+            if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                setErrors({ contact_email: true });
+                toast.error("Please enter a valid contact email address.");
+                return false;
+            }
+        }
+
         return true;
     };
 
@@ -401,6 +591,8 @@ export function EventWizard({
                 // '' is the "not applicable" option, which the server maps to NULL.
                 religion_id: form.religion_id ? Number(form.religion_id) : null,
                 name: form.name.trim(),
+                host_one: form.host_one.trim() || null,
+                host_two: form.host_two.trim() || null,
                 tagline: form.tagline.trim() || null,
                 description: form.description.trim() || null,
                 start_date: form.start_date,
@@ -408,6 +600,12 @@ export function EventWizard({
                 start_time: form.start_time,
                 end_time: form.end_time,
                 timezone: form.timezone,
+                venue_name: form.venue_name.trim() || null,
+                venue_address: form.venue_address.trim() || null,
+                organizer: form.organizer.trim() || null,
+                contact_phone: form.contact_phone.trim() || null,
+                contact_email: form.contact_email.trim() || null,
+                footer_note: form.footer_note.trim() || null,
                 privacy: form.privacy,
                 status: form.status,
                 // Only the menus still toggled on, and only ones the plan
@@ -416,6 +614,13 @@ export function EventWizard({
                 menu_ids: menuRows.filter((m) => menus[m.id] ?? true).map((m) => m.id),
                 theme_id: form.theme_id,
                 primary_color: form.primary_color,
+                // null means "keep following the template". Sent explicitly so
+                // that clearing an override actually clears it server-side
+                // rather than leaving the old one in place.
+                components: compOverride
+                    ? Object.fromEntries(COMPONENT_KEYS.map((k) => [k, compOverride[k] ? 1 : 0]))
+                    : null,
+                component_order: orderOverride,
             };
 
             if (isEdit && eventId) updateEvent.mutate({ id: eventId, data: payload });
@@ -549,7 +754,10 @@ export function EventWizard({
                     <div className="mt-6">
                         {/* ── Step 1 — real taxonomy ─────────────────────────── */}
                         {step === 1 && (
-                            <div className="grid max-w-xl gap-5">
+                            // Full card width, not capped: three selects in a row
+                            // need the room, and any max-w leaves a dead gutter
+                            // down the right of a wide card.
+                            <div className="grid gap-5">
                                 {/* An empty dropdown with no explanation reads as a broken
                                     form. The taxonomy endpoints require a session, and this
                                     panel has no login of its own, so 401 is the likely
@@ -578,139 +786,263 @@ export function EventWizard({
                                     </div>
                                 )}
 
-                                <Field label="Event Category" required error={errors.category_id}>
-                                    <TaxonomySelect
-                                        value={form.category_id}
-                                        onChange={(v) => setField("category_id", v)}
-                                        loading={options.isLoading}
-                                        rows={categoryRows}
-                                        placeholder="Select event category"
-                                        invalid={errors.category_id}
-                                    />
-                                </Field>
+                                {/* One row on desktop — the three are a single
+                                    cascading choice, and stacking them made a
+                                    short step look longer than it is. They still
+                                    stack on narrow screens, where three selects
+                                    side by side would be unusable. */}
+                                <div className="grid gap-5 md:grid-cols-3">
+                                    <Field label="Event Category" required error={errors.category_id}>
+                                        <TaxonomySelect
+                                            value={form.category_id}
+                                            onChange={(v) => setField("category_id", v)}
+                                            loading={options.isLoading}
+                                            rows={categoryRows}
+                                            placeholder="Select category"
+                                            invalid={errors.category_id}
+                                        />
+                                    </Field>
 
-                                <Field label="Event Type" required error={errors.type_id}>
-                                    <TaxonomySelect
-                                        value={form.type_id}
-                                        onChange={(v) => setField("type_id", v)}
-                                        loading={options.isLoading}
-                                        rows={typeRows}
-                                        disabled={!categoryId}
-                                        placeholder={categoryId ? "Select event type" : "Select a category first"}
-                                        invalid={errors.type_id}
-                                    />
-                                </Field>
+                                    <Field label="Event Type" required error={errors.type_id}>
+                                        <TaxonomySelect
+                                            value={form.type_id}
+                                            onChange={(v) => setField("type_id", v)}
+                                            loading={options.isLoading}
+                                            rows={typeRows}
+                                            disabled={!categoryId}
+                                            placeholder={categoryId ? "Select type" : "Category first"}
+                                            invalid={errors.type_id}
+                                        />
+                                    </Field>
 
-                                <Field label="Religion (Optional)">
-                                    <TaxonomySelect
-                                        value={form.religion_id}
-                                        onChange={(v) => setField("religion_id", v)}
-                                        loading={options.isLoading}
-                                        rows={religionRows}
-                                        disabled={!typeId}
-                                        placeholder={typeId ? "Select religion" : "Select an event type first"}
-                                    />
-                                    <p className="mt-1.5 text-[11.5px] text-muted-foreground">
-                                        Religion is optional. You can skip if not applicable.
-                                    </p>
-                                </Field>
+                                    <Field label="Religion (Optional)">
+                                        <TaxonomySelect
+                                            value={form.religion_id}
+                                            onChange={(v) => setField("religion_id", v)}
+                                            loading={options.isLoading}
+                                            rows={religionRows}
+                                            disabled={!typeId}
+                                            placeholder={typeId ? "Select religion" : "Type first"}
+                                        />
+                                    </Field>
+                                </div>
+
+                                <p className="text-[11.5px] text-muted-foreground">
+                                    Religion is optional. You can skip if not applicable.
+                                </p>
                             </div>
                         )}
 
                         {/* ── Step 2 ─────────────────────────────────────────── */}
                         {step === 2 && (
-                            <div className="grid max-w-2xl gap-5">
-                                <Field label="Event Name" required error={errors.name}>
-                                    <Input
-                                        value={form.name}
-                                        onChange={(e) => setField("name", e.target.value.slice(0, 100))}
-                                        placeholder="e.g. Priya & Arjun Wedding"
-                                        className={cn("h-11 rounded-md", errors.name && "border-destructive")}
-                                    />
-                                    <Counter value={form.name.length} max={100} />
-                                </Field>
+                            /*
+                              Two PANELS side by side, not two columns of fields.
 
-                                <Field label="Tagline (Optional)">
-                                    <Input
-                                        value={form.tagline}
-                                        onChange={(e) => setField("tagline", e.target.value.slice(0, 100))}
-                                        placeholder="Together with their families"
-                                        className="h-11 rounded-md"
-                                    />
-                                    <Counter value={form.tagline.length} max={100} />
-                                </Field>
+                              The step asks for two different kinds of thing: what
+                              the event IS (its name, hosts, when it happens) and
+                              what the INVITATION says (venue, organiser, contact,
+                              footer). Interleaving them across a plain two-column
+                              grid put unrelated fields next to each other and made
+                              the section rules meaningless — a heading spanning
+                              both columns still had the previous section's fields
+                              beside it.
 
-                                <Field label="Short Description (Optional)">
-                                    <Textarea
-                                        value={form.description}
-                                        onChange={(e) => setField("description", e.target.value.slice(0, 300))}
-                                        placeholder="We are delighted to invite you to celebrate our special day."
-                                        className="min-h-[90px] rounded-md"
-                                    />
-                                    <Counter value={form.description.length} max={300} />
-                                </Field>
+                              Each panel is a vertical stack, so reading down one
+                              column follows one subject. Pairs that genuinely
+                              belong together (start/end date, phone/email) nest as
+                              a two-column row INSIDE a panel.
 
-                                {/* Separator, not a hand-placed 1px div. */}
-                                <div className="relative pt-2">
-                                    <Separator className="absolute inset-x-0 top-1/2" />
-                                    <span className="relative mx-auto block w-fit bg-card px-3 text-[12.5px] font-semibold text-primary">
-                                        Date &amp; Time
-                                    </span>
-                                </div>
+                              Stacks below `lg`, where two panels would leave each
+                              field about 300px wide.
+                            */
+                            <div className="grid gap-x-10 gap-y-8 lg:grid-cols-2">
 
-                                <div className="grid gap-5 sm:grid-cols-2">
-                                    <Field label="Start Date" required error={errors.start_date}>
-                                        <IconInput icon={faCalendarDays} type="date" value={form.start_date}
-                                            onChange={(v) => setField("start_date", v)} invalid={errors.start_date} />
+                                {/* ── Panel 1 — the event itself ─────────────── */}
+                                <div className="flex min-w-0 flex-col gap-5">
+                                    <PanelHeading label="Event Details" />
+
+                                    <Field label="Event Name" required error={errors.name}>
+                                        <Input
+                                            value={form.name}
+                                            onChange={(e) => setField("name", e.target.value.slice(0, 100))}
+                                            placeholder="e.g. Priya & Arjun Wedding"
+                                            className={cn("h-11 rounded-md", errors.name && "border-destructive")}
+                                        />
+                                        <Counter value={form.name.length} max={100} />
                                     </Field>
-                                    <Field label="End Date" required error={errors.end_date}>
-                                        <IconInput icon={faCalendarDays} type="date" value={form.end_date}
-                                            onChange={(v) => setField("end_date", v)} invalid={errors.end_date} />
-                                    </Field>
-                                    <Field label="Start Time" required error={errors.start_time}>
-                                        <IconInput icon={faClock} type="time" value={form.start_time}
-                                            onChange={(v) => setField("start_time", v)} invalid={errors.start_time} />
-                                    </Field>
-                                    <Field label="End Time" required error={errors.end_time}>
-                                        <IconInput icon={faClock} type="time" value={form.end_time}
-                                            onChange={(v) => setField("end_time", v)} invalid={errors.end_time} />
-                                    </Field>
-                                </div>
 
-                                <Field label="Time Zone">
-                                    <Select value={form.timezone} onValueChange={(v) => setField("timezone", v)}>
-                                        <SelectTrigger className="h-11 rounded-md"><SelectValue /></SelectTrigger>
-                                        <SelectContent>
-                                            {TIME_ZONES.map((z) => <SelectItem key={z} value={z}>{z}</SelectItem>)}
-                                        </SelectContent>
-                                    </Select>
-                                </Field>
+                                    <Field label="Tagline (Optional)">
+                                        <Input
+                                            value={form.tagline}
+                                            onChange={(e) => setField("tagline", e.target.value.slice(0, 100))}
+                                            placeholder="Together with their families"
+                                            className="h-11 rounded-md"
+                                        />
+                                        <Counter value={form.tagline.length} max={100} />
+                                    </Field>
 
-                                <div className="grid gap-5 sm:grid-cols-2">
-                                    <Field label="Event Privacy">
-                                        <Select value={form.privacy} onValueChange={(v) => setField("privacy", v)}>
-                                            <SelectTrigger className="h-11 rounded-md"><SelectValue /></SelectTrigger>
+                                    {/* Two fields, because the invitation prints them
+                                        on their own lines either side of an ampersand.
+                                        One "A & B" field would have to be split back
+                                        apart on a separator a single name can contain. */}
+                                    <div className="grid gap-5 sm:grid-cols-2">
+                                        <Field label="First Host Name (Optional)">
+                                            <Input
+                                                value={form.host_one}
+                                                onChange={(e) => setField("host_one", e.target.value.slice(0, 120))}
+                                                placeholder="e.g. Priya"
+                                                className="h-11 rounded-md"
+                                            />
+                                        </Field>
+                                        <Field label="Second Host Name (Optional)">
+                                            <Input
+                                                value={form.host_two}
+                                                onChange={(e) => setField("host_two", e.target.value.slice(0, 120))}
+                                                placeholder="e.g. Arjun"
+                                                className="h-11 rounded-md"
+                                            />
+                                        </Field>
+                                    </div>
+
+                                    <Field label="Short Description (Optional)">
+                                        <Textarea
+                                            value={form.description}
+                                            onChange={(e) => setField("description", e.target.value.slice(0, 300))}
+                                            placeholder="We are delighted to invite you to celebrate our special day."
+                                            className="min-h-[90px] rounded-md"
+                                        />
+                                        <Counter value={form.description.length} max={300} />
+                                    </Field>
+
+                                    <SectionRule label="Date & Time" />
+
+                                    <div className="grid gap-5 sm:grid-cols-2">
+                                        <Field label="Start Date" required error={errors.start_date}>
+                                            <IconInput icon={faCalendarDays} type="date" value={form.start_date}
+                                                onChange={(v) => setField("start_date", v)} invalid={errors.start_date} />
+                                        </Field>
+                                        <Field label="End Date" required error={errors.end_date}>
+                                            <IconInput icon={faCalendarDays} type="date" value={form.end_date}
+                                                onChange={(v) => setField("end_date", v)} invalid={errors.end_date} />
+                                        </Field>
+                                        <Field label="Start Time" required error={errors.start_time}>
+                                            <IconInput icon={faClock} type="time" value={form.start_time}
+                                                onChange={(v) => setField("start_time", v)} invalid={errors.start_time} />
+                                        </Field>
+                                        <Field label="End Time" required error={errors.end_time}>
+                                            <IconInput icon={faClock} type="time" value={form.end_time}
+                                                onChange={(v) => setField("end_time", v)} invalid={errors.end_time} />
+                                        </Field>
+                                    </div>
+
+                                    <Field label="Time Zone">
+                                        <Select value={form.timezone} onValueChange={(v) => setField("timezone", v)}>
+                                            <SelectTrigger className="h-11 w-full rounded-md"><SelectValue /></SelectTrigger>
                                             <SelectContent>
-                                                <SelectItem value="private">Private</SelectItem>
-                                                <SelectItem value="public">Public</SelectItem>
-                                                <SelectItem value="unlisted">Unlisted</SelectItem>
+                                                {TIME_ZONES.map((z) => <SelectItem key={z} value={z}>{z}</SelectItem>)}
                                             </SelectContent>
                                         </Select>
                                     </Field>
-                                    <Field label="Event Status">
-                                        <Select value={form.status} onValueChange={(v) => setField("status", v)}>
-                                            <SelectTrigger className="h-11 rounded-md"><SelectValue /></SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="upcoming">Upcoming</SelectItem>
-                                                <SelectItem value="draft">Draft</SelectItem>
-                                                <SelectItem value="cancelled">Cancelled</SelectItem>
-                                            </SelectContent>
-                                        </Select>
+                                </div>
+
+                                {/* ── Panel 2 — what the invitation says ─────── */}
+                                <div className="flex min-w-0 flex-col gap-5">
+                                    <PanelHeading label="Invitation Details" />
+
+                                    {/* The venue columns and the API have accepted
+                                        these all along — only the form was missing,
+                                        so every invitation printed "Venue to be
+                                        confirmed" with no way for anyone to fix it. */}
+                                    <Field label="Venue Name">
+                                        <Input
+                                            value={form.venue_name}
+                                            onChange={(e) => setField("venue_name", e.target.value.slice(0, 255))}
+                                            placeholder="e.g. The Grand Palace"
+                                            className="h-11 rounded-md"
+                                        />
                                     </Field>
+
+                                    <Field label="Venue Address">
+                                        <Textarea
+                                            value={form.venue_address}
+                                            onChange={(e) => setField("venue_address", e.target.value.slice(0, 500))}
+                                            placeholder="Street, area, city and postcode"
+                                            className="min-h-[90px] rounded-md"
+                                        />
+                                        <Counter value={form.venue_address.length} max={500} />
+                                    </Field>
+
+                                    {/* Each of these backs a component the template
+                                        can switch on. Left blank, the invitation
+                                        falls back to a placeholder — which is what
+                                        every event showed before these existed. */}
+                                    <Field label="Organizer / Hosted By">
+                                        <Input
+                                            value={form.organizer}
+                                            onChange={(e) => setField("organizer", e.target.value.slice(0, 200))}
+                                            placeholder="e.g. Hosted by the Verma family"
+                                            className="h-11 rounded-md"
+                                        />
+                                    </Field>
+
+                                    <div className="grid gap-5 sm:grid-cols-2">
+                                        <Field label="Contact Number" error={errors.contact_phone}>
+                                            <Input
+                                                value={form.contact_phone}
+                                                onChange={(e) => setField("contact_phone", e.target.value.slice(0, 30))}
+                                                placeholder="+91 98765 43210"
+                                                inputMode="tel"
+                                                className={cn("h-11 rounded-md", errors.contact_phone && "border-destructive")}
+                                            />
+                                        </Field>
+                                        <Field label="Contact Email" error={errors.contact_email}>
+                                            <Input
+                                                value={form.contact_email}
+                                                onChange={(e) => setField("contact_email", e.target.value.slice(0, 150))}
+                                                placeholder="hello@example.com"
+                                                inputMode="email"
+                                                className={cn("h-11 rounded-md", errors.contact_email && "border-destructive")}
+                                            />
+                                        </Field>
+                                    </div>
+
+                                    <Field label="Footer Note">
+                                        <Input
+                                            value={form.footer_note}
+                                            onChange={(e) => setField("footer_note", e.target.value.slice(0, 300))}
+                                            placeholder="e.g. Thank you for being part of our story."
+                                            className="h-11 rounded-md"
+                                        />
+                                        <Counter value={form.footer_note.length} max={300} />
+                                    </Field>
+
+                                    <SectionRule label="Visibility" />
+
+                                    <div className="grid gap-5 sm:grid-cols-2">
+                                        <Field label="Event Privacy">
+                                            <Select value={form.privacy} onValueChange={(v) => setField("privacy", v)}>
+                                                <SelectTrigger className="h-11 w-full rounded-md"><SelectValue /></SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="private">Private</SelectItem>
+                                                    <SelectItem value="public">Public</SelectItem>
+                                                    <SelectItem value="unlisted">Unlisted</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </Field>
+                                        <Field label="Event Status">
+                                            <Select value={form.status} onValueChange={(v) => setField("status", v)}>
+                                                <SelectTrigger className="h-11 w-full rounded-md"><SelectValue /></SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="upcoming">Upcoming</SelectItem>
+                                                    <SelectItem value="draft">Draft</SelectItem>
+                                                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </Field>
+                                    </div>
                                 </div>
                             </div>
                         )}
-
                         {/* ── Step 3 — real event_menus ──────────────────────── */}
                         {step === 3 && (
                             <div className="max-w-xl">
@@ -754,8 +1086,23 @@ export function EventWizard({
 
                         {/* ── Step 4 — presentational ────────────────────────── */}
                         {step === 4 && (
-                            <div className="max-w-2xl">
-                                <p className="mb-3 text-[12.5px] font-semibold text-foreground">Select Theme</p>
+                            /*
+                              Two panels, matching step 2: the DESIGN on the left,
+                              what the invitation CARRIES on the right. They are
+                              different decisions — picking artwork versus choosing
+                              which blocks appear — and stacking them made step 4 a
+                              long scroll where the component toggles were far
+                              enough below the theme grid to look unrelated to it.
+
+                              Stacks below `xl`: the theme grid is itself 2-3
+                              columns of cards, so two panels need real width.
+                            */
+                            <div className="grid gap-x-10 gap-y-8 xl:grid-cols-2">
+                                <div className="flex min-w-0 flex-col gap-3">
+                                    <PanelHeading label="Theme & Colour" />
+                                    <p className="text-[12px] text-muted-foreground">
+                                        Pick the invitation design. Your plan decides what is on offer.
+                                    </p>
 
                                 {/* ONLY the admin catalogue, narrowed to this client's
                                     plan and to the category/type/religion picked in
@@ -861,7 +1208,18 @@ export function EventWizard({
                                     </div>
                                 )}
 
-                                <p className="mb-3 mt-6 text-[12.5px] font-semibold text-foreground">Primary Color</p>
+                                    {/* What this colour ACTUALLY drives: the
+                                        event / host names on the invitation and on
+                                        every thumbnail of it. Nothing else reads it —
+                                        the card's background, frame and accents all
+                                        come from the template. It is held to a 4.5:1
+                                        contrast floor at render time, because it is
+                                        picked from a swatch row that knows nothing
+                                        about the design behind it. */}
+                                    <p className="mb-1 mt-6 text-[12.5px] font-semibold text-foreground">Primary Colour</p>
+                                    <p className="mb-3 text-[12px] text-muted-foreground">
+                                        Used for the names printed on your invitation.
+                                    </p>
                                 <div className="flex flex-wrap items-center gap-3">
                                     {PRIMARY_SWATCHES.map((c) => (
                                         <button
@@ -895,12 +1253,125 @@ export function EventWizard({
                                         />
                                     </label>
                                 </div>
+                                </div>
+
+                                {/* ── Per-event component control ───────────────
+                                    The template sets the defaults; this is the
+                                    client's override for THIS event only. It
+                                    stays null until something is actually
+                                    touched, so an untouched event keeps
+                                    following the template as the admin edits it
+                                    — copying the map up front would freeze the
+                                    design at creation time.
+
+                                    The whole PANEL is conditional, heading and
+                                    all: with no admin template there is nothing
+                                    to override, and a heading standing over an
+                                    empty column reads as a section that failed
+                                    to load. */}
+                                {artwork.kind === "template" && (
+                                    <div className="flex min-w-0 flex-col gap-3">
+                                        <PanelHeading label="Invitation Components" />
+
+                                        <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+                                            <div className="min-w-0">
+                                                <p className="text-[12px] text-muted-foreground">
+                                                    {hasOverride
+                                                        ? "Customised for this event."
+                                                        : `Following the ${artwork.template.name} template.`}
+                                                </p>
+                                            </div>
+                                            {hasOverride && (
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={resetComponents}
+                                                    className="h-8 rounded-md text-[12px]"
+                                                >
+                                                    Reset to template
+                                                </Button>
+                                            )}
+                                        </div>
+
+                                        <ul className="grid gap-x-6 sm:grid-cols-2">
+                                            {COMPONENT_KEYS.map((key) => (
+                                                <li
+                                                    key={key}
+                                                    className="flex items-center justify-between gap-3 border-b border-border py-2.5"
+                                                >
+                                                    <span className="min-w-0 text-[12.5px] text-foreground break-words">
+                                                        {COMPONENT_LABELS[key]}
+                                                    </span>
+                                                    <Switch
+                                                        checked={effectiveComponents[key]}
+                                                        onCheckedChange={(v) => toggleComponent(key, v)}
+                                                        aria-label={COMPONENT_LABELS[key]}
+                                                    />
+                                                </li>
+                                            ))}
+                                        </ul>
+
+                                        <p className="mb-2 mt-6 text-[12.5px] font-semibold text-foreground">
+                                            Component Order
+                                        </p>
+                                        <p className="mb-3 text-[11.5px] text-muted-foreground">
+                                            Drag the chips to arrange the order components appear on the
+                                            invitation. Components switched off keep their place.
+                                        </p>
+                                        <ul className="flex flex-wrap gap-2">
+                                            {effectiveOrder.map((key, index) => (
+                                                <li
+                                                    key={key}
+                                                    draggable
+                                                    onDragStart={() => setDragKey(key)}
+                                                    onDragEnd={() => setDragKey(null)}
+                                                    // Both are required: without preventDefault on
+                                                    // dragOver the browser refuses the drop outright.
+                                                    onDragOver={(e) => e.preventDefault()}
+                                                    onDrop={(e) => {
+                                                        e.preventDefault();
+                                                        moveComponent(key);
+                                                        setDragKey(null);
+                                                    }}
+                                                    className={cn(
+                                                        "flex cursor-grab items-center gap-2 rounded-md border px-2.5 py-1.5 text-[11.5px] transition-colors active:cursor-grabbing",
+                                                        dragKey === key
+                                                            ? "border-primary bg-primary/10"
+                                                            : "border-border bg-card",
+                                                        // Struck through rather than hidden: an off
+                                                        // component keeps its place in the order, and
+                                                        // dropping it from the list would make turning
+                                                        // it back on land it somewhere unexpected.
+                                                        !effectiveComponents[key] && "opacity-50"
+                                                    )}
+                                                >
+                                                    <FontAwesomeIcon
+                                                        icon={faGripVertical}
+                                                        className="!size-[10px] text-muted-foreground"
+                                                    />
+                                                    <span className="grid h-4 w-4 place-items-center rounded bg-foreground/80 text-[9px] font-semibold text-background">
+                                                        {index + 1}
+                                                    </span>
+                                                    <span
+                                                        className={cn(
+                                                            "break-words",
+                                                            !effectiveComponents[key] && "line-through"
+                                                        )}
+                                                    >
+                                                        {COMPONENT_LABELS[key]}
+                                                    </span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
                             </div>
                         )}
 
                         {/* ── Step 5 — presentational preview ────────────────── */}
                         {step === 5 && (
-                            <div className="flex flex-col items-center gap-4">
+                            <div ref={previewWrapRef} className="flex flex-col items-center gap-4">
                                 {/*
                                   The real invitation, not a summary of it.
 
@@ -919,13 +1390,30 @@ export function EventWizard({
                                 {artwork.kind === "template" ? (
                                     <InvitationCard
                                         template={artwork.template}
+                                        // Whatever step 4 was left showing — so the
+                                        // preview and the toggles cannot disagree.
+                                        componentsOverride={
+                                            compOverride
+                                                ? Object.fromEntries(
+                                                    COMPONENT_KEYS.map((k) => [k, compOverride[k] ? 1 : 0])
+                                                )
+                                                : null
+                                        }
+                                        orderOverride={orderOverride}
                                         data={{
                                             name: form.name,
+                                            hostOne: form.host_one,
+                                            hostTwo: form.host_two,
                                             tagline: form.tagline,
                                             description: form.description,
                                             startDate: form.start_date,
                                             startTime: form.start_time,
                                             endTime: form.end_time,
+                                            venueName: form.venue_name,
+                                            venueAddress: form.venue_address,
+                                            organizer: form.organizer,
+                                            contact: form.contact_phone,
+                                            footerNote: form.footer_note,
                                             primaryColor: form.primary_color,
                                         }}
                                     />
@@ -972,10 +1460,13 @@ export function EventWizard({
                                     The QR code is generated when you create the event.
                                 </p>
 
-                                <Button variant="outline" className="h-10 rounded-md text-[13px] font-medium">
-                                    <FontAwesomeIcon icon={faDownload} className="mr-2 !size-[12px]" />
-                                    Download Invitation
-                                </Button>
+                                {/* The QR is not offered here: no event exists yet,
+                                    so there is no token to encode. It appears on
+                                    step 6, once the row has been written. */}
+                                <DownloadMenu
+                                    busy={downloading}
+                                    onPick={(format) => downloadInvitation(format)}
+                                />
                             </div>
                         )}
                         {/* ── Step 6 ─────────────────────────────────────────── */}
@@ -1035,7 +1526,7 @@ export function EventWizard({
                                     token verbatim - a normal scanner reads an opaque
                                     EVQ1 string, and nothing about the event leaks to
                                     whoever scanned it. */}
-                                <div id="event-qr" className="w-full rounded-md border border-border p-4">
+                                <div ref={qrWrapRef} id="event-qr" className="w-full rounded-md border border-border p-4">
                                     <p className="mb-1 text-left text-[13px] font-bold text-foreground">Event QR Code</p>
                                     <p className="mb-4 text-left text-[11.5px] text-muted-foreground">
                                         Print this on your invitation. The code carries your event details in
@@ -1043,6 +1534,14 @@ export function EventWizard({
                                     </p>
                                     <EventQr token={created?.qr_token} eventName={created?.name} size={190} />
                                 </div>
+
+                                {/* The event exists by now, so the QR is a real
+                                    option here in a way it was not on step 5. */}
+                                <DownloadMenu
+                                    busy={downloading}
+                                    withQr={!!created?.qr_token}
+                                    onPick={(format) => downloadInvitation(format)}
+                                />
 
                                 {/*
                                   Share. Copy Link is real; the other three are not
@@ -1181,6 +1680,40 @@ function Field({
     );
 }
 
+/**
+ * The title at the top of one of step 2's two panels.
+ *
+ * Left-aligned with a short accent rule under it, deliberately unlike
+ * `SectionRule` — a centred rule at the top of a column reads as a divider
+ * BETWEEN two things rather than as the heading OF the one below it.
+ */
+function PanelHeading({ label }: { label: string }) {
+    return (
+        <div className="flex flex-col gap-1.5">
+            <p className="text-[13px] font-bold text-foreground">{label}</p>
+            <span className="h-0.5 w-8 rounded-full bg-primary" />
+        </div>
+    );
+}
+
+/**
+ * A titled rule between groups of fields INSIDE a panel.
+ *
+ * `col-span-full` so it still spans correctly if it ever sits in a grid rather
+ * than a flex column — a heading occupying one grid cell would sit beside an
+ * unrelated input and read as that field's label.
+ */
+function SectionRule({ label }: { label: string }) {
+    return (
+        <div className="relative col-span-full pt-2">
+            <Separator className="absolute inset-x-0 top-1/2" />
+            <span className="relative mx-auto block w-fit bg-card px-3 text-[12.5px] font-semibold text-primary">
+                {label}
+            </span>
+        </div>
+    );
+}
+
 function Counter({ value, max }: { value: number; max: number }) {
     return (
         <p className="text-right text-[11px] tabular-nums text-muted-foreground">
@@ -1225,7 +1758,7 @@ function TaxonomySelect({
     if (loading && !disabled) return <Skeleton className="h-11 w-full rounded-md" />;
     return (
         <Select value={value} onValueChange={onChange} disabled={disabled}>
-            <SelectTrigger className={cn("h-11 rounded-md", invalid && "border-destructive")}>
+            <SelectTrigger className={cn("h-11 w-full rounded-md", invalid && "border-destructive")}>
                 <SelectValue placeholder={placeholder} />
             </SelectTrigger>
             <SelectContent>

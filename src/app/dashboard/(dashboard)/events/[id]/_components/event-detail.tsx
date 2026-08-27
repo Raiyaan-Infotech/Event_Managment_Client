@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -26,6 +26,8 @@ import { cn } from "@/lib/utils";
 import { themeName } from "@/lib/event-themes";
 import { EventThumbnail } from "@/components/common/event-thumbnail";
 import { EventQr } from "@/components/common/event-qr";
+import { InvitationDownload } from "@/components/common/invitation-download";
+import { downloadQrAsPng, fileSlug } from "@/lib/export-invitation";
 import { useClientEvent, useDeleteEvent, type DerivedStatus } from "@/hooks/use-client-events";
 import { useGuestStats, useGuests } from "@/hooks/use-guests";
 import { ApiError } from "@/lib/api-client";
@@ -110,6 +112,9 @@ export function EventDetail({ eventId }: { eventId: number }) {
     const [tab, setTab] = useState<TabValue>("overview");
     const [confirmDelete, setConfirmDelete] = useState(false);
     const [qrOpen, setQrOpen] = useState(false);
+    // The QR inside the dialog, captured on demand by its Download button.
+    const dialogQrRef = useRef<HTMLDivElement>(null);
+    const [savingQr, setSavingQr] = useState(false);
 
     const query = useClientEvent(eventId);
     const remove = useDeleteEvent();
@@ -206,12 +211,11 @@ export function EventDetail({ eventId }: { eventId: number }) {
                         <FontAwesomeIcon icon={faShareNodes} className="mr-2 !size-[12px]" />
                         Share Event
                     </Button>
-                    {/* "Download Invitation" is the QR — it is the only artefact
-                        of this event that exists as a file. */}
-                    <Button onClick={() => setQrOpen(true)} className="h-10 rounded-md px-4 text-[12.5px] font-semibold">
-                        <FontAwesomeIcon icon={faDownload} className="mr-2 !size-[12px]" />
-                        Download Invitation
-                    </Button>
+                    {/* Was a button that only opened the QR dialog — it said
+                        "Download" and downloaded nothing. It now produces the
+                        real file: the invitation as PNG or SVG, or the QR on
+                        its own. */}
+                    <InvitationDownload event={event} />
                 </div>
             </div>
 
@@ -644,13 +648,40 @@ export function EventDetail({ eventId }: { eventId: number }) {
                             a normal scanner reads only an opaque string.
                         </DialogDescription>
                     </DialogHeader>
-                    <div className="flex justify-center py-2">
+                    {/* The dialog's own QR is the capture target, so what gets
+                        saved is the code being looked at rather than a second
+                        one rendered somewhere off-screen. */}
+                    <div ref={dialogQrRef} className="flex justify-center py-2">
                         <EventQr token={event.qr_token} eventName={event.name} size={200} />
                     </div>
                     {event.qr_issued_at && (
                         <p className="text-center text-[10.5px] text-muted-foreground">
                             Issued {formatStamp(event.qr_issued_at)}
                         </p>
+                    )}
+                    {event.qr_token && (
+                        <Button
+                            variant="outline"
+                            disabled={savingQr}
+                            onClick={async () => {
+                                if (!dialogQrRef.current) return;
+                                setSavingQr(true);
+                                try {
+                                    await downloadQrAsPng(dialogQrRef.current, fileSlug(event.name, "invitation"));
+                                    toast.success("QR code downloaded.");
+                                } catch (error) {
+                                    toast.error(
+                                        error instanceof Error ? error.message : "Could not download the QR code."
+                                    );
+                                } finally {
+                                    setSavingQr(false);
+                                }
+                            }}
+                            className="h-10 w-full rounded-md text-[12.5px] font-semibold"
+                        >
+                            <FontAwesomeIcon icon={faDownload} className="mr-2 !size-[12px]" />
+                            {savingQr ? "Preparing…" : "Download QR Code"}
+                        </Button>
                     )}
                 </DialogContent>
             </Dialog>
