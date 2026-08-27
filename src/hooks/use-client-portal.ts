@@ -98,17 +98,39 @@ export interface TemplateOption {
     description: string | null;
     style: string;
     thumbnail: string | null;
+    layout_style: string | null;
     background_type: 'color' | 'image' | 'gradient' | 'custom';
     background_color: string | null;
     secondary_color: string | null;
     background_image: string | null;
     gradient_from: string | null;
+    gradient_via: string | null;
     gradient_to: string | null;
+    gradient_type: 'linear' | 'radial';
+    gradient_direction: string | null;
+    overlay_enabled: boolean;
+    overlay_color: string | null;
     overlay_opacity: number;
+    image_position: string | null;
+    image_scale: string | null;
+    image_shape: 'rectangle' | 'square' | 'circle' | 'heart' | 'arch';
+    corner_radius: number;
+    background_position: string | null;
+    image_size: number;
     orientation: 'portrait' | 'landscape';
     primary_font: string | null;
     secondary_font: string | null;
     border_style: string | null;
+    /**
+     * The chosen Frame Style's artwork, resolved server-side.
+     *
+     * When present it REPLACES `border_style` entirely — a real frame occupies
+     * the margin the CSS border would sit in, and drawing both gives a double
+     * edge nobody asked for. Same rule as the admin's own preview.
+     */
+    frame_url: string | null;
+    /** Decorations, resolved and in display order. Placed by their `type`. */
+    decorationItems: Array<{ id: number; name: string; type: string; file_url: string | null }>;
     /** Which invitation parts show, and in what order. */
     components: Record<string, number>;
     component_order: string[];

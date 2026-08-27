@@ -47,6 +47,7 @@ import {
     isDarkTemplate,
 } from "@/lib/event-templates";
 import { EventQr } from "@/components/common/event-qr";
+import { InvitationCard } from "@/components/common/invitation-card";
 import { SignInPrompt } from '@/components/common/sign-in-prompt';
 
 /**
@@ -338,21 +339,8 @@ export function EventWizard({
     const artwork = resolveArtwork(form.theme_id, opts?.templates);
     const selectedTheme = artwork.kind === "legacy" ? artwork.theme : undefined;
 
-    /**
-     * Whether the chosen template shows a given component.
-     *
-     * An admin template curates this — `components` is a per-key 0/1 map, and a
-     * design that switches `invitation_message` off should not have one appear
-     * in the preview the client is about to approve. A legacy theme has no such
-     * map, so everything the form collected is shown.
-     */
-    const showsComponent = (key: string) => {
-        if (artwork.kind !== "template") return true;
-        const value = artwork.template.components?.[key];
-        // Absent means "on", matching how the admin preview reads it: a key the
-        // template never stored is not the same as one deliberately turned off.
-        return value === undefined || !!Number(value);
-    };
+    // Which components a template shows is decided inside InvitationCard, from
+    // the template's own `components` map — the wizard no longer needs to know.
 
     /**
      * If the selected template stops being on offer — the category changed, or
@@ -913,92 +901,83 @@ export function EventWizard({
                         {/* ── Step 5 — presentational preview ────────────────── */}
                         {step === 5 && (
                             <div className="flex flex-col items-center gap-4">
-                                {/* Resolves either catalogue, so the design chosen on
-                                    step 4 survives into the preview whichever kind it
-                                    was. Without this an admin template silently fell
-                                    back to the default gradient one step later. */}
-                                <div
-                                    className={cn(
-                                        "w-full max-w-[300px] overflow-hidden rounded-md border border-border p-6 text-center shadow-sm",
-                                        artwork.kind === "legacy" && "bg-gradient-to-br",
-                                        artwork.kind === "legacy" && selectedTheme?.swatch
-                                    )}
-                                    style={
-                                        artwork.kind === "template"
-                                            ? templateBackground(artwork.template)
-                                            : undefined
-                                    }
-                                >
-                                    {showsComponent("event_title") && (
+                                {/*
+                                  The real invitation, not a summary of it.
+
+                                  This was a hand-rolled card that drew a
+                                  background, the name, the date and nothing
+                                  else — so the same template that renders a
+                                  framed, decorated invitation in the admin
+                                  panel showed the client an almost empty
+                                  swatch, one step before they approve it.
+
+                                  InvitationCard applies the template properly:
+                                  frame artwork, decorations, the components the
+                                  design enables, in its own component_order —
+                                  filled with what was typed on steps 1-4.
+                                */}
+                                {artwork.kind === "template" ? (
+                                    <InvitationCard
+                                        template={artwork.template}
+                                        data={{
+                                            name: form.name,
+                                            tagline: form.tagline,
+                                            description: form.description,
+                                            startDate: form.start_date,
+                                            startTime: form.start_time,
+                                            endTime: form.end_time,
+                                            primaryColor: form.primary_color,
+                                        }}
+                                    />
+                                ) : (
+                                    /* A legacy theme has no template row to render
+                                       from — only a gradient — so the older card
+                                       stays for events created before the admin
+                                       catalogue existed. */
+                                    <div
+                                        className={cn(
+                                            "w-full max-w-[248px] overflow-hidden rounded-md border border-border p-6 text-center shadow-sm bg-gradient-to-br",
+                                            selectedTheme?.swatch
+                                        )}
+                                    >
                                         <p className="text-[10.5px] font-semibold uppercase tracking-[0.18em] text-foreground/70">
                                             You&rsquo;re invited to
                                         </p>
-                                    )}
-                                    <p
-                                        className="mt-2 text-[24px] font-bold leading-tight break-words"
-                                        style={{ color: form.primary_color }}
-                                    >
-                                        {form.name || "Your Event Name"}
-                                    </p>
-                                    {form.tagline && (
-                                        <p className="mt-1.5 text-[12px] text-foreground/70 break-words">{form.tagline}</p>
-                                    )}
-
-                                    {showsComponent("date_time") && (
-                                        <>
-                                            <div className="my-4 flex items-center justify-center gap-3 border-y border-foreground/10 py-3">
-                                                <span className="text-[26px] font-bold tabular-nums text-foreground">
-                                                    {form.start_date ? form.start_date.slice(8, 10) : "--"}
-                                                </span>
-                                                <span className="text-left text-[11px] font-semibold uppercase leading-tight text-foreground/70">
-                                                    {form.start_date ? new Date(form.start_date).toLocaleString("en", { month: "short" }) : "---"}
-                                                    <br />
-                                                    {form.start_date ? form.start_date.slice(0, 4) : "----"}
-                                                </span>
-                                            </div>
-                                            <p className="text-[11.5px] text-foreground/70">
-                                                {form.start_time || "--:--"} &ndash; {form.end_time || "--:--"}
-                                            </p>
-                                        </>
-                                    )}
-
-                                    {/* The description the client typed on step 2. It was
-                                        collected and then never shown, so the preview
-                                        confirmed less than the form had actually asked
-                                        for. Gated on the template's own component, since
-                                        a design can switch the message off. */}
-                                    {form.description && showsComponent("invitation_message") && (
-                                        <p className="mt-3 text-[11px] italic leading-snug text-foreground/75 break-words">
-                                            {form.description}
+                                        <p
+                                            className="mt-2 text-[22px] font-bold leading-tight break-words"
+                                            style={{ color: form.primary_color }}
+                                        >
+                                            {form.name || "Your Event Name"}
                                         </p>
-                                    )}
-                                    {/* A placeholder, and correctly so: the QR encodes
-                                        the event's encrypted token, and no event
-                                        exists to encode until this step is submitted.
-                                        The real code appears on step 6.
-
-                                        Hidden entirely when the template switches the
-                                        QR off — several of the premium designs do, and
-                                        promising a code the invitation will not carry
-                                        is worse than not showing one. */}
-                                    {showsComponent("event_qr_code") && (
-                                        <>
-                                            <span className="mx-auto mt-4 grid h-20 w-20 place-items-center rounded bg-foreground/10">
-                                                <FontAwesomeIcon icon={faQrcode} className="!size-[34px] text-foreground/50" />
+                                        {form.tagline && (
+                                            <p className="mt-1.5 text-[12px] text-foreground/70 break-words">{form.tagline}</p>
+                                        )}
+                                        <div className="my-4 flex items-center justify-center gap-3 border-y border-foreground/10 py-3">
+                                            <span className="text-[26px] font-bold tabular-nums text-foreground">
+                                                {form.start_date ? form.start_date.slice(8, 10) : "--"}
                                             </span>
-                                            <p className="mt-2 text-[10px] text-foreground/60">
-                                                QR code is generated when you create the event
-                                            </p>
-                                        </>
-                                    )}
-                                </div>
+                                            <span className="text-left text-[11px] font-semibold uppercase leading-tight text-foreground/70">
+                                                {form.start_date ? form.start_date.slice(5, 7) : "--"}
+                                                <br />
+                                                {form.start_date ? form.start_date.slice(0, 4) : "----"}
+                                            </span>
+                                        </div>
+                                        <p className="text-[11.5px] text-foreground/70">
+                                            {form.start_time || "--:--"} &ndash; {form.end_time || "--:--"}
+                                        </p>
+                                    </div>
+                                )}
+
+                                <p className="text-center text-[11px] text-muted-foreground">
+                                    The QR code is generated when you create the event.
+                                </p>
+
                                 <Button variant="outline" className="h-10 rounded-md text-[13px] font-medium">
                                     <FontAwesomeIcon icon={faDownload} className="mr-2 !size-[12px]" />
                                     Download Invitation
                                 </Button>
                             </div>
                         )}
-
                         {/* ── Step 6 ─────────────────────────────────────────── */}
                         {step === 6 && (
                             <div className="mx-auto flex max-w-md flex-col items-center gap-4 text-center">
