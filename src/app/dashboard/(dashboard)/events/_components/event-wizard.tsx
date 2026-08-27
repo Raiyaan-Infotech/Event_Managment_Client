@@ -14,6 +14,7 @@ import {
     faQrcode,
     faLink,
     faEnvelope,
+    faPalette,
 } from "@fortawesome/free-solid-svg-icons";
 import { faWhatsapp as faWhatsappBrand } from "@fortawesome/free-brands-svg-icons";
 import { Button } from "@/components/ui/button";
@@ -31,14 +32,14 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { ApiError } from "@/lib/api-client";
-import { useEventOptions } from "@/hooks/use-client-portal";
+import { useEventOptions, type MenuOption } from "@/hooks/use-client-portal";
 import {
     useCreateEvent,
     useUpdateEvent,
     useClientEvent,
     type ClientEvent,
 } from "@/hooks/use-client-events";
-import { EVENT_THEMES, PRIMARY_SWATCHES } from "@/lib/event-themes";
+import { PRIMARY_SWATCHES } from "@/lib/event-themes";
 import {
     resolveArtwork,
     templatesForEvent,
@@ -101,6 +102,12 @@ const STEPS = [
 // render an event's artwork from the same list. They were two copies before,
 // which is how a card and its own preview showed different gradients.
 
+const MENU_GROUP_LABELS: Record<MenuOption["menu_group"], string> = {
+    core: "Core Menus",
+    additional: "Additional Menus",
+    custom: "Custom Menus",
+};
+
 const TIME_ZONES = [
     "(GMT +05:30) India Standard Time",
     "(GMT +04:00) Gulf Standard Time",
@@ -131,7 +138,9 @@ const EMPTY: FormState = {
     name: "", tagline: "", description: "",
     start_date: "", end_date: "", start_time: "", end_time: "",
     timezone: TIME_ZONES[0], privacy: "private", status: "upcoming",
-    theme_id: "floral-bliss", primary_color: PRIMARY_SWATCHES[0],
+    // Blank, not a hardcoded slug: the theme catalogue is whatever the client's
+    // PLAN grants, so nothing can be preselected until those templates load.
+    theme_id: "", primary_color: PRIMARY_SWATCHES[0],
 };
 
 export function EventWizard({
@@ -140,20 +149,17 @@ export function EventWizard({
 }: {
     eventId?: number;
     /**
-     * Preselected template, from `/dashboard/events/create?theme=<id>` — what
-     * "Use Template" on the Templates screen hands over. Validated against the
-     * catalogue rather than trusted: a stale or hand-typed id would otherwise
-     * put the wizard in a state where step 4 highlights nothing at all.
+     * Preselected template code, from `/dashboard/events/create?theme=<code>` —
+     * what "Use Template" on the Templates screen hands over. It cannot be
+     * validated here (the plan's templates have not loaded yet), so it is held
+     * as-is and checked against the real catalogue by the effect below.
      */
     initialThemeId?: string;
 }) {
     const isEdit = !!eventId;
 
     const [step, setStep] = useState(1);
-    const [form, setForm] = useState<FormState>(() => {
-        const picked = EVENT_THEMES.find((t) => t.id === initialThemeId);
-        return picked ? { ...EMPTY, theme_id: picked.id, primary_color: picked.accent } : EMPTY;
-    });
+    const [form, setForm] = useState<FormState>(EMPTY);
     const [errors, setErrors] = useState<Record<string, boolean>>({});
     const [menus, setMenus] = useState<Record<number, boolean>>({});
     /** The saved row. Null until step 5 succeeds; step 6 renders from it. */
@@ -206,7 +212,7 @@ export function EventWizard({
             timezone: row.timezone || TIME_ZONES[0],
             privacy: row.privacy ?? "private",
             status: row.status ?? "upcoming",
-            theme_id: row.theme_id || EVENT_THEMES[0].id,
+            theme_id: row.theme_id || "",
             primary_color: row.primary_color || PRIMARY_SWATCHES[0],
         });
 
@@ -248,9 +254,27 @@ export function EventWizard({
         /* eslint-disable-next-line react-hooks/exhaustive-deps */
     }, [form.type_id]);
 
-    // Default every discovered menu to on, matching the design. Only seeds keys
-    // not already set, so a user's toggle survives a refetch.
+    /**
+     * The menus on offer for THIS event.
+     *
+     * Exactly what the plan grants via `subscription_plan_menus` — that join is
+     * a manual admin assignment ("this plan includes these menus"), NOT a claim
+     * that the menu's own `event_category_id`/`event_type_id`/`religion_id`
+     * matches what was picked in step 1. Those columns are the menu's own
+     * general catalogue tag (Menu Management), unrelated to plan curation, and
+     * an admin can and does attach a menu tagged for one category to a plan
+     * scoped to another — re-filtering here would silently hide menus the
+     * admin explicitly chose to include.
+     */
     const menuRows = useMemo(() => opts?.menus ?? [], [opts]);
+
+    /** Core / Additional / Custom sections, in that fixed order, empty groups dropped. */
+    const menuGroups = useMemo(() => {
+        const order: MenuOption["menu_group"][] = ["core", "additional", "custom"];
+        return order
+            .map((group) => ({ group, rows: menuRows.filter((m) => m.menu_group === group) }))
+            .filter((g) => g.rows.length > 0);
+    }, [menuRows]);
     useEffect(() => {
         if (!menuRows.length) return;
         // In edit mode the saved selection IS the answer — defaulting unknown
@@ -303,17 +327,32 @@ export function EventWizard({
     );
 
     /**
-     * Step 4 shows the admin catalogue when there is one, and the built-in list
-     * when there is not — a fresh install with no templates authored yet must
-     * still be able to create an event, so this falls back rather than showing
-     * an empty grid.
+     * Step 5's preview artwork.
+     *
+     * `resolveArtwork` still falls back to the built-in catalogue, and must:
+     * an event SAVED before this feature holds a legacy slug in `theme_id`, and
+     * reopening it for edit has to show the design it actually has rather than
+     * a blank card. What changed is that step 4 no longer OFFERS those — the
+     * fallback is for rendering history, not for picking something new.
      */
-    const usingDbTemplates = dbTemplates.length > 0;
-
-    // Either kind of theme_id resolves through here, so step 5's preview never
-    // has to know which catalogue the id came from.
     const artwork = resolveArtwork(form.theme_id, opts?.templates);
     const selectedTheme = artwork.kind === "legacy" ? artwork.theme : undefined;
+
+    /**
+     * Whether the chosen template shows a given component.
+     *
+     * An admin template curates this — `components` is a per-key 0/1 map, and a
+     * design that switches `invitation_message` off should not have one appear
+     * in the preview the client is about to approve. A legacy theme has no such
+     * map, so everything the form collected is shown.
+     */
+    const showsComponent = (key: string) => {
+        if (artwork.kind !== "template") return true;
+        const value = artwork.template.components?.[key];
+        // Absent means "on", matching how the admin preview reads it: a key the
+        // template never stored is not the same as one deliberately turned off.
+        return value === undefined || !!Number(value);
+    };
 
     /**
      * If the selected template stops being on offer — the category changed, or
@@ -321,12 +360,12 @@ export function EventWizard({
      * would save against a template the client can no longer see. Snap to the
      * first one that IS on offer.
      *
-     * Guarded on `usingDbTemplates` so it never fires while the options request
+     * Guarded on a non-empty list so it never fires while the options request
      * is still in flight, which would overwrite a restored edit value with a
      * default before the real list had arrived.
      */
     useEffect(() => {
-        if (!usingDbTemplates) return;
+        if (dbTemplates.length === 0) return;
         if (dbTemplates.some((t) => t.code === form.theme_id)) return;
 
         // A `?theme=` deep link may name an ADMIN template, which the initial
@@ -340,7 +379,7 @@ export function EventWizard({
 
         setField("theme_id", (deepLinked ?? dbTemplates[0]).code);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [usingDbTemplates, dbTemplates, form.theme_id]);
+    }, [dbTemplates, form.theme_id]);
 
     const validate = (target: number) => {
         const next: Record<string, boolean> = {};
@@ -447,15 +486,11 @@ export function EventWizard({
                 {/* Confirms the template came across. Without it the choice made
                     on the Templates screen is invisible until step 4, which reads
                     as the button having done nothing. */}
-                {!isEdit && initialThemeId && (
-                    EVENT_THEMES.some((t) => t.id === initialThemeId) ||
-                    dbTemplates.some((t) => t.code === initialThemeId)
-                ) && (
+                {!isEdit && initialThemeId && dbTemplates.some((t) => t.code === initialThemeId) && (
                     <div className="mt-3 flex flex-wrap items-center gap-2 rounded-md bg-primary/5 px-3 py-2">
                         <span className="text-[12px] text-muted-foreground">Starting from</span>
                         <Badge variant="ghost" className="rounded bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
-                            {dbTemplates.find((t) => t.code === initialThemeId)?.name ??
-                                EVENT_THEMES.find((t) => t.id === initialThemeId)?.name}
+                            {dbTemplates.find((t) => t.code === initialThemeId)?.name}
                         </Badge>
                         <Link href="/dashboard/templates" className="text-[11.5px] font-semibold text-primary hover:underline">
                             Change template
@@ -702,20 +737,29 @@ export function EventWizard({
                                         No menus are configured for this event type yet.
                                     </p>
                                 ) : (
-                                    <ul className="flex flex-col divide-y divide-border">
-                                        {menuRows.map((m) => (
-                                            <li key={m.id} className="flex items-center justify-between gap-4 py-3">
-                                                <span className="min-w-0 text-[13.5px] font-medium text-foreground break-words">
-                                                    {m.name}
-                                                </span>
-                                                <Switch
-                                                    checked={menus[m.id] ?? true}
-                                                    onCheckedChange={(v) => setMenus((p) => ({ ...p, [m.id]: v }))}
-                                                    aria-label={m.name}
-                                                />
-                                            </li>
+                                    <div className="flex flex-col gap-6">
+                                        {menuGroups.map(({ group, rows }) => (
+                                            <div key={group}>
+                                                <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                                                    {MENU_GROUP_LABELS[group]}
+                                                </p>
+                                                <ul className="flex flex-col divide-y divide-border">
+                                                    {rows.map((m) => (
+                                                        <li key={m.id} className="flex items-center justify-between gap-4 py-3">
+                                                            <span className="min-w-0 text-[13.5px] font-medium text-foreground break-words">
+                                                                {m.name}
+                                                            </span>
+                                                            <Switch
+                                                                checked={menus[m.id] ?? true}
+                                                                onCheckedChange={(v) => setMenus((p) => ({ ...p, [m.id]: v }))}
+                                                                aria-label={m.name}
+                                                            />
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </div>
                                         ))}
-                                    </ul>
+                                    </div>
                                 )}
                             </div>
                         )}
@@ -725,11 +769,19 @@ export function EventWizard({
                             <div className="max-w-2xl">
                                 <p className="mb-3 text-[12.5px] font-semibold text-foreground">Select Theme</p>
 
-                                {/* The admin catalogue when there is one, the built-in
-                                    list when there is not. Never an empty grid: a fresh
-                                    install with nothing authored yet must still be able
-                                    to create an event. */}
-                                {usingDbTemplates ? (
+                                {/* ONLY the admin catalogue, narrowed to this client's
+                                    plan and to the category/type/religion picked in
+                                    step 1. There is deliberately no built-in fallback:
+                                    offering designs the plan does not grant is exactly
+                                    the mis-sell the plan gating exists to prevent, and
+                                    a hardcoded grid made an empty catalogue look full. */}
+                                {options.isLoading ? (
+                                    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+                                        {Array.from({ length: 6 }).map((_, i) => (
+                                            <Skeleton key={i} className="aspect-[4/3] w-full rounded-md" />
+                                        ))}
+                                    </div>
+                                ) : dbTemplates.length > 0 ? (
                                     <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
                                         {dbTemplates.map((t) => {
                                             const active = form.theme_id === t.code;
@@ -801,44 +853,24 @@ export function EventWizard({
                                         })}
                                     </div>
                                 ) : (
-                                    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-                                        {EVENT_THEMES.map((t) => {
-                                            const active = form.theme_id === t.id;
-                                            return (
-                                                <button
-                                                    key={t.id}
-                                                    type="button"
-                                                    onClick={() => setField("theme_id", t.id)}
-                                                    aria-pressed={active}
-                                                    className={cn(
-                                                        "group rounded-md border-2 p-1.5 text-left transition-colors",
-                                                        active ? "border-primary" : "border-border hover:border-primary/40"
-                                                    )}
-                                                >
-                                                    <span className={cn("relative block aspect-[4/3] w-full rounded bg-gradient-to-br", t.swatch)}>
-                                                        {active && (
-                                                            <span className="absolute right-1.5 top-1.5 grid h-5 w-5 place-items-center rounded-full bg-primary text-primary-foreground">
-                                                                <FontAwesomeIcon icon={faCheck} className="!size-[9px]" />
-                                                            </span>
-                                                        )}
-                                                    </span>
-                                                    <span className="mt-2 block text-center text-[12px] font-medium text-foreground">
-                                                        {t.name}
-                                                    </span>
-                                                </button>
-                                            );
-                                        })}
+                                    /* An empty catalogue is stated, not papered over with
+                                       stand-in designs. The two cases have different
+                                       answers — narrow the event, or ask for more — so
+                                       they are worded differently rather than merged. */
+                                    <div className="rounded-md border border-dashed border-border px-6 py-10 text-center">
+                                        <FontAwesomeIcon icon={faPalette} className="!size-[24px] text-muted-foreground/40" />
+                                        <p className="mt-3 text-[13.5px] font-semibold text-foreground">
+                                            No templates available
+                                        </p>
+                                        <p className="mx-auto mt-1 max-w-sm text-[12.5px] text-muted-foreground">
+                                            {opts?.templates && opts.templates.length > 0
+                                                ? "None of your plan’s templates match the category, type or religion selected in Event Basics. Go back and change your selection, or contact us for more designs."
+                                                : "Your subscription plan doesn’t include any invitation templates yet. Please contact us to have them added to your plan."}
+                                        </p>
+                                        <p className="mt-3 text-[11.5px] text-muted-foreground/80">
+                                            You can still continue — a template can be chosen later by editing the event.
+                                        </p>
                                     </div>
-                                )}
-
-                                {/* Said out loud rather than silently swapping catalogues:
-                                    otherwise the grid changing under you on a category
-                                    change looks like a bug. */}
-                                {opts?.templates && opts.templates.length > 0 && dbTemplates.length === 0 && (
-                                    <p className="mt-2 text-[11.5px] text-muted-foreground">
-                                        None of your plan&rsquo;s templates match this event category, so the
-                                        built-in designs are shown instead.
-                                    </p>
                                 )}
 
                                 <p className="mb-3 mt-6 text-[12.5px] font-semibold text-foreground">Primary Color</p>
@@ -897,9 +929,11 @@ export function EventWizard({
                                             : undefined
                                     }
                                 >
-                                    <p className="text-[10.5px] font-semibold uppercase tracking-[0.18em] text-foreground/70">
-                                        You&rsquo;re invited to
-                                    </p>
+                                    {showsComponent("event_title") && (
+                                        <p className="text-[10.5px] font-semibold uppercase tracking-[0.18em] text-foreground/70">
+                                            You&rsquo;re invited to
+                                        </p>
+                                    )}
                                     <p
                                         className="mt-2 text-[24px] font-bold leading-tight break-words"
                                         style={{ color: form.primary_color }}
@@ -909,29 +943,54 @@ export function EventWizard({
                                     {form.tagline && (
                                         <p className="mt-1.5 text-[12px] text-foreground/70 break-words">{form.tagline}</p>
                                     )}
-                                    <div className="my-4 flex items-center justify-center gap-3 border-y border-foreground/10 py-3">
-                                        <span className="text-[26px] font-bold tabular-nums text-foreground">
-                                            {form.start_date ? form.start_date.slice(8, 10) : "--"}
-                                        </span>
-                                        <span className="text-left text-[11px] font-semibold uppercase leading-tight text-foreground/70">
-                                            {form.start_date ? new Date(form.start_date).toLocaleString("en", { month: "short" }) : "---"}
-                                            <br />
-                                            {form.start_date ? form.start_date.slice(0, 4) : "----"}
-                                        </span>
-                                    </div>
-                                    <p className="text-[11.5px] text-foreground/70">
-                                        {form.start_time || "--:--"} &ndash; {form.end_time || "--:--"}
-                                    </p>
+
+                                    {showsComponent("date_time") && (
+                                        <>
+                                            <div className="my-4 flex items-center justify-center gap-3 border-y border-foreground/10 py-3">
+                                                <span className="text-[26px] font-bold tabular-nums text-foreground">
+                                                    {form.start_date ? form.start_date.slice(8, 10) : "--"}
+                                                </span>
+                                                <span className="text-left text-[11px] font-semibold uppercase leading-tight text-foreground/70">
+                                                    {form.start_date ? new Date(form.start_date).toLocaleString("en", { month: "short" }) : "---"}
+                                                    <br />
+                                                    {form.start_date ? form.start_date.slice(0, 4) : "----"}
+                                                </span>
+                                            </div>
+                                            <p className="text-[11.5px] text-foreground/70">
+                                                {form.start_time || "--:--"} &ndash; {form.end_time || "--:--"}
+                                            </p>
+                                        </>
+                                    )}
+
+                                    {/* The description the client typed on step 2. It was
+                                        collected and then never shown, so the preview
+                                        confirmed less than the form had actually asked
+                                        for. Gated on the template's own component, since
+                                        a design can switch the message off. */}
+                                    {form.description && showsComponent("invitation_message") && (
+                                        <p className="mt-3 text-[11px] italic leading-snug text-foreground/75 break-words">
+                                            {form.description}
+                                        </p>
+                                    )}
                                     {/* A placeholder, and correctly so: the QR encodes
                                         the event's encrypted token, and no event
                                         exists to encode until this step is submitted.
-                                        The real code appears on step 6. */}
-                                    <span className="mx-auto mt-4 grid h-20 w-20 place-items-center rounded bg-foreground/10">
-                                        <FontAwesomeIcon icon={faQrcode} className="!size-[34px] text-foreground/50" />
-                                    </span>
-                                    <p className="mt-2 text-[10px] text-foreground/60">
-                                        QR code is generated when you create the event
-                                    </p>
+                                        The real code appears on step 6.
+
+                                        Hidden entirely when the template switches the
+                                        QR off — several of the premium designs do, and
+                                        promising a code the invitation will not carry
+                                        is worse than not showing one. */}
+                                    {showsComponent("event_qr_code") && (
+                                        <>
+                                            <span className="mx-auto mt-4 grid h-20 w-20 place-items-center rounded bg-foreground/10">
+                                                <FontAwesomeIcon icon={faQrcode} className="!size-[34px] text-foreground/50" />
+                                            </span>
+                                            <p className="mt-2 text-[10px] text-foreground/60">
+                                                QR code is generated when you create the event
+                                            </p>
+                                        </>
+                                    )}
                                 </div>
                                 <Button variant="outline" className="h-10 rounded-md text-[13px] font-medium">
                                     <FontAwesomeIcon icon={faDownload} className="mr-2 !size-[12px]" />

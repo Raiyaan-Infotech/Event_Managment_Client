@@ -117,17 +117,26 @@ export function resolveArtwork(
  * Haldi-only template for a Reception. A NULL column on the template means "any"
  * — a general template must stay on offer whatever is selected.
  */
-export function templatesForEvent(
-    templates: TemplateOption[] | undefined,
-    scope: { categoryId?: number | null; typeId?: number | null; religionId?: number | null }
-): TemplateOption[] {
-    const suits = (want: number | null | undefined, has: number | null) =>
+type Scope = { categoryId?: number | null; typeId?: number | null; religionId?: number | null };
+
+/** NULL on the row means "suits every value of it" — the shared scoping rule. */
+const suitsScope = (
+    row: { event_category_id?: number | null; event_type_id?: number | null; religion_id?: number | null },
+    scope: Scope
+): boolean => {
+    const suits = (want: number | null | undefined, has: number | null | undefined) =>
         !has || !want || Number(has) === Number(want);
 
-    return (templates ?? []).filter(
-        (t) =>
-            suits(scope.categoryId, t.event_category_id) &&
-            suits(scope.typeId, t.event_type_id) &&
-            suits(scope.religionId, t.religion_id)
+    return (
+        suits(scope.categoryId, row.event_category_id) &&
+        suits(scope.typeId, row.event_type_id) &&
+        suits(scope.religionId, row.religion_id)
     );
+};
+
+export function templatesForEvent(
+    templates: TemplateOption[] | undefined,
+    scope: Scope
+): TemplateOption[] {
+    return (templates ?? []).filter((t) => suitsScope(t, scope));
 }

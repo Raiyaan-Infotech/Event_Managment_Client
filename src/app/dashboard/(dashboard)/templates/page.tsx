@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -11,9 +11,9 @@ import {
     faRotateRight,
     faLightbulb,
     faArrowRight,
-    faCheck,
     faLayerGroup,
     faChevronDown,
+    faStar,
 } from "@fortawesome/free-solid-svg-icons";
 import { faHeart as faHeartOutline } from "@fortawesome/free-regular-svg-icons";
 import { Button } from "@/components/ui/button";
@@ -30,48 +30,36 @@ import {
 import {
     Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import {
-    EVENT_THEMES,
-    TEMPLATE_CATEGORIES,
-    TEMPLATE_STYLES,
-    TEMPLATE_LAYOUTS,
-    TEMPLATE_COLOR_FILTERS,
-    type EventTheme,
-} from "@/lib/event-themes";
+import { templateBackground, isDarkTemplate } from "@/lib/event-templates";
 import { useEventAnalytics } from "@/hooks/use-client-events";
-import { useClientProfile, useSetFavouriteTemplates } from "@/hooks/use-client-portal";
+import {
+    useClientProfile, useEventOptions, useSetFavouriteTemplates, type TemplateOption,
+} from "@/hooks/use-client-portal";
 
 /**
  * Templates — the invitation designs a client can build an event on.
  *
  * ── WHAT BACKS THIS ──────────────────────────────────────────────────────────
- * `lib/event-themes.ts`. That list is the REAL catalogue: it is what the Create
- * Event wizard offers, and what an event stores in `theme_id`. There is no
- * templates table for this, and `company_templates` in the backend belongs to
- * the Website Builder — a different domain, tied to the tenant's website rather
- * than to a client's invitation.
+ * `event_templates` ONLY — admin-authored and plan-scoped.
+ * `/client/event-options` has already narrowed the list to what THIS client's
+ * plan entitles them to, so nothing shown here needs re-checking on "Use".
  *
- * So every card here is a template that genuinely works: "Use Template" opens
- * the wizard with it already selected, and the artwork is the same component
- * the event rows and cards render.
+ * ── WHY THERE IS NO HARDCODED FALLBACK ───────────────────────────────────────
+ * `lib/event-themes.ts` used to fill this screen when a plan had no templates.
+ * That was wrong twice over: it offered designs the plan does not grant (the
+ * exact mis-sell the plan gating exists to prevent), and a full grid of
+ * stand-ins made an empty catalogue look stocked, so nobody could tell a
+ * misconfigured plan from a working one. An empty plan now SAYS it is empty.
  *
- * ── WHAT IS REAL IN THE FILTER PANEL ─────────────────────────────────────────
- * Colour, Event Type, Style, Layout and Favourites Only all filter on something
- * real. The design's "Free templates only" switch was dropped rather than shown
- * disabled: every template is free, so it could never filter anything, and a
- * control that cannot change the result is worse than no control.
- *
- * "Used by your events" comes from `/client/events/analytics` (`by_theme`), so
- * the counts on the cards are the client's own real usage.
+ * That file still exists, and must: an event saved earlier holds a legacy slug
+ * in `theme_id`, and `resolveArtwork` needs the list to draw its artwork. It is
+ * for rendering history, never for offering something new.
  *
  * ── FAVOURITES ───────────────────────────────────────────────────────────────
- * `website_clients.favourite_templates`, through
- * `PUT /client/favourite-templates`. This WAS localStorage, which was wrong:
- * the hearts vanished on a different browser, were invisible to anything
- * server-side, and silently did nothing in private mode where writes are
- * refused. The whole list is sent on each change rather than a toggle, because
- * a toggle endpoint races itself when two hearts are clicked quickly.
+ * `website_clients.favourite_templates`, through `PUT /client/favourite-templates`,
+ * keyed by the template's `code` — the same slug that ends up in `events.theme_id`.
  */
 
 const PAGE_SIZE = 8;
@@ -85,31 +73,87 @@ const SORTS: { value: SortKey; label: string }[] = [
 ];
 
 export default function TemplatesPage() {
+    const options = useEventOptions();
+    const opts = options.data;
+    const dbTemplates = opts?.templates ?? [];
+
+    if (options.isLoading) return <TemplatesSkeleton />;
+
+    // Stated plainly rather than backfilled with built-in designs — see the
+    // "why there is no hardcoded fallback" note above. `reason` is the
+    // backend's own words for a missing or inactive plan and outranks the
+    // generic message, since it names the actual problem.
+    if (dbTemplates.length === 0) {
+        return (
+            <div className="flex flex-col gap-5">
+                <div className="min-w-0">
+                    <h1 className="text-[24px] font-bold leading-tight tracking-tight text-foreground">Templates</h1>
+                    <p className="mt-1 text-[13.5px] text-muted-foreground">
+                        Choose a template and customize it to create your perfect invitation.
+                    </p>
+                </div>
+
+                <Card className="border border-border shadow-none py-0">
+                    <CardContent className="flex flex-col items-center gap-2 py-16 text-center">
+                        <FontAwesomeIcon icon={faLayerGroup} className="!size-[26px] text-muted-foreground/40" />
+                        <p className="text-[14px] font-semibold text-foreground">No templates available</p>
+                        <p className="max-w-md text-[13px] text-muted-foreground">
+                            {opts?.reason
+                                ?? "Your subscription plan doesn’t include any invitation templates yet. Please contact us to have them added to your plan."}
+                        </p>
+                        <Button asChild variant="outline" size="sm" className="mt-2 h-9 text-[12.5px]">
+                            <Link href="/dashboard/events/create">Create an event anyway</Link>
+                        </Button>
+                    </CardContent>
+                </Card>
+            </div>
+        );
+    }
+
+    return <DbTemplates templates={dbTemplates} categories={opts?.categories ?? []} />;
+}
+
+function TemplatesSkeleton() {
+    return (
+        <div className="flex flex-col gap-5">
+            <Skeleton className="h-8 w-[220px]" />
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                {Array.from({ length: 4 }).map((_, i) => (
+                    <Skeleton key={i} className="aspect-square w-full rounded-md" />
+                ))}
+            </div>
+        </div>
+    );
+}
+
+/* ── Admin-authored, plan-scoped catalogue ──────────────────────────────── */
+
+function DbTemplates({
+    templates, categories,
+}: {
+    templates: TemplateOption[];
+    categories: { id: number; name: string }[];
+}) {
     const [search, setSearch] = useState("");
-    const [category, setCategory] = useState<string>("all");
-    const [colour, setColour] = useState<string | null>(null);
+    const [categoryId, setCategoryId] = useState<number | "all">("all");
     const [style, setStyle] = useState("all");
-    const [layout, setLayout] = useState("all");
     const [sort, setSort] = useState<SortKey>("popular");
     const [favouritesOnly, setFavouritesOnly] = useState(false);
+    const [featuredOnly, setFeaturedOnly] = useState(false);
     const [visible, setVisible] = useState(PAGE_SIZE);
-    const [preview, setPreview] = useState<EventTheme | null>(null);
+    const [preview, setPreview] = useState<TemplateOption | null>(null);
 
-    // Server-held, read off the client's own profile. The mutation is optimistic
-    // and rolls back on failure, so the heart still responds instantly without
-    // pretending a failed save succeeded.
     const profile = useClientProfile();
     const saveFavourites = useSetFavouriteTemplates();
     const favourites = useMemo(() => profile.data?.favourite_templates ?? [], [profile.data]);
 
-    const toggleFavourite = (id: string) => {
-        const next = favourites.includes(id)
-            ? favourites.filter((f) => f !== id)
-            : [...favourites, id];
+    const toggleFavourite = (code: string) => {
+        const next = favourites.includes(code)
+            ? favourites.filter((f) => f !== code)
+            : [...favourites, code];
         saveFavourites.mutate(next);
     };
 
-    // The client's own template usage, so the counts on the cards are real.
     const analytics = useEventAnalytics();
     const usage = useMemo(() => {
         const map = new Map<string, number>();
@@ -117,51 +161,62 @@ export default function TemplatesPage() {
         return map;
     }, [analytics.data]);
 
-    // Any filter change resets the page size, or "Load More" would appear to do
-    // nothing when the new result set is smaller than what is already shown.
-    useEffect(() => { setVisible(PAGE_SIZE); }, [search, category, colour, style, layout, sort, favouritesOnly]);
+    // Every style at least one admin template claims — a hardcoded list would
+    // offer styles nothing in this plan actually has.
+    const styles = useMemo(
+        () => [...new Set(templates.map((t) => t.style).filter(Boolean))].sort(),
+        [templates]
+    );
+
+    /**
+     * Any filter change resets the page size, or "Load More" appears to do
+     * nothing when the new result set is smaller than what is already shown.
+     *
+     * Adjusted during render rather than in an effect: an effect would paint
+     * the over-long list once and then correct it, and React flags the
+     * cascading render it causes. Comparing against the previous key is the
+     * documented way to reset state when inputs change.
+     */
+    const filterKey = [search, categoryId, style, sort, favouritesOnly, featuredOnly].join("|");
+    const [lastFilterKey, setLastFilterKey] = useState(filterKey);
+    if (lastFilterKey !== filterKey) {
+        setLastFilterKey(filterKey);
+        setVisible(PAGE_SIZE);
+    }
 
     const filtered = useMemo(() => {
         const term = search.trim().toLowerCase();
-        const colourMatch = TEMPLATE_COLOR_FILTERS.find((c) => c.key === colour);
 
-        const rows = EVENT_THEMES.filter((t) => {
-            if (term && !t.name.toLowerCase().includes(term) && !t.style.toLowerCase().includes(term)) return false;
-            if (category !== "all" && !t.categories.includes(category as never)) return false;
-            if (colourMatch && !colourMatch.match.includes(t.accent)) return false;
+        const rows = templates.filter((t) => {
+            if (term && !t.name.toLowerCase().includes(term) && !(t.style ?? "").toLowerCase().includes(term)) return false;
+            // NULL on the template means "suits every category" — same rule the
+            // wizard applies when narrowing by what step 1 picked.
+            if (categoryId !== "all" && t.event_category_id && t.event_category_id !== categoryId) return false;
             if (style !== "all" && t.style !== style) return false;
-            if (layout !== "all" && t.layout !== layout) return false;
-            if (favouritesOnly && !favourites.includes(t.id)) return false;
+            if (favouritesOnly && !favourites.includes(t.code)) return false;
+            if (featuredOnly && !t.is_featured) return false;
             return true;
         });
 
-        // Sorted on a copy — EVENT_THEMES is module state shared with the wizard,
-        // and sorting it in place would reorder the theme picker as a side effect.
         return [...rows].sort((a, b) => {
             if (sort === "name") return a.name.localeCompare(b.name);
-            if (sort === "newest") {
-                const rank = (t: EventTheme) => (t.badge === "New" ? 0 : 1);
-                return rank(a) - rank(b) || a.name.localeCompare(b.name);
-            }
-            // Popular: badged first, then whatever this client actually uses most.
-            const rank = (t: EventTheme) => (t.badge === "Popular" ? 0 : t.badge === "New" ? 1 : 2);
-            return rank(a) - rank(b) || (usage.get(b.id) ?? 0) - (usage.get(a.id) ?? 0);
+            if (sort === "newest") return b.id - a.id; // no created_at on the row; insertion order is the best proxy
+            // Popular: featured first, then whatever this client actually uses most.
+            const rank = (t: TemplateOption) => (t.is_featured ? 0 : 1);
+            return rank(a) - rank(b) || (usage.get(b.code) ?? 0) - (usage.get(a.code) ?? 0) || a.sort_order - b.sort_order;
         });
-    }, [search, category, colour, style, layout, sort, usage, favouritesOnly, favourites]);
+    }, [templates, search, categoryId, style, sort, usage, favouritesOnly, featuredOnly, favourites]);
 
     const shown = filtered.slice(0, visible);
     const activeFilters =
-        (colour ? 1 : 0) + (style !== "all" ? 1 : 0) + (layout !== "all" ? 1 : 0) +
-        (category !== "all" ? 1 : 0) + (favouritesOnly ? 1 : 0);
+        (categoryId !== "all" ? 1 : 0) + (style !== "all" ? 1 : 0) + (favouritesOnly ? 1 : 0) + (featuredOnly ? 1 : 0);
 
     const resetFilters = () => {
-        setColour(null); setStyle("all"); setLayout("all"); setCategory("all");
-        setFavouritesOnly(false);
+        setCategoryId("all"); setStyle("all"); setFavouritesOnly(false); setFeaturedOnly(false);
     };
 
     return (
         <div className="flex flex-col gap-5">
-            {/* ── Header ──────────────────────────────────────────────────── */}
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div className="min-w-0">
                     <h1 className="text-[24px] font-bold leading-tight tracking-tight text-foreground">Templates</h1>
@@ -198,8 +253,7 @@ export default function TemplatesPage() {
                 </div>
             </div>
 
-            {/* ── Category tabs ───────────────────────────────────────────── */}
-            <Tabs value={category} onValueChange={setCategory} className="overflow-x-auto">
+            <Tabs value={String(categoryId)} onValueChange={(v) => setCategoryId(v === "all" ? "all" : Number(v))} className="overflow-x-auto">
                 <TabsList variant="line" className="h-auto flex-nowrap gap-2 p-0">
                     <TabsTrigger
                         value="all"
@@ -207,19 +261,18 @@ export default function TemplatesPage() {
                     >
                         All Templates
                     </TabsTrigger>
-                    {TEMPLATE_CATEGORIES.map((c) => (
+                    {categories.map((c) => (
                         <TabsTrigger
-                            key={c}
-                            value={c}
+                            key={c.id}
+                            value={String(c.id)}
                             className="h-9 rounded-md border border-border px-4 text-[12.5px] data-[state=active]:border-primary data-[state=active]:bg-primary/5 data-[state=active]:font-semibold data-[state=active]:text-primary data-[state=active]:after:opacity-0"
                         >
-                            {c}
+                            {c.name}
                         </TabsTrigger>
                     ))}
                 </TabsList>
             </Tabs>
 
-            {/* ── Grid + filter rail ──────────────────────────────────────── */}
             <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_260px]">
                 <div className="flex min-w-0 flex-col gap-5">
                     {shown.length === 0 ? (
@@ -242,19 +295,37 @@ export default function TemplatesPage() {
                     ) : (
                         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                             {shown.map((template) => {
-                                const used = usage.get(template.id) ?? 0;
-                                const isFavourite = favourites.includes(template.id);
+                                const used = usage.get(template.code) ?? 0;
+                                const isFavourite = favourites.includes(template.code);
+                                const dark = isDarkTemplate(template);
                                 return (
                                     <Card
                                         key={template.id}
                                         className="min-w-0 gap-0 overflow-hidden border border-border p-0 shadow-none transition-shadow hover:shadow-md"
                                     >
                                         <div className="relative">
-                                            <TemplatePreview template={template} className="aspect-square w-full" />
+                                            <div
+                                                className="relative flex aspect-square w-full items-center justify-center overflow-hidden"
+                                                style={templateBackground(template)}
+                                            >
+                                                {template.thumbnail ? (
+                                                    // eslint-disable-next-line @next/next/no-img-element
+                                                    <img src={template.thumbnail} alt="" className="absolute inset-0 h-full w-full object-cover" />
+                                                ) : (
+                                                    <span
+                                                        className={cn(
+                                                            "px-4 text-center text-[13px] font-bold italic break-words",
+                                                            dark ? "text-white" : "text-black"
+                                                        )}
+                                                    >
+                                                        {template.name}
+                                                    </span>
+                                                )}
+                                            </div>
 
                                             <button
                                                 type="button"
-                                                onClick={() => toggleFavourite(template.id)}
+                                                onClick={() => toggleFavourite(template.code)}
                                                 aria-label={isFavourite ? `Remove ${template.name} from favourites` : `Add ${template.name} to favourites`}
                                                 aria-pressed={isFavourite}
                                                 className="absolute right-2.5 top-2.5 grid h-7 w-7 place-items-center rounded-full bg-background/90 shadow-sm backdrop-blur-sm transition-colors hover:bg-background"
@@ -277,21 +348,13 @@ export default function TemplatesPage() {
 
                                         <div className="flex flex-col gap-3 p-3">
                                             <div className="flex flex-wrap items-center gap-2">
-                                                {/* break-words, never truncate. */}
                                                 <p className="text-[13px] font-bold text-foreground break-words">
                                                     {template.name}
                                                 </p>
-                                                {template.badge && (
-                                                    <Badge
-                                                        variant="ghost"
-                                                        className={cn(
-                                                            "rounded px-2 py-0.5 text-[10px] font-semibold",
-                                                            template.badge === "New"
-                                                                ? "bg-success/15 text-success"
-                                                                : "bg-primary/10 text-primary"
-                                                        )}
-                                                    >
-                                                        {template.badge}
+                                                {!!template.is_featured && (
+                                                    <Badge variant="ghost" className="rounded bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                                                        <FontAwesomeIcon icon={faStar} className="mr-1 !size-[8px]" />
+                                                        Featured
                                                     </Badge>
                                                 )}
                                             </div>
@@ -307,10 +370,7 @@ export default function TemplatesPage() {
                                                     Preview
                                                 </Button>
                                                 <Button asChild size="sm" className="h-8 flex-1 rounded-md text-[12px] font-semibold">
-                                                    {/* Opens the wizard with this template
-                                                        already selected — the whole point of
-                                                        the screen. */}
-                                                    <Link href={`/dashboard/events/create?theme=${template.id}`}>Use</Link>
+                                                    <Link href={`/dashboard/events/create?theme=${template.code}`}>Use</Link>
                                                 </Button>
                                             </div>
                                         </div>
@@ -340,7 +400,6 @@ export default function TemplatesPage() {
                     )}
                 </div>
 
-                {/* ── Filter rail ─────────────────────────────────────────── */}
                 <div className="flex min-w-0 flex-col gap-5">
                     <Card className="border border-border shadow-none py-0">
                         <CardContent className="p-4">
@@ -351,81 +410,42 @@ export default function TemplatesPage() {
 
                             <div className="flex flex-col gap-4">
                                 <div className="flex flex-col gap-2">
-                                    <Label className="text-[12px] font-medium">Color Theme</Label>
-                                    <div className="flex flex-wrap gap-2">
-                                        {TEMPLATE_COLOR_FILTERS.map((c) => (
-                                            <button
-                                                key={c.key}
-                                                type="button"
-                                                aria-label={c.label}
-                                                aria-pressed={colour === c.key}
-                                                // Clicking the active swatch clears it —
-                                                // otherwise the only way out of a colour
-                                                // filter is the Reset button.
-                                                onClick={() => setColour(colour === c.key ? null : c.key)}
-                                                style={{ backgroundColor: c.hex }}
-                                                className={cn(
-                                                    "grid h-6 w-6 place-items-center rounded-full ring-offset-2 ring-offset-card transition-shadow",
-                                                    colour === c.key && "ring-2 ring-foreground/50"
-                                                )}
-                                            >
-                                                {colour === c.key && (
-                                                    <FontAwesomeIcon icon={faCheck} className="!size-[9px] text-white drop-shadow" />
-                                                )}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                <div className="flex flex-col gap-2">
                                     <Label className="text-[12px] font-medium">Event Type</Label>
-                                    <Select value={category} onValueChange={setCategory}>
+                                    <Select value={String(categoryId)} onValueChange={(v) => setCategoryId(v === "all" ? "all" : Number(v))}>
                                         <SelectTrigger className="h-9 rounded-md text-[12.5px]">
                                             <SelectValue placeholder="All Event Types" />
                                         </SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="all">All Event Types</SelectItem>
-                                            {TEMPLATE_CATEGORIES.map((c) => (
-                                                <SelectItem key={c} value={c}>{c}</SelectItem>
+                                            {categories.map((c) => (
+                                                <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
                                             ))}
                                         </SelectContent>
                                     </Select>
                                 </div>
 
-                                <div className="flex flex-col gap-2">
-                                    <Label className="text-[12px] font-medium">Style</Label>
-                                    <Select value={style} onValueChange={setStyle}>
-                                        <SelectTrigger className="h-9 rounded-md text-[12.5px]">
-                                            <SelectValue placeholder="All Styles" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">All Styles</SelectItem>
-                                            {TEMPLATE_STYLES.map((v) => (
-                                                <SelectItem key={v} value={v}>{v}</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+                                {styles.length > 0 && (
+                                    <div className="flex flex-col gap-2">
+                                        <Label className="text-[12px] font-medium">Style</Label>
+                                        <Select value={style} onValueChange={setStyle}>
+                                            <SelectTrigger className="h-9 rounded-md text-[12.5px]">
+                                                <SelectValue placeholder="All Styles" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="all">All Styles</SelectItem>
+                                                {styles.map((v) => (
+                                                    <SelectItem key={v} value={v}>{v}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                )}
+
+                                <div className="flex items-center justify-between gap-3">
+                                    <Label className="text-[12px] font-medium">Featured Only</Label>
+                                    <Switch checked={featuredOnly} onCheckedChange={setFeaturedOnly} aria-label="Show featured templates only" />
                                 </div>
 
-                                <div className="flex flex-col gap-2">
-                                    <Label className="text-[12px] font-medium">Layout</Label>
-                                    <Select value={layout} onValueChange={setLayout}>
-                                        <SelectTrigger className="h-9 rounded-md text-[12.5px]">
-                                            <SelectValue placeholder="All Layouts" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">All Layouts</SelectItem>
-                                            {TEMPLATE_LAYOUTS.map((v) => (
-                                                <SelectItem key={v} value={v}>{v}</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-
-                                {/* Was a locked "Free templates only" switch — every
-                                    template is free, so it filtered nothing and read
-                                    as broken. Favourites persist server-side now, so
-                                    this is a toggle that does something. */}
                                 <div className="flex items-center justify-between gap-3">
                                     <div className="min-w-0">
                                         <Label className="text-[12px] font-medium">Favourites Only</Label>
@@ -479,21 +499,35 @@ export default function TemplatesPage() {
                 </div>
             </div>
 
-            {/* ── Preview dialog ──────────────────────────────────────────── */}
             <Dialog open={!!preview} onOpenChange={(v) => { if (!v) setPreview(null); }}>
                 <DialogContent className="sm:max-w-[420px]">
                     <DialogHeader>
                         <DialogTitle>{preview?.name}</DialogTitle>
-                        <DialogDescription>
-                            {preview?.style} · {preview?.layout} · {preview?.categories.join(", ")}
-                        </DialogDescription>
+                        <DialogDescription>{preview?.style}</DialogDescription>
                     </DialogHeader>
 
                     {preview && (
                         <div className="flex flex-col gap-4">
-                            <TemplatePreview template={preview} className="aspect-square w-full" large />
+                            <div
+                                className="relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-md"
+                                style={templateBackground(preview)}
+                            >
+                                {preview.thumbnail ? (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img src={preview.thumbnail} alt="" className="absolute inset-0 h-full w-full object-cover" />
+                                ) : (
+                                    <span
+                                        className={cn(
+                                            "px-6 text-center text-[22px] font-bold italic break-words",
+                                            isDarkTemplate(preview) ? "text-white" : "text-black"
+                                        )}
+                                    >
+                                        {preview.name}
+                                    </span>
+                                )}
+                            </div>
                             <Button asChild className="h-10 w-full rounded-md text-[13px] font-semibold">
-                                <Link href={`/dashboard/events/create?theme=${preview.id}`}>
+                                <Link href={`/dashboard/events/create?theme=${preview.code}`}>
                                     Use this template
                                 </Link>
                             </Button>
@@ -505,67 +539,3 @@ export default function TemplatesPage() {
     );
 }
 
-/**
- * A template's artwork.
- *
- * Deliberately NOT `EventThumbnail` — that one is a miniature for a list row and
- * shows a real event's name. This is the empty template as the wizard's step-5
- * preview renders it, at card or dialog size. `dark` picks the ink, exactly as
- * it does there: without it the two near-black templates draw as blank squares.
- */
-function TemplatePreview({
-    template, className, large,
-}: {
-    template: EventTheme;
-    className?: string;
-    large?: boolean;
-}) {
-    const ink = template.dark ? "text-white" : "text-black";
-    const muted = template.dark ? "text-white/60" : "text-black/45";
-    const rule = template.dark ? "bg-white/25" : "bg-black/15";
-
-    return (
-        <div
-            className={cn(
-                "flex flex-col items-center justify-center bg-gradient-to-br p-4 text-center",
-                template.swatch,
-                className
-            )}
-        >
-            <span
-                className={cn(
-                    "font-semibold uppercase tracking-[0.22em]",
-                    large ? "text-[11px]" : "text-[8px]",
-                    muted
-                )}
-            >
-                You&rsquo;re invited
-            </span>
-            <span className={cn("mt-0.5 uppercase tracking-[0.2em]", large ? "text-[9px]" : "text-[6.5px]", muted)}>
-                to
-            </span>
-            <span
-                className={cn(
-                    "mt-1.5 font-bold italic leading-tight",
-                    large ? "text-[22px]" : "text-[13px]",
-                    ink
-                )}
-                style={{ color: template.dark ? undefined : template.accent }}
-            >
-                Our Special Event
-            </span>
-            <span className={cn("mt-2.5 h-px", rule, large ? "w-16" : "w-10")} />
-            <FontAwesomeIcon
-                icon={faHeartSolid}
-                className={cn(large ? "!size-[12px]" : "!size-[8px]", "mt-2")}
-                style={{ color: template.accent }}
-            />
-            {large && (
-                <>
-                    <span className={cn("mt-3 text-[10px]", muted)}>25 May 2025 · 07:00 PM</span>
-                    <span className={cn("text-[10px]", muted)}>The Grand Palace, New Delhi</span>
-                </>
-            )}
-        </div>
-    );
-}

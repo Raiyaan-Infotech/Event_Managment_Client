@@ -222,6 +222,8 @@ export function EventDetail({ eventId }: { eventId: number }) {
                         themeId={event.theme_id}
                         name={event.name}
                         primaryColor={event.primary_color}
+                        startDate={event.start_date}
+                        venueName={event.venue_name}
                         className="h-[200px] w-full shrink-0 rounded-lg lg:w-[206px]"
                     />
 
