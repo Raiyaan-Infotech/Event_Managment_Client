@@ -89,8 +89,27 @@ async function request<T>(method: string, path: string, body?: unknown, query?: 
             // Sends the backend session cookie cross-origin. Without this the
             // request is anonymous and every protected route answers 401.
             credentials: 'include',
-            headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
-            body: body === undefined ? undefined : JSON.stringify(body),
+            /*
+              FormData goes through UNTOUCHED, and deliberately without a
+              Content-Type.
+
+              Stringifying it would send "[object FormData]"; setting
+              'multipart/form-data' by hand is worse, because the header must
+              carry a generated boundary and one written by hand has none — the
+              server then cannot split the parts and reports an empty upload
+              with nothing explaining why. Letting the browser set it is the
+              only correct option.
+            */
+            headers:
+                body === undefined || body instanceof FormData
+                    ? undefined
+                    : { 'Content-Type': 'application/json' },
+            body:
+                body === undefined
+                    ? undefined
+                    : body instanceof FormData
+                        ? body
+                        : JSON.stringify(body),
         });
     } catch {
         // fetch only rejects on network/CORS failure — never on a 4xx/5xx.

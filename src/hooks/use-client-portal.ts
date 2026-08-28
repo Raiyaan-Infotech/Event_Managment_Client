@@ -57,6 +57,26 @@ export interface ClientProfile {
     subscription_plan_id: number | null;
     /** Template slugs hearted on the Templates screen. Null until first saved. */
     favourite_templates: string[] | null;
+
+    /** Free text the client types about themselves, from Settings > Profile. */
+    company_name: string | null;
+    bio: string | null;
+    dial_code: string | null;
+
+    /** Whether each contact route has been proven. Read-only to the client. */
+    email_verified: number;
+    mobile_verified: number;
+
+    /** Drives "Member Since". */
+    created_at: string;
+
+    /**
+     * Whether this account has a password at all.
+     *
+     * A social-only sign-in has none, and the Change Password form has to say so
+     * rather than asking for a current password that never existed.
+     */
+    has_password?: number | boolean;
 }
 
 export interface TaxonomyOption {
@@ -255,5 +275,101 @@ export function useSetFavouriteTemplates() {
         onSettled: () => {
             qc.invalidateQueries({ queryKey: ['client', 'me'] });
         },
+    });
+}
+
+/**
+ * Update the signed-in client's own profile.
+ *
+ * The endpoint takes no id — it acts on the session — so there is nothing here
+ * that could be aimed at another account. The server whitelist is narrower than
+ * this payload looks: plan, active state and verification flags are ignored if
+ * sent.
+ */
+export function useUpdateProfile() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (patch: Partial<Pick<ClientProfile,
+            'name' | 'email' | 'mobile' | 'dial_code' | 'company_name' | 'bio' | 'avatar_url'>>) =>
+            api.put<{ client: ClientProfile }>('/client/me', patch).then((r) => r.client),
+        onSuccess: (client) => {
+            // Written straight into the cache rather than invalidated: the
+            // response IS the fresh row, and a refetch would show the old values
+            // for a beat before catching up.
+            qc.setQueryData(['client', 'me'], client);
+            toast.success('Profile updated');
+        },
+        onError: (error) => {
+            // The server's own wording — "That email address is already in use"
+            // is the only message that tells them what to do next.
+            toast.error(error instanceof ApiError ? error.message : 'Could not save your profile.');
+        },
+    });
+}
+
+/** Change the signed-in client's password. */
+export function useChangePassword() {
+    return useMutation({
+        mutationFn: (body: { current_password: string; new_password: string }) =>
+            api.put('/client/me/password', body),
+        onSuccess: () => toast.success('Password updated'),
+        onError: (error) =>
+            toast.error(error instanceof ApiError ? error.message : 'Could not change your password.'),
+    });
+}
+
+/**
+ * Close the signed-in client's own account.
+ *
+ * The server clears the session cookies, so there is nothing to sign out of
+ * afterwards — the caller just needs to leave the portal.
+ */
+export function useDeleteAccount() {
+    return useMutation({
+        mutationFn: () => api.del('/client/me'),
+        onError: (error) =>
+            toast.error(error instanceof ApiError ? error.message : 'Could not close your account.'),
+    });
+}
+
+/**
+ * Replace the signed-in client's profile photo.
+ *
+ * Goes to `/client/me/avatar`, not `/media/upload` — the latter is behind the
+ * ADMIN token plus a `media.upload` permission and the approval middleware, so
+ * a client session gets 401 there. The client route accepts images only, caps
+ * at 4MB, and writes the result straight onto `avatar_url`.
+ *
+ * Where the FILE lands is decided by the company's media settings, not here:
+ * S3 where that is configured, local disk where it is not.
+ */
+export function useUploadAvatar() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (file: File) => {
+            const form = new FormData();
+            form.append('file', file);
+            return api.put<{ client: ClientProfile }>('/client/me/avatar', form).then((r) => r.client);
+        },
+        onSuccess: (client) => {
+            qc.setQueryData(['client', 'me'], client);
+            toast.success('Photo updated');
+        },
+        onError: (error) =>
+            toast.error(error instanceof ApiError ? error.message : 'Could not upload that photo.'),
+    });
+}
+
+/** Clear it. The stored file is left in place — the server explains why. */
+export function useRemoveAvatar() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: () => api.del<{ client: ClientProfile }>('/client/me/avatar').then((r) => r.client),
+        onSuccess: (client) => {
+            qc.setQueryData(['client', 'me'], client);
+            toast.success('Photo removed');
+        },
+        onError: (error) =>
+            toast.error(error instanceof ApiError ? error.message : 'Could not remove that photo.'),
     });
 }

@@ -259,7 +259,7 @@ export default function Header() {
                         </DropdownMenuLabel>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem asChild>
-                            <Link href="/dashboard/settings" className="text-[12.5px]">
+                            <Link href="/dashboard/profile" className="text-[12.5px]">
                                 <FontAwesomeIcon icon={faUser} className="mr-2.5 !size-[12px]" /> My Profile
                             </Link>
                         </DropdownMenuItem>

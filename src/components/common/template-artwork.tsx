@@ -3,6 +3,7 @@
 import { InvitationCard, type InvitationData } from '@/components/common/invitation-card';
 import type { TemplateOption } from '@/hooks/use-client-portal';
 import { cn } from '@/lib/utils';
+import { mediaUrl } from '@/lib/media-url';
 
 /**
  * A template's design, drawn the way it will actually print.
@@ -103,11 +104,11 @@ export function TemplateArtwork({
             <span className={cn('mx-auto block w-full max-w-[248px] overflow-hidden rounded-md', className)}
                 style={{ aspectRatio: `${w} / ${h}` }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={template.thumbnail} alt="" className="h-full w-full object-cover" />
+                <img src={mediaUrl(template.thumbnail)} alt="" className="h-full w-full object-cover" />
             </span>
         ) : (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={template.thumbnail} alt=""
+            <img src={mediaUrl(template.thumbnail)} alt=""
                 className={cn('absolute inset-0 h-full w-full object-cover', className, cardClassName)} />
         );
     }

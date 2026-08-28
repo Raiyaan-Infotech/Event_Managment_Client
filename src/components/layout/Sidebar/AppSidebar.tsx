@@ -135,45 +135,40 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     <SidebarMenu className="gap-1">
                         {navMain.map((item) => {
                             const hasChildren = (item.items?.length ?? 0) > 0
-                            const groupActive =
-                                isActive(item.url) || item.items?.some((s) => isActive(s.url))
-
-                            // A parent whose CHILD is active gets the label weight but
-                            // not the filled background — otherwise the group header and
-                            // the selected child both look selected, and the eye cannot
-                            // tell which one it is actually on.
-                            const childActive = (item.items ?? []).some((s) => isActive(s.url))
                             const selfActive = isActive(item.url)
 
-                            const buttonClasses = cn(
-                                "h-[38px] rounded-md transition-colors !outline-none !ring-0 focus-visible:ring-0",
-                                selfActive && !hasChildren
-                                    ? "bg-sidebar-accent text-sidebar-accent-foreground font-semibold"
-                                    : childActive || selfActive
-                                        ? "bg-transparent font-semibold text-sidebar-accent-foreground hover:bg-sidebar-accent/60"
-                                        : "bg-transparent text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
-                                isCollapsed ? "px-0 justify-center" : "px-3"
-                            )
+                            // NOTE: a collapsible parent is deliberately never marked
+                            // active, matching the admin panel. The open group and the
+                            // highlighted child already say where you are; filling the
+                            // header too made both look selected at once.
+
+                            /*
+                              NO className on the rows below, deliberately.
+
+                              Height, padding, type scale, gaps and the active
+                              fill all come from the shared primitive — the same
+                              component the admin panel uses — so the two sidebars
+                              cannot drift apart.
+
+                              This used to override all of it: h-[38px], px-3,
+                              text-[13px], gap-2.5, 15px icons, and a hand-rolled
+                              active state that replaced the primitive's solid
+                              bg-sidebar-primary fill with a faint accent tint.
+                              That is why these rows read shorter and flatter than
+                              the admin panel's.
+                            */
 
                             // A row with nothing to expand is a plain link — no
                             // chevron, no collapsible, one click to navigate.
                             if (!hasChildren) {
                                 return (
                                     <SidebarMenuItem key={item.title}>
-                                        <SidebarMenuButton asChild tooltip={item.title} className={buttonClasses}>
-                                            <Link href={item.url} className="flex items-center gap-2.5">
+                                        <SidebarMenuButton asChild isActive={selfActive} tooltip={item.title}>
+                                            <Link href={item.url} className="flex items-center gap-2">
                                                 {item.icon && (
-                                                    <FontAwesomeIcon
-                                                        icon={item.icon}
-                                                        className={cn(
-                                                            "!size-[15px] shrink-0",
-                                                            groupActive ? "text-primary" : "text-sidebar-foreground/60"
-                                                        )}
-                                                    />
+                                                    <FontAwesomeIcon icon={item.icon} className="!size-4 shrink-0" />
                                                 )}
-                                                <span className="text-[13px] group-data-[collapsible=icon]:hidden">
-                                                    {item.title}
-                                                </span>
+                                                <span className="truncate">{item.title}</span>
                                             </Link>
                                         </SidebarMenuButton>
                                     </SidebarMenuItem>
@@ -194,25 +189,18 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                                                 gap and one child — the gap did nothing and the
                                                 wrapper broke alignment against the flat rows,
                                                 which put icon and label in ONE flex parent. */}
-                                            <SidebarMenuButton tooltip={item.title} className={cn(buttonClasses, "flex items-center gap-2.5")}>
+                                            <SidebarMenuButton tooltip={item.title}>
                                                 {item.icon && (
-                                                    <FontAwesomeIcon
-                                                        icon={item.icon}
-                                                        className={cn(
-                                                            "!size-[15px] shrink-0",
-                                                            groupActive ? "text-primary" : "text-sidebar-foreground/60"
-                                                        )}
-                                                    />
+                                                    <FontAwesomeIcon icon={item.icon} className="!size-4 shrink-0" />
                                                 )}
-                                                <span className="text-[13px] group-data-[collapsible=icon]:hidden">
-                                                    {item.title}
-                                                </span>
-                                                {!isCollapsed && (
-                                                    <FontAwesomeIcon
-                                                        icon={faChevronDown}
-                                                        className="ml-auto !size-3 text-sidebar-foreground/50 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180"
-                                                    />
-                                                )}
+                                                {/* truncate + shrink-0 on the icon: a long
+                                                    label otherwise wraps and pushes the
+                                                    chevron out of alignment. */}
+                                                <span className="truncate">{item.title}</span>
+                                                <FontAwesomeIcon
+                                                    icon={faChevronDown}
+                                                    className="ml-auto !size-4 shrink-0 transition-transform group-data-[state=open]/collapsible:rotate-180"
+                                                />
                                             </SidebarMenuButton>
                                         </CollapsibleTrigger>
                                         <CollapsibleContent>
@@ -221,9 +209,20 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                                               parent's 15px icon rather than past it, so the
                                               line reads as descending from the parent row.
                                               gap-0.5 + py-1.5 stop the children stacking into
-                                              one block; pl-2 keeps the labels off the guide.
+                                              one block.
+                                              NO GEOMETRY OVERRIDES HERE, deliberately.
+                                              Indent, gaps, row height, padding and type
+                                              scale all come from the shared primitive —
+                                              the same component the admin panel uses — so
+                                              the two sidebars cannot drift apart.
+
+                                              This block used to override nearly all of it
+                                              (gap-0.5, py-1.5, pl-2 pr-0, h-[30px], px-2.5,
+                                              12.5px text), which is exactly why these rows
+                                              read as a tighter, narrower list than the
+                                              admin panel's.
                                             */}
-                                            <SidebarMenuSub className="ml-3.5 gap-0.5 border-l border-sidebar-border/70 py-1.5 pl-2 pr-0">
+                                            <SidebarMenuSub>
                                                 {item.items?.map((sub) => {
                                                     // Not built yet: shown, but not as a link.
                                                     if ((sub as { ready?: boolean }).ready === false) {
@@ -232,8 +231,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                                                                 <div
                                                                     aria-disabled
                                                                     title="Not available yet"
-                                                                    className="flex h-[30px] cursor-not-allowed items-center gap-2 rounded-md px-2.5 text-[12.5px] text-sidebar-foreground/40"
+                                                                    className="flex h-7 cursor-not-allowed items-center gap-2 rounded-md px-2 text-sm text-sidebar-foreground/40"
                                                                 >
+                                                                    {sub.icon && (
+                                                                        <FontAwesomeIcon icon={sub.icon} className="!size-4 shrink-0" />
+                                                                    )}
                                                                     <span className="min-w-0 flex-1 truncate">{sub.title}</span>
                                                                     <span className="shrink-0 rounded bg-sidebar-accent px-1.5 py-0 text-[8.5px] font-semibold uppercase tracking-wide text-sidebar-foreground/60">
                                                                         Soon
@@ -247,29 +249,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                                                         <SidebarMenuSubButton
                                                             asChild
                                                             isActive={isActive(sub.url)}
-                                                            className="h-[30px] rounded-md !outline-none !ring-0"
                                                         >
-                                                            <Link
-                                                                href={sub.url}
-                                                                className={cn(
-                                                                    "relative flex h-full items-center px-2.5 !text-[12.5px] transition-colors",
-                                                                    isActive(sub.url)
-                                                                        // A tinted pill, not just coloured text: on a
-                                                                        // list of four the colour alone was too weak
-                                                                        // to find at a glance.
-                                                                        ? "bg-primary/10 font-semibold text-primary"
-                                                                        : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
+                                                            <Link href={sub.url} className="flex items-center gap-2">
+                                                                {sub.icon && (
+                                                                    <FontAwesomeIcon icon={sub.icon} className="!size-4 shrink-0" />
                                                                 )}
-                                                            >
-                                                                {/* Covers the guide line beside the active row, so
-                                                                    the marker reads as attached to it. */}
-                                                                {isActive(sub.url) && (
-                                                                    <span
-                                                                        aria-hidden
-                                                                        className="absolute -left-2 top-1/2 h-4 w-[2px] -translate-y-1/2 rounded-full bg-primary"
-                                                                    />
-                                                                )}
-                                                                <span className="min-w-0 truncate">{sub.title}</span>
+                                                                <span className="truncate">{sub.title}</span>
                                                             </Link>
                                                         </SidebarMenuSubButton>
                                                     </SidebarMenuSubItem>

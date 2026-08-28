@@ -6,6 +6,7 @@ import { faLocationDot, faPhone, faCamera, faShareNodes, faWandMagicSparkles } f
 import { QRCodeSVG } from 'qrcode.react';
 import { cn } from '@/lib/utils';
 import type { TemplateOption } from '@/hooks/use-client-portal';
+import { mediaUrl } from '@/lib/media-url';
 
 /**
  * The client's invitation, drawn from an admin template plus their own data.
@@ -217,7 +218,7 @@ function backgroundStyle(t: TemplateOption): React.CSSProperties {
             ? `${Number(t.image_size)}%`
             : (t.image_scale ?? 'cover');
         return {
-            backgroundImage: `url(${t.background_image})`,
+            backgroundImage: `url(${mediaUrl(t.background_image)})`,
             backgroundSize: size,
             backgroundPosition: (position ?? 'center').replace(/-/g, ' '),
             backgroundRepeat: 'no-repeat',
@@ -605,35 +606,35 @@ export function InvitationCard({
                 couple's names is not a decoration. */}
             {placed('motif').slice(0, 1).map((d) => (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img key={d.id} src={d.file_url!} alt=""
+                <img key={d.id} src={mediaUrl(d.file_url)} alt=""
                     className="pointer-events-none absolute left-1/2 top-1/2 w-2/3 -translate-x-1/2 -translate-y-1/2 opacity-20" />
             ))}
             {placed('top').slice(0, 1).map((d) => (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img key={d.id} src={d.file_url!} alt="" className="pointer-events-none absolute inset-x-0 top-0 w-full" />
+                <img key={d.id} src={mediaUrl(d.file_url)} alt="" className="pointer-events-none absolute inset-x-0 top-0 w-full" />
             ))}
             {placed('bottom').slice(0, 1).map((d) => (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img key={d.id} src={d.file_url!} alt="" className="pointer-events-none absolute inset-x-0 bottom-0 w-full" />
+                <img key={d.id} src={mediaUrl(d.file_url)} alt="" className="pointer-events-none absolute inset-x-0 bottom-0 w-full" />
             ))}
             {/* One uploaded corner, mirrored into all four. */}
             {placed('corner').slice(0, 1).map((d) =>
                 (['left-0 top-0', 'right-0 top-0 -scale-x-100', 'left-0 bottom-0 -scale-y-100', 'right-0 bottom-0 -scale-100'] as const).map((pos) => (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img key={`${d.id}-${pos}`} src={d.file_url!} alt=""
+                    <img key={`${d.id}-${pos}`} src={mediaUrl(d.file_url)} alt=""
                         className={cn('pointer-events-none absolute w-2/5', pos)} />
                 ))
             )}
             {placed('ornament').slice(0, 1).map((d) => (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img key={d.id} src={d.file_url!} alt=""
+                <img key={d.id} src={mediaUrl(d.file_url)} alt=""
                     className="pointer-events-none absolute inset-x-0 top-0 mx-auto w-3/5" />
             ))}
             {/* A divider is a short centred rule — stretched edge to edge its end
                 ornaments land out at the margins and read as two stray shapes. */}
             {placed('divider').slice(0, 1).map((d) => (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img key={d.id} src={d.file_url!} alt=""
+                <img key={d.id} src={mediaUrl(d.file_url)} alt=""
                     className="pointer-events-none absolute left-1/2 top-1/2 w-2/5 -translate-x-1/2 -translate-y-1/2 opacity-70" />
             ))}
 

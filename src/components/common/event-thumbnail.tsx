@@ -3,6 +3,7 @@
 import { cn } from '@/lib/utils';
 import { useEventOptions } from '@/hooks/use-client-portal';
 import { resolveArtwork, templateBackground } from '@/lib/event-templates';
+import { mediaUrl } from '@/lib/media-url';
 
 /**
  * An event's invitation artwork, as shown in the My Events rows, the dashboard
@@ -133,7 +134,7 @@ export function EventThumbnail({
                 <>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                        src={artwork.template.thumbnail}
+                        src={mediaUrl(artwork.template.thumbnail)}
                         alt=""
                         className="absolute inset-0 h-full w-full object-cover"
                     />

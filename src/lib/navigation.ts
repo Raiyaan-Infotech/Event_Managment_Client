@@ -13,6 +13,7 @@ import {
     faPlug,
     faCreditCard,
     faGear,
+    faListUl,
 } from "@fortawesome/free-solid-svg-icons"
 
 /**
@@ -57,10 +58,10 @@ export const navMain = [
         url: "/dashboard/guests",
         icon: faUsers,
         items: [
-            { title: "All Guests", url: "/dashboard/guests", ready: true },
-            { title: "Add Guest", url: "/dashboard/guests/add", ready: true },
-            { title: "Guest Groups", url: "/dashboard/guests/groups", ready: true },
-            { title: "Import Guests", url: "/dashboard/guests/import", ready: true },
+            { title: "All Guests", url: "/dashboard/guests", icon: faListUl, ready: true },
+            { title: "Add Guest", url: "/dashboard/guests/add", icon: faUserPlus, ready: true },
+            { title: "Guest Groups", url: "/dashboard/guests/groups", icon: faPeopleGroup, ready: true },
+            { title: "Import Guests", url: "/dashboard/guests/import", icon: faFileImport, ready: true },
         ],
     },
     {
@@ -68,8 +69,8 @@ export const navMain = [
         url: "/dashboard/messages",
         icon: faEnvelope,
         items: [
-            { title: "All Messages", url: "/dashboard/messages", ready: false },
-            { title: "Send Message", url: "/dashboard/messages/send", ready: false },
+            { title: "All Messages", url: "/dashboard/messages", icon: faListUl, ready: false },
+            { title: "Send Message", url: "/dashboard/messages/send", icon: faPaperPlane, ready: false },
         ],
     },
     { title: "RSVPs", url: "/dashboard/rsvps", icon: faSquareCheck, items: [] },
@@ -80,9 +81,12 @@ export const navMain = [
 ]
 
 /**
- * Icons for the guest sub-pages, used by the Quick Actions cards rather than
- * the sidebar (whose sub-items are text-only). Kept beside the routes so the
- * two cannot drift.
+ * Icons for the guest sub-pages, used by the Quick Actions cards.
+ *
+ * The SIDEBAR now carries its own `icon` on each sub-item — it used to render
+ * them as text only, which is what made its sub-menus read as a cramped block
+ * next to the admin panel's. These stay because the Quick Actions cards pick
+ * from them independently.
  */
 export const guestActionIcons = {
     add: faUserPlus,
