@@ -2,7 +2,8 @@
 
 import { useLayoutEffect, useRef, useState } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faQrcode, faLocationDot, faPhone, faCamera, faShareNodes, faWandMagicSparkles } from '@fortawesome/free-solid-svg-icons';
+import { faLocationDot, faPhone, faCamera, faShareNodes, faWandMagicSparkles } from '@fortawesome/free-solid-svg-icons';
+import { QRCodeSVG } from 'qrcode.react';
 import { cn } from '@/lib/utils';
 import type { TemplateOption } from '@/hooks/use-client-portal';
 
@@ -53,6 +54,16 @@ export interface InvitationData {
     footerNote?: string | null;
     /** The client's chosen accent, from wizard step 4. */
     primaryColor?: string | null;
+    /**
+     * The event's `qr_token`, when one has been issued.
+     *
+     * Absent on a template in the catalogue and on the wizard before step 5 is
+     * submitted — there is no event yet, so there is nothing to encode. The card
+     * draws a clearly-labelled preview code in that case rather than the generic
+     * QR glyph it used to, which made the block read as an icon rather than as
+     * the code that will actually be printed there.
+     */
+    qrToken?: string | null;
 }
 
 const COMPONENT_KEYS = [
@@ -62,6 +73,17 @@ const COMPONENT_KEYS = [
 ] as const;
 
 type ComponentKey = (typeof COMPONENT_KEYS)[number];
+
+/**
+ * What an unissued QR encodes.
+ *
+ * A REAL matrix, so the design reads truthfully — the old glyph was a picture of
+ * a QR code, not one, and it made the block impossible to judge at design time.
+ * But it is deliberately readable when scanned: anyone who points a phone at a
+ * preview gets this sentence back, not a plausible-looking string of gibberish
+ * they might mistake for a working code.
+ */
+const PREVIEW_QR_VALUE = 'PREVIEW ONLY - this event has no QR code yet';
 
 const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 
@@ -445,9 +467,33 @@ export function InvitationCard({
         ),
         event_qr_code: (
             <div className="flex flex-col items-center gap-0.5">
+                {/*
+                  The real code, drawn as a real QR.
+
+                  SVG rather than canvas: the card is scaled by a transform to
+                  fit its box and exported at 3x for print, and a vector survives
+                  both. A canvas would be resampled twice.
+
+                  Black on white regardless of the invitation's palette, and it
+                  keeps its own white tile on a dark design — an inverted or
+                  tinted QR is rejected by most scanners, so this is the one
+                  element that does NOT follow the template's colours.
+                */}
                 <div className="flex h-14 w-14 items-center justify-center rounded-sm border bg-white"
                     style={{ borderColor: accentLine }}>
-                    <FontAwesomeIcon icon={faQrcode} className="!size-[40px]" style={{ color: '#1A1A1A' }} />
+                    <QRCodeSVG
+                        value={data.qrToken || PREVIEW_QR_VALUE}
+                        size={56}
+                        level="M"
+                        // The quiet zone belongs INSIDE the code, not as CSS
+                        // padding around it: measured in modules it scales with
+                        // the code, so it stays correct at any printed size.
+                        // A QR flush to its own edge scans poorly.
+                        marginSize={2}
+                        bgColor="#ffffff"
+                        fgColor="#000000"
+                        style={{ width: '100%', height: '100%' }}
+                    />
                 </div>
                 <div className="rounded-sm border px-1.5 py-px text-[6px] font-semibold"
                     style={{ borderColor: accentLine, color: accentInk, fontFamily: bodyFont }}>

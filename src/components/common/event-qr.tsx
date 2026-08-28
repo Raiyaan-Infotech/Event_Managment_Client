@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { QRCodeCanvas } from 'qrcode.react';
+import { QRCodeCanvas, QRCodeSVG } from 'qrcode.react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faDownload, faCopy, faCheck, faQrcode } from '@fortawesome/free-solid-svg-icons';
 import { Button } from '@/components/ui/button';
@@ -37,6 +37,15 @@ interface EventQrProps {
     size?: number;
     /** Show the Download / Copy buttons. */
     actions?: boolean;
+    /**
+     * Show the card's own Download button.
+     *
+     * Off where the screen already offers a dedicated download control — two
+     * buttons a few pixels apart that download the same file, one of which
+     * asks for a format and one of which does not, reads as a bug. Copy code
+     * has no such twin and stays.
+     */
+    showDownload?: boolean;
     className?: string;
 }
 
@@ -51,6 +60,7 @@ export function EventQr({
     eventName,
     size = 180,
     actions = true,
+    showDownload = true,
     className,
 }: EventQrProps) {
     const wrapRef = useRef<HTMLDivElement>(null);
@@ -123,19 +133,45 @@ export function EventQr({
                     fgColor="#000000"
                     style={{ width: size, height: size }}
                 />
+
+                {/*
+                  The SVG export source.
+
+                  `QRCodeCanvas` above is what the page shows — a canvas prints
+                  the modules crisply and reads straight into a PNG. But a
+                  canvas cannot become a vector, and "download as SVG" is asked
+                  for precisely when the size is not yet known (a banner, a
+                  press sheet), so a rasterised SVG would defeat the request.
+
+                  `hidden` is safe HERE, unlike the off-canvas capture targets
+                  elsewhere: this is serialised from the DOM, not rasterised, so
+                  it never needs a layout box.
+                */}
+                <span data-qr-svg hidden aria-hidden>
+                    <QRCodeSVG
+                        value={token}
+                        size={size * EXPORT_SCALE}
+                        level="M"
+                        marginSize={2}
+                        bgColor="#ffffff"
+                        fgColor="#000000"
+                    />
+                </span>
             </div>
 
             {actions && (
                 <div className="flex items-center gap-2">
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={download}
-                        className="h-8 rounded-md px-3 text-[12px] font-medium"
-                    >
-                        <FontAwesomeIcon icon={faDownload} className="mr-1.5 !size-[11px]" />
-                        Download
-                    </Button>
+                    {showDownload && (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={download}
+                            className="h-8 rounded-md px-3 text-[12px] font-medium"
+                        >
+                            <FontAwesomeIcon icon={faDownload} className="mr-1.5 !size-[11px]" />
+                            Download
+                        </Button>
+                    )}
                     <Button
                         variant="outline"
                         size="sm"

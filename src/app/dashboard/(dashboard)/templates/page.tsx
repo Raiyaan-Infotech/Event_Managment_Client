@@ -32,7 +32,7 @@ import {
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { templateBackground, isDarkTemplate } from "@/lib/event-templates";
+import { TemplateArtwork } from "@/components/common/template-artwork";
 import { useEventAnalytics } from "@/hooks/use-client-events";
 import {
     useClientProfile, useEventOptions, useSetFavouriteTemplates, type TemplateOption,
@@ -119,7 +119,7 @@ function TemplatesSkeleton() {
             <Skeleton className="h-8 w-[220px]" />
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                 {Array.from({ length: 4 }).map((_, i) => (
-                    <Skeleton key={i} className="aspect-square w-full rounded-md" />
+                    <Skeleton key={i} className="aspect-[4/5] w-full rounded-md" />
                 ))}
             </div>
         </div>
@@ -297,30 +297,36 @@ function DbTemplates({
                             {shown.map((template) => {
                                 const used = usage.get(template.code) ?? 0;
                                 const isFavourite = favourites.includes(template.code);
-                                const dark = isDarkTemplate(template);
                                 return (
                                     <Card
                                         key={template.id}
                                         className="min-w-0 gap-0 overflow-hidden border border-border p-0 shadow-none transition-shadow hover:shadow-md"
                                     >
                                         <div className="relative">
-                                            <div
-                                                className="relative flex aspect-square w-full items-center justify-center overflow-hidden"
-                                                style={templateBackground(template)}
-                                            >
-                                                {template.thumbnail ? (
-                                                    // eslint-disable-next-line @next/next/no-img-element
-                                                    <img src={template.thumbnail} alt="" className="absolute inset-0 h-full w-full object-cover" />
-                                                ) : (
-                                                    <span
-                                                        className={cn(
-                                                            "px-4 text-center text-[13px] font-bold italic break-words",
-                                                            dark ? "text-white" : "text-black"
-                                                        )}
-                                                    >
-                                                        {template.name}
-                                                    </span>
-                                                )}
+                                            {/* The real design — frame, decorations and the
+                                                components the template enables — not the
+                                                background colour with a name written on it.
+                                                A 4:5 tile because an invitation is portrait:
+                                                a square one squeezed the card so hard that
+                                                InvitationCard hit its 0.45 scale floor and
+                                                clipped its own content. */}
+                                            {/* Inset, on a neutral ground.
+
+                                                Edge to edge, the invitation's own
+                                                frame ran into the tile's corners and
+                                                the heart sat directly on the artwork —
+                                                two borders and a control fighting for
+                                                the same eight pixels. The card now
+                                                floats on a mat, the way a framed print
+                                                does, so its frame is readable and the
+                                                one floating control has ground of its
+                                                own to sit on. */}
+                                            <div className="relative aspect-[4/5] w-full overflow-hidden bg-muted/40">
+                                                <TemplateArtwork
+                                                    template={template}
+                                                    className="inset-3.5"
+                                                    cardClassName="rounded-[3px] shadow-sm"
+                                                />
                                             </div>
 
                                             <button
@@ -328,22 +334,13 @@ function DbTemplates({
                                                 onClick={() => toggleFavourite(template.code)}
                                                 aria-label={isFavourite ? `Remove ${template.name} from favourites` : `Add ${template.name} to favourites`}
                                                 aria-pressed={isFavourite}
-                                                className="absolute right-2.5 top-2.5 grid h-7 w-7 place-items-center rounded-full bg-background/90 shadow-sm backdrop-blur-sm transition-colors hover:bg-background"
+                                                className="absolute right-1.5 top-1.5 grid h-7 w-7 place-items-center rounded-full bg-background/90 shadow-sm backdrop-blur-sm transition-colors hover:bg-background"
                                             >
                                                 <FontAwesomeIcon
                                                     icon={isFavourite ? faHeartSolid : faHeartOutline}
                                                     className={cn("!size-[12px]", isFavourite ? "text-destructive" : "text-muted-foreground")}
                                                 />
                                             </button>
-
-                                            {used > 0 && (
-                                                <Badge
-                                                    variant="ghost"
-                                                    className="absolute left-2.5 top-2.5 rounded bg-background/90 px-2 py-0.5 text-[10px] font-semibold text-foreground shadow-sm backdrop-blur-sm"
-                                                >
-                                                    Used {used}×
-                                                </Badge>
-                                            )}
                                         </div>
 
                                         <div className="flex flex-col gap-3 p-3">
@@ -357,22 +354,32 @@ function DbTemplates({
                                                         Featured
                                                     </Badge>
                                                 )}
+                                                {/* "Used N×" is metadata, not a control —
+                                                    it belongs with the name rather than
+                                                    stamped across the design. Floating it
+                                                    over the artwork is what put a white
+                                                    pill through the frame's top-left
+                                                    corner. */}
+                                                {used > 0 && (
+                                                    <Badge variant="ghost" className="rounded bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                                                        Used {used}×
+                                                    </Badge>
+                                                )}
                                             </div>
 
-                                            <div className="flex items-center gap-2">
-                                                <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    onClick={() => setPreview(template)}
-                                                    className="h-8 flex-1 rounded-md text-[12px] font-medium"
-                                                >
-                                                    <FontAwesomeIcon icon={faEye} className="mr-1.5 !size-[11px]" />
-                                                    Preview
-                                                </Button>
-                                                <Button asChild size="sm" className="h-8 flex-1 rounded-md text-[12px] font-semibold">
-                                                    <Link href={`/dashboard/events/create?theme=${template.code}`}>Use</Link>
-                                                </Button>
-                                            </div>
+                                            {/* Preview only. "Use" was removed from the card:
+                                                the Preview dialog carries "Use this template",
+                                                so the action still exists — one click later,
+                                                after the design has actually been looked at. */}
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => setPreview(template)}
+                                                className="h-8 w-full rounded-md text-[12px] font-medium"
+                                            >
+                                                <FontAwesomeIcon icon={faEye} className="mr-1.5 !size-[11px]" />
+                                                Preview
+                                            </Button>
                                         </div>
                                     </Card>
                                 );
@@ -508,23 +515,11 @@ function DbTemplates({
 
                     {preview && (
                         <div className="flex flex-col gap-4">
-                            <div
-                                className="relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-md"
-                                style={templateBackground(preview)}
-                            >
-                                {preview.thumbnail ? (
-                                    // eslint-disable-next-line @next/next/no-img-element
-                                    <img src={preview.thumbnail} alt="" className="absolute inset-0 h-full w-full object-cover" />
-                                ) : (
-                                    <span
-                                        className={cn(
-                                            "px-6 text-center text-[22px] font-bold italic break-words",
-                                            isDarkTemplate(preview) ? "text-white" : "text-black"
-                                        )}
-                                    >
-                                        {preview.name}
-                                    </span>
-                                )}
+                            {/* Natural size here: the dialog has room for the card
+                                as it was authored, so nothing is scaled down and
+                                every line reads at its designed size. */}
+                            <div className="max-h-[62vh] overflow-y-auto py-1">
+                                <TemplateArtwork template={preview} fit="natural" />
                             </div>
                             <Button asChild className="h-10 w-full rounded-md text-[13px] font-semibold">
                                 <Link href={`/dashboard/events/create?theme=${preview.code}`}>

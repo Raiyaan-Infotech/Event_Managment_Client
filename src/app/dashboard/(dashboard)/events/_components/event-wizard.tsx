@@ -43,13 +43,12 @@ import { PRIMARY_SWATCHES } from "@/lib/event-themes";
 import {
     resolveArtwork,
     templatesForEvent,
-    templateBackground,
-    isDarkTemplate,
 } from "@/lib/event-templates";
-import { downloadNodeAsImage, downloadQrAsPng, fileSlug } from "@/lib/export-invitation";
+import { downloadNodeAsImage, downloadQrAsPng, downloadQrAsSvg, fileSlug } from "@/lib/export-invitation";
 import { EventQr } from "@/components/common/event-qr";
-import { InvitationCard } from "@/components/common/invitation-card";
-import { DownloadMenu, type DownloadKind } from "@/components/common/invitation-download";
+import { InvitationCard, type InvitationData } from "@/components/common/invitation-card";
+import { TemplateArtwork } from "@/components/common/template-artwork";
+import { DownloadFormatButton, type DownloadKind } from "@/components/common/invitation-download";
 import { SignInPrompt } from '@/components/common/sign-in-prompt';
 
 /**
@@ -224,6 +223,15 @@ export function EventWizard({
      */
     const previewWrapRef = useRef<HTMLDivElement>(null);
     const qrWrapRef = useRef<HTMLDivElement>(null);
+    /**
+     * Step 6's own capture target.
+     *
+     * The exporter rasterises a real DOM node — it cannot draw an invitation
+     * from data alone — and step 6 shows a QR and a summary, not the card. So
+     * the card is mounted off-canvas there purely to be captured, the same
+     * pattern `InvitationDownload` uses on the detail page.
+     */
+    const exportCardRef = useRef<HTMLDivElement>(null);
     const [downloading, setDownloading] = useState<DownloadKind | null>(null);
     /** The saved row. Null until step 5 succeeds; step 6 renders from it. */
     const [created, setCreated] = useState<ClientEvent | null>(null);
@@ -426,6 +434,40 @@ export function EventWizard({
     const selectedTheme = artwork.kind === "legacy" ? artwork.theme : undefined;
 
     /**
+     * What gets PRINTED on the invitation, wherever one is drawn.
+     *
+     * Defined once because it feeds two places that must agree: the template
+     * tiles on step 4 and the full card on step 5. A tile carrying sample names
+     * while the card carries the client's own would make choosing a design a
+     * guess — the tile is there to answer "what will MY invitation look like".
+     *
+     * Blanks are passed through as blanks. `InvitationCard` has placeholders for
+     * them; filling a missing venue with a plausible one would print something
+     * about their event that is not true.
+     */
+    const invitationData: InvitationData = {
+        name: form.name,
+        hostOne: form.host_one,
+        hostTwo: form.host_two,
+        tagline: form.tagline,
+        description: form.description,
+        startDate: form.start_date,
+        startTime: form.start_time,
+        endTime: form.end_time,
+        venueName: form.venue_name,
+        venueAddress: form.venue_address,
+        organizer: form.organizer,
+        contact: form.contact_phone,
+        footerNote: form.footer_note,
+        primaryColor: form.primary_color,
+        // Only exists once the event has been saved. Step 5's preview therefore
+        // draws the labelled placeholder code and step 6's export draws the real
+        // one — which is correct, and is why the token is read from `created`
+        // rather than from the form.
+        qrToken: created?.qr_token,
+    };
+
+    /**
      * What the template says, before any override — the baseline the toggles
      * start from and the thing "Reset to template" returns to.
      */
@@ -485,15 +527,22 @@ export function EventWizard({
 
         setDownloading(kind);
         try {
-            if (kind === "qr") {
+            if (kind === "qr" || kind === "qr-svg") {
                 const wrap = qrWrapRef.current;
                 if (!wrap) throw new Error("The QR code is not ready yet.");
-                await downloadQrAsPng(wrap, baseName);
+                if (kind === "qr-svg") downloadQrAsSvg(wrap, baseName);
+                else await downloadQrAsPng(wrap, baseName);
             } else {
-                const card = (step === 6 ? qrWrapRef : previewWrapRef).current
-                    ?.querySelector<HTMLElement>("[data-invitation-card]")
-                    // Step 6 has no card of its own, so fall back to the one
-                    // step 5 rendered — it is still mounted in the same tree.
+                /*
+                  Step 5's card is UNMOUNTED by the time step 6 renders, so its
+                  ref is null and the old fallback to it could never resolve —
+                  "Download Invitation" on the success screen threw "There is no
+                  invitation to download yet" every time. Step 6 therefore mounts
+                  its own off-canvas copy (`exportCardRef`), and that is checked
+                  first because it is the one that exists there.
+                */
+                const card =
+                    exportCardRef.current?.querySelector<HTMLElement>("[data-invitation-card]")
                     ?? previewWrapRef.current?.querySelector<HTMLElement>("[data-invitation-card]");
                 if (!card) throw new Error("There is no invitation to download yet.");
                 await downloadNodeAsImage(card, baseName, kind);
@@ -1087,17 +1136,15 @@ export function EventWizard({
                         {/* ── Step 4 — presentational ────────────────────────── */}
                         {step === 4 && (
                             /*
-                              Two panels, matching step 2: the DESIGN on the left,
-                              what the invitation CARRIES on the right. They are
-                              different decisions — picking artwork versus choosing
-                              which blocks appear — and stacking them made step 4 a
-                              long scroll where the component toggles were far
-                              enough below the theme grid to look unrelated to it.
+                              Theme & Colour, and nothing else.
 
-                              Stacks below `xl`: the theme grid is itself 2-3
-                              columns of cards, so two panels need real width.
+                              The component toggles used to sit in a second panel
+                              on this step, which put two unrelated decisions on one
+                              screen: WHICH design, and WHAT that design carries.
+                              The second one is only answerable next to a picture of
+                              the result, so it moved to step 5 where the preview is.
                             */
-                            <div className="grid gap-x-10 gap-y-8 xl:grid-cols-2">
+                            <div className="grid gap-x-10 gap-y-8">
                                 <div className="flex min-w-0 flex-col gap-3">
                                     <PanelHeading label="Theme & Colour" />
                                     <p className="text-[12px] text-muted-foreground">
@@ -1111,16 +1158,15 @@ export function EventWizard({
                                     the mis-sell the plan gating exists to prevent, and
                                     a hardcoded grid made an empty catalogue look full. */}
                                 {options.isLoading ? (
-                                    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+                                    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5">
                                         {Array.from({ length: 6 }).map((_, i) => (
-                                            <Skeleton key={i} className="aspect-[4/3] w-full rounded-md" />
+                                            <Skeleton key={i} className="aspect-[4/5] w-full rounded-md" />
                                         ))}
                                     </div>
                                 ) : dbTemplates.length > 0 ? (
-                                    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+                                    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5">
                                         {dbTemplates.map((t) => {
                                             const active = form.theme_id === t.code;
-                                            const dark = isDarkTemplate(t);
                                             return (
                                                 <button
                                                     key={t.code}
@@ -1141,48 +1187,60 @@ export function EventWizard({
                                                         active ? "border-primary" : "border-border hover:border-primary/40"
                                                     )}
                                                 >
+                                                    {/* Matted, not edge to edge — see the
+                                                        note on the catalogue tile. The
+                                                        template's own frame reaches its
+                                                        corners, so an overlay placed there
+                                                        lands on the artwork. */}
                                                     <span
-                                                        className="relative block aspect-[4/3] w-full overflow-hidden rounded"
-                                                        style={templateBackground(t)}
+                                                        className="relative block aspect-[4/5] w-full overflow-hidden rounded bg-muted/40"
                                                     >
-                                                        {/* The template's own thumbnail when it
-                                                            has one, so a photo design does not
-                                                            read as a flat colour swatch. */}
-                                                        {t.thumbnail && (
-                                                            // eslint-disable-next-line @next/next/no-img-element
-                                                            <img
-                                                                src={t.thumbnail}
-                                                                alt=""
-                                                                className="absolute inset-0 h-full w-full object-cover"
-                                                            />
-                                                        )}
-                                                        {t.is_featured ? (
-                                                            <span className="absolute left-1.5 top-1.5 rounded-full bg-black/55 px-1.5 py-px text-[8px] font-semibold uppercase tracking-wide text-white">
-                                                                Featured
-                                                            </span>
-                                                        ) : null}
+                                                        {/* The design itself — frame, decorations
+                                                            and its enabled components — so what is
+                                                            picked here is what step 5 then shows.
+                                                            It used to be the background colour and
+                                                            a style word, which made every template
+                                                            in the plan look like the same swatch. */}
+                                                        <TemplateArtwork
+                                                            template={t}
+                                                            data={invitationData}
+                                                            className="inset-2"
+                                                            cardClassName="rounded-[3px] shadow-sm"
+                                                        />
+                                                        {/* Only the SELECTED state stays over
+                                                            the artwork: it has to be readable
+                                                            at a glance across the grid, and it
+                                                            is the one thing here that is about
+                                                            the tile rather than the design.
+                                                            "Featured" moved below with the
+                                                            name — it is a label, not a state. */}
                                                         {active && (
-                                                            <span className="absolute right-1.5 top-1.5 grid h-5 w-5 place-items-center rounded-full bg-primary text-primary-foreground">
+                                                            <span className="absolute right-1 top-1 grid h-5 w-5 place-items-center rounded-full bg-primary text-primary-foreground shadow-sm">
                                                                 <FontAwesomeIcon icon={faCheck} className="!size-[9px]" />
-                                                            </span>
-                                                        )}
-                                                        {!t.thumbnail && (
-                                                            <span
-                                                                className={cn(
-                                                                    "absolute inset-x-0 bottom-1 text-center text-[7px] font-semibold uppercase tracking-[0.14em]",
-                                                                    dark ? "text-white/70" : "text-black/45"
-                                                                )}
-                                                            >
-                                                                {t.style}
                                                             </span>
                                                         )}
                                                     </span>
                                                     {/* break-words, not truncate: an admin can
                                                         name a template anything, and a clipped
                                                         name is how you pick the wrong one. */}
-                                                    <span className="mt-2 block break-words text-center text-[12px] font-medium text-foreground">
-                                                        {t.name}
+                                                    <span className="mt-2 flex flex-wrap items-center justify-center gap-1.5">
+                                                        <span className="break-words text-center text-[12px] font-medium text-foreground">
+                                                            {t.name}
+                                                        </span>
+                                                        {t.is_featured ? (
+                                                            <span className="rounded bg-primary/10 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-primary">
+                                                                Featured
+                                                            </span>
+                                                        ) : null}
                                                     </span>
+                                                    {/* Below the tile, not written across it —
+                                                        the tile now holds the invitation, and a
+                                                        label over it lands on the footer line. */}
+                                                    {t.style && (
+                                                        <span className="mt-0.5 block break-words text-center text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+                                                            {t.style}
+                                                        </span>
+                                                    )}
                                                 </button>
                                             );
                                         })}
@@ -1255,20 +1313,26 @@ export function EventWizard({
                                 </div>
                                 </div>
 
-                                {/* ── Per-event component control ───────────────
-                                    The template sets the defaults; this is the
-                                    client's override for THIS event only. It
-                                    stays null until something is actually
-                                    touched, so an untouched event keeps
-                                    following the template as the admin edits it
-                                    — copying the map up front would freeze the
-                                    design at creation time.
+                            </div>
+                        )}
 
-                                    The whole PANEL is conditional, heading and
-                                    all: with no admin template there is nothing
-                                    to override, and a heading standing over an
-                                    empty column reads as a section that failed
-                                    to load. */}
+                        {/* ── Step 5 — what the invitation carries, beside it ── */}
+                        {step === 5 && (
+                            /*
+                              Two panels: the component toggles on the left, the
+                              invitation they build on the right. They were on
+                              separate steps, so every toggle was a decision taken
+                              blind — you flipped Event QR Code off on step 4 and
+                              found out what that did on step 5.
+
+                              A legacy theme has no components to control, so it
+                              gets the single centred column it always had rather
+                              than an empty panel beside the card.
+                            */
+                            <div className={cn(
+                                "grid gap-x-10 gap-y-8",
+                                artwork.kind === "template" && "xl:grid-cols-[minmax(0,1fr)_300px]"
+                            )}>
                                 {artwork.kind === "template" && (
                                     <div className="flex min-w-0 flex-col gap-3">
                                         <PanelHeading label="Invitation Components" />
@@ -1366,109 +1430,103 @@ export function EventWizard({
                                         </ul>
                                     </div>
                                 )}
-                            </div>
-                        )}
 
-                        {/* ── Step 5 — presentational preview ────────────────── */}
-                        {step === 5 && (
-                            <div ref={previewWrapRef} className="flex flex-col items-center gap-4">
-                                {/*
-                                  The real invitation, not a summary of it.
-
-                                  This was a hand-rolled card that drew a
-                                  background, the name, the date and nothing
-                                  else — so the same template that renders a
-                                  framed, decorated invitation in the admin
-                                  panel showed the client an almost empty
-                                  swatch, one step before they approve it.
-
-                                  InvitationCard applies the template properly:
-                                  frame artwork, decorations, the components the
-                                  design enables, in its own component_order —
-                                  filled with what was typed on steps 1-4.
-                                */}
-                                {artwork.kind === "template" ? (
-                                    <InvitationCard
-                                        template={artwork.template}
-                                        // Whatever step 4 was left showing — so the
-                                        // preview and the toggles cannot disagree.
-                                        componentsOverride={
-                                            compOverride
-                                                ? Object.fromEntries(
-                                                    COMPONENT_KEYS.map((k) => [k, compOverride[k] ? 1 : 0])
-                                                )
-                                                : null
-                                        }
-                                        orderOverride={orderOverride}
-                                        data={{
-                                            name: form.name,
-                                            hostOne: form.host_one,
-                                            hostTwo: form.host_two,
-                                            tagline: form.tagline,
-                                            description: form.description,
-                                            startDate: form.start_date,
-                                            startTime: form.start_time,
-                                            endTime: form.end_time,
-                                            venueName: form.venue_name,
-                                            venueAddress: form.venue_address,
-                                            organizer: form.organizer,
-                                            contact: form.contact_phone,
-                                            footerNote: form.footer_note,
-                                            primaryColor: form.primary_color,
-                                        }}
-                                    />
-                                ) : (
-                                    /* A legacy theme has no template row to render
-                                       from — only a gradient — so the older card
-                                       stays for events created before the admin
-                                       catalogue existed. */
-                                    <div
-                                        className={cn(
-                                            "w-full max-w-[248px] overflow-hidden rounded-md border border-border p-6 text-center shadow-sm bg-gradient-to-br",
-                                            selectedTheme?.swatch
-                                        )}
-                                    >
-                                        <p className="text-[10.5px] font-semibold uppercase tracking-[0.18em] text-foreground/70">
-                                            You&rsquo;re invited to
-                                        </p>
-                                        <p
-                                            className="mt-2 text-[22px] font-bold leading-tight break-words"
-                                            style={{ color: form.primary_color }}
-                                        >
-                                            {form.name || "Your Event Name"}
-                                        </p>
-                                        {form.tagline && (
-                                            <p className="mt-1.5 text-[12px] text-foreground/70 break-words">{form.tagline}</p>
-                                        )}
-                                        <div className="my-4 flex items-center justify-center gap-3 border-y border-foreground/10 py-3">
-                                            <span className="text-[26px] font-bold tabular-nums text-foreground">
-                                                {form.start_date ? form.start_date.slice(8, 10) : "--"}
-                                            </span>
-                                            <span className="text-left text-[11px] font-semibold uppercase leading-tight text-foreground/70">
-                                                {form.start_date ? form.start_date.slice(5, 7) : "--"}
-                                                <br />
-                                                {form.start_date ? form.start_date.slice(0, 4) : "----"}
-                                            </span>
-                                        </div>
-                                        <p className="text-[11.5px] text-foreground/70">
-                                            {form.start_time || "--:--"} &ndash; {form.end_time || "--:--"}
-                                        </p>
+                                <div ref={previewWrapRef} className="flex flex-col items-center gap-4 xl:sticky xl:top-4 xl:self-start">
+                                    {/* Headed like the panel beside it, so the two read
+                                        as one screen rather than a card floating next to
+                                        a list. Full width, or the column's `items-center`
+                                        would centre the heading while its twin on the left
+                                        sits against the margin. */}
+                                    <div className="w-full">
+                                        <PanelHeading label="Invitation Preview" />
                                     </div>
-                                )}
+                                    {/*
+                                      The real invitation, not a summary of it.
 
-                                <p className="text-center text-[11px] text-muted-foreground">
-                                    The QR code is generated when you create the event.
-                                </p>
+                                      This was a hand-rolled card that drew a
+                                      background, the name, the date and nothing
+                                      else — so the same template that renders a
+                                      framed, decorated invitation in the admin
+                                      panel showed the client an almost empty
+                                      swatch, one step before they approve it.
 
-                                {/* The QR is not offered here: no event exists yet,
-                                    so there is no token to encode. It appears on
-                                    step 6, once the row has been written. */}
-                                <DownloadMenu
-                                    busy={downloading}
-                                    onPick={(format) => downloadInvitation(format)}
-                                />
+                                      InvitationCard applies the template properly:
+                                      frame artwork, decorations, the components the
+                                      design enables, in its own component_order —
+                                      filled with what was typed on steps 1-4.
+                                    */}
+                                    {artwork.kind === "template" ? (
+                                        <InvitationCard
+                                            template={artwork.template}
+                                            // Whatever step 4 was left showing — so the
+                                            // preview and the toggles cannot disagree.
+                                            componentsOverride={
+                                                compOverride
+                                                    ? Object.fromEntries(
+                                                        COMPONENT_KEYS.map((k) => [k, compOverride[k] ? 1 : 0])
+                                                    )
+                                                    : null
+                                            }
+                                            orderOverride={orderOverride}
+                                            data={invitationData}
+                                        />
+                                    ) : (
+                                        /* A legacy theme has no template row to render
+                                           from — only a gradient — so the older card
+                                           stays for events created before the admin
+                                           catalogue existed. */
+                                        <div
+                                            className={cn(
+                                                "w-full max-w-[248px] overflow-hidden rounded-md border border-border p-6 text-center shadow-sm bg-gradient-to-br",
+                                                selectedTheme?.swatch
+                                            )}
+                                        >
+                                            <p className="text-[10.5px] font-semibold uppercase tracking-[0.18em] text-foreground/70">
+                                                You&rsquo;re invited to
+                                            </p>
+                                            <p
+                                                className="mt-2 text-[22px] font-bold leading-tight break-words"
+                                                style={{ color: form.primary_color }}
+                                            >
+                                                {form.name || "Your Event Name"}
+                                            </p>
+                                            {form.tagline && (
+                                                <p className="mt-1.5 text-[12px] text-foreground/70 break-words">{form.tagline}</p>
+                                            )}
+                                            <div className="my-4 flex items-center justify-center gap-3 border-y border-foreground/10 py-3">
+                                                <span className="text-[26px] font-bold tabular-nums text-foreground">
+                                                    {form.start_date ? form.start_date.slice(8, 10) : "--"}
+                                                </span>
+                                                <span className="text-left text-[11px] font-semibold uppercase leading-tight text-foreground/70">
+                                                    {form.start_date ? form.start_date.slice(5, 7) : "--"}
+                                                    <br />
+                                                    {form.start_date ? form.start_date.slice(0, 4) : "----"}
+                                                </span>
+                                            </div>
+                                            <p className="text-[11.5px] text-foreground/70">
+                                                {form.start_time || "--:--"} &ndash; {form.end_time || "--:--"}
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    {/*
+                                      No download here, deliberately.
+
+                                      The event does not exist yet, so the card's QR
+                                      is the labelled preview code — a file saved
+                                      from this step would look finished and carry a
+                                      code that scans to "PREVIEW ONLY". Both
+                                      downloads live on step 6, once a real token has
+                                      been issued.
+                                    */}
+                                    <p className="text-center text-[11px] text-muted-foreground">
+                                        The QR code is generated when you create the event.
+                                        You can download the invitation on the next step.
+                                    </p>
+                                </div>
                             </div>
                         )}
+
                         {/* ── Step 6 ─────────────────────────────────────────── */}
                         {step === 6 && (
                             <div className="mx-auto flex max-w-md flex-col items-center gap-4 text-center">
@@ -1532,16 +1590,76 @@ export function EventWizard({
                                         Print this on your invitation. The code carries your event details in
                                         encrypted form &mdash; only this app can read it back.
                                     </p>
-                                    <EventQr token={created?.qr_token} eventName={created?.name} size={190} />
+                                    {/* The card's own Download button is off here:
+                                        the dedicated one below downloads the same
+                                        code and asks for a format first, and two
+                                        controls doing one job differently reads as
+                                        a bug. Copy code has no twin and stays. */}
+                                    <EventQr
+                                        token={created?.qr_token}
+                                        eventName={created?.name}
+                                        size={190}
+                                        showDownload={false}
+                                    />
                                 </div>
 
-                                {/* The event exists by now, so the QR is a real
-                                    option here in a way it was not on step 5. */}
-                                <DownloadMenu
-                                    busy={downloading}
-                                    withQr={!!created?.qr_token}
-                                    onPick={(format) => downloadInvitation(format)}
-                                />
+                                {/*
+                                  The two downloads, stacked so they read as one
+                                  set rather than a primary action with an
+                                  afterthought beside it. Each asks PNG or SVG
+                                  before it writes anything — the formats are not
+                                  interchangeable, and choosing on someone's
+                                  behalf gets it wrong for whoever is sending the
+                                  file to a printer.
+
+                                  The QR is a real option here in a way it was not
+                                  on step 5: the event now exists, so a token has
+                                  been issued.
+                                */}
+                                <div className="flex w-full flex-col gap-2">
+                                    <DownloadFormatButton
+                                        target="invitation"
+                                        label="Download Invitation"
+                                        busy={downloading}
+                                        onPick={downloadInvitation}
+                                        variant="default"
+                                    />
+                                    {!!created?.qr_token && (
+                                        <DownloadFormatButton
+                                            target="qr"
+                                            label="Download QR Code"
+                                            icon={faQrcode}
+                                            busy={downloading}
+                                            onPick={downloadInvitation}
+                                        />
+                                    )}
+                                </div>
+
+                                {/* Off-canvas capture target — positioned away
+                                    rather than hidden, because a `display:none`
+                                    element has no layout box and html-to-image
+                                    measures it as 0x0 and writes a blank file. */}
+                                {artwork.kind === "template" && (
+                                    <div
+                                        aria-hidden
+                                        className="pointer-events-none fixed left-[-10000px] top-0"
+                                    >
+                                        <div ref={exportCardRef}>
+                                            <InvitationCard
+                                                template={artwork.template}
+                                                componentsOverride={
+                                                    compOverride
+                                                        ? Object.fromEntries(
+                                                            COMPONENT_KEYS.map((k) => [k, compOverride[k] ? 1 : 0])
+                                                        )
+                                                        : null
+                                                }
+                                                orderOverride={orderOverride}
+                                                data={invitationData}
+                                            />
+                                        </div>
+                                    </div>
+                                )}
 
                                 {/*
                                   Share. Copy Link is real; the other three are not
@@ -1657,8 +1775,8 @@ const SUBTITLES = [
     "Select the basic information for your event.",
     "Add your event details and schedule.",
     "Choose the menus to show in your event app.",
-    "Choose a theme and customize your design.",
-    "Review your invitation before publishing.",
+    "Pick the invitation design your plan offers.",
+    "Choose what the invitation carries, and check it before publishing.",
     SUBTITLES_LAST,
 ];
 

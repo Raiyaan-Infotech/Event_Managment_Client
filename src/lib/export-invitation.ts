@@ -211,3 +211,48 @@ export async function downloadQrAsPng(
 
     triggerDownload(out.toDataURL('image/png'), `${name}-qr.png`);
 }
+
+/**
+ * Downloads the QR code on its own, as a real vector SVG.
+ *
+ * ── WHY IT LOOKS FOR A MARKED ELEMENT ────────────────────────────────────────
+ * A bare `querySelector('svg')` is wrong here: the container is the whole QR
+ * card, and every Font Awesome icon on it is an `<svg>` too — the first match
+ * would be a download arrow, serialised and handed over as "your QR code".
+ * `EventQr` marks its export source with `data-qr-svg`, and the loose lookup is
+ * only a fallback for a container that holds nothing else.
+ *
+ * Vector rather than a PNG wrapped in an `<svg>`: the whole point of asking for
+ * SVG is printing at a size nobody has chosen yet, and a raster inside a vector
+ * wrapper blurs exactly the same way at exactly the same size.
+ *
+ * The quiet zone is already in the markup — `qrcode.react` draws its own
+ * background rect and honours `marginSize`, so nothing has to be composited
+ * here the way the PNG path composites onto a canvas.
+ */
+export function downloadQrAsSvg(
+    container: HTMLElement,
+    baseName: string,
+    size = 900
+): void {
+    const name = baseName.replace(/\.svg$/i, '');
+    const source =
+        container.querySelector<SVGElement>('[data-qr-svg] svg') ??
+        container.querySelector<SVGElement>('svg');
+    if (!source) throw new Error('No QR code has been generated for this event yet.');
+
+    // Cloned, so setting an export size cannot resize what is on screen.
+    const clone = source.cloneNode(true) as SVGElement;
+    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    clone.setAttribute('width', String(size));
+    clone.setAttribute('height', String(size));
+
+    const xml = new XMLSerializer().serializeToString(clone);
+    // encodeURIComponent, not btoa: the markup is ASCII today, but base64 of a
+    // non-ASCII string throws, and that would surface as a broken download
+    // rather than an error anyone could read.
+    triggerDownload(
+        `data:image/svg+xml;charset=utf-8,${encodeURIComponent(xml)}`,
+        `${name}-qr.svg`
+    );
+}
