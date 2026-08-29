@@ -294,14 +294,25 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                             : "Contact us to have a subscription plan assigned to your account."}
                     </p>
                     {/*
-                      There was a "View Plan" button here linking to
-                      /dashboard/billing, which does not exist — it fell through
-                      to the [...slug] catch-all. Removed rather than pointed
-                      somewhere else: this card already shows the plan's name and
-                      what it governs, which is everything that page would have
-                      said, and a plan cannot be changed from the portal anyway.
-                      Reinstate it if a real billing screen is ever built.
+                      "View Plan" was removed when /dashboard/billing did not
+                      exist and fell through to the [...slug] catch-all.
+                      Reinstated now that Billing is a real screen — it shows the
+                      term, the renewal date and what has been used, none of
+                      which this card can say.
+
+                      Only rendered when a plan is actually assigned: sending
+                      somebody with no subscription to a billing page tells them
+                      nothing they can act on, and the line above already directs
+                      them to get in touch.
                     */}
+                    {profile.data?.plan ? (
+                        <Link
+                            href="/dashboard/billing"
+                            className="mt-2.5 inline-flex w-full items-center justify-center rounded-md border border-primary/30 bg-background px-2.5 py-1.5 text-[11.5px] font-medium text-primary transition-colors hover:bg-primary/10"
+                        >
+                            View plan &amp; billing
+                        </Link>
+                    ) : null}
                 </div>
 
                 <div className="flex items-center gap-3 rounded-lg border border-border bg-secondary/60 p-3">
