@@ -56,6 +56,7 @@ import {
 } from "@/hooks/use-guests";
 import { ApiError } from "@/lib/api-client";
 import { SignInPrompt } from '@/components/common/sign-in-prompt';
+import { useDateFormatter } from '@/hooks/use-client-settings';
 
 /**
  * Guests — the module's list screen.
@@ -102,12 +103,6 @@ const RESPONSE_META: Record<ResponseType, { label: string; icon: typeof faCheck 
 
 const PAGE_SIZE = 8;
 
-/** "10 May 2025", built from parts so UTC cannot shift the day. */
-function formatDate(value: string | null): string {
-    if (!value) return "—";
-    const d = new Date(value);
-    return `${String(d.getDate()).padStart(2, "0")} ${d.toLocaleString("en", { month: "short" })} ${d.getFullYear()}`;
-}
 
 function initialsOf(name: string | undefined): string {
     if (!name) return "?";
@@ -118,6 +113,8 @@ function initialsOf(name: string | undefined): string {
 }
 
 export default function GuestsPage() {
+    // Dates follow the client's own Date Format / Time Zone preference.
+    const fmt = useDateFormatter();
     const [tab, setTab] = useState<GuestTab>("all");
     const [eventId, setEventId] = useState("all");
     const [groupId, setGroupId] = useState("all");
@@ -507,7 +504,7 @@ export default function GuestsPage() {
                                                         </p>
                                                         {guest.event?.start_date && (
                                                             <p className="text-[10.5px] text-muted-foreground">
-                                                                {formatDate(guest.event.start_date)}
+                                                                {fmt(guest.event.start_date)}
                                                             </p>
                                                         )}
                                                     </td>
@@ -543,7 +540,7 @@ export default function GuestsPage() {
                                                     </td>
 
                                                     <td className="py-3 pr-3 align-top text-[12px] text-muted-foreground">
-                                                        {formatDate(guest.created_at)}
+                                                        {fmt(guest.created_at)}
                                                     </td>
 
                                                     <td className="py-3 pr-4 align-top">

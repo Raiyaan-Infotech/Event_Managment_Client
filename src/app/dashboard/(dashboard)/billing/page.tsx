@@ -1,12 +1,16 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import {
     Calendar, Users, Mail, HardDrive, CheckCircle2, AlertTriangle, Crown,
     Headphones, ArrowRight, Loader2, Info, Clock, RotateCcw,
-    CreditCard, FileText, Receipt, Search,
+    FileText, Receipt, Search, CreditCard, Plus, Pencil, MapPin, Lock,
+    Download, X, ChevronLeft, ChevronRight,
 } from 'lucide-react';
+import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
+import { toast } from 'sonner';
 
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -15,20 +19,28 @@ import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { PaymentMethodsPanel, BrandMark } from './_components/payment-methods-panel';
+import { HistoryPanel } from './_components/history-panel';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import {
+    Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
     Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 
 import {
-    useBillingOverview, useBillingHistory, useInvoices,
+    useBillingOverview, useInvoices, usePaymentMethods,
     useCancelSubscription, useResumeSubscription,
     formatMoney, formatDate, CYCLE_LABEL, CYCLE_SUFFIX,
-    type BillingStatus, type UsageMetric,
+    type BillingStatus, type UsageMetric, type PaymentMethodList,
+    type Invoice, type InvoiceList,
 } from '@/hooks/use-billing';
+import { useClientProfile } from '@/hooks/use-client-portal';
+import { api } from '@/lib/api-client';
 
 /**
  * Billing.
@@ -137,31 +149,70 @@ function UsageTile({ icon: Icon, label, metric, unit, tint }: {
     );
 }
 
+const TABS = ['overview', 'invoices', 'payment', 'history'];
+
+/**
+ * `useSearchParams` opts the tree into client-side rendering, so Next 15 wants
+ * it under a Suspense boundary. The fallback is the same skeleton the page uses
+ * while the overview loads, so nothing flashes.
+ */
 export default function BillingPage() {
+    return (
+        <Suspense fallback={<BillingSkeleton />}>
+            <BillingScreen />
+        </Suspense>
+    );
+}
+
+function BillingSkeleton() {
+    return (
+        <div className="flex flex-col gap-5 p-4 md:p-6">
+            <Skeleton className="h-8 w-40" />
+            <div className="grid gap-5 lg:grid-cols-[1.4fr_1fr]">
+                <Skeleton className="h-64 rounded-xl" />
+                <Skeleton className="h-64 rounded-xl" />
+            </div>
+            <Skeleton className="h-40 rounded-xl" />
+        </div>
+    );
+}
+
+function BillingScreen() {
     const { data, isLoading } = useBillingOverview();
+    const { data: pm } = usePaymentMethods();
     const cancel = useCancelSubscription();
     const resume = useResumeSubscription();
 
     const [cancelOpen, setCancelOpen] = useState(false);
     const [reason, setReason] = useState('');
 
+    /*
+      Controlled, because the Overview now links INTO the other tabs:
+      "View All Invoices", "Manage" and "Manage Payment Method" are the
+      design's own affordances, and each moves the tab rather than
+      navigating to a page that does not exist.
+    */
+    /*
+      `?tab=` so the invoice screen's "Back to Invoices" and "View Billing
+      History" land where they say they will.
+
+      Seeded from the URL on the FIRST render, not pushed in by an effect — an
+      effect would paint Overview and then swap, and setState in an effect body
+      is a cascading render. `useSearchParams` is why the export below wraps
+      this component in Suspense.
+    */
+    const params = useSearchParams();
+    const wanted = params.get('tab');
+    const [tab, setTab] = useState(
+        wanted && TABS.includes(wanted) ? wanted : 'overview',
+    );
+
     const sub = data?.subscription ?? null;
     const unavailable = data?.unavailable ?? {};
     const status = sub?.status;
     const cycleSuffix = sub ? CYCLE_SUFFIX[sub.billing_cycle] ?? '' : '';
 
-    if (isLoading) {
-        return (
-            <div className="flex flex-col gap-5 p-4 md:p-6">
-                <Skeleton className="h-8 w-40" />
-                <div className="grid gap-5 lg:grid-cols-[1.4fr_1fr]">
-                    <Skeleton className="h-64 rounded-xl" />
-                    <Skeleton className="h-64 rounded-xl" />
-                </div>
-                <Skeleton className="h-40 rounded-xl" />
-            </div>
-        );
-    }
+    if (isLoading) return <BillingSkeleton />;
 
     return (
         <div className="flex min-w-0 flex-col gap-5 p-4 md:p-6">
@@ -172,7 +223,7 @@ export default function BillingPage() {
                 </p>
             </div>
 
-            <Tabs defaultValue="overview" className="gap-5">
+            <Tabs value={tab} onValueChange={setTab} className="gap-5">
                 <TabsList variant="line" className="w-full justify-start overflow-x-auto">
                     <TabsTrigger value="overview">Overview</TabsTrigger>
                     <TabsTrigger value="invoices">Invoices</TabsTrigger>
@@ -337,11 +388,46 @@ export default function BillingPage() {
                                                     <dd className="min-w-0 text-end font-medium break-words">{value}</dd>
                                                 </div>
                                             ))}
+                                            <div className="flex items-center justify-between gap-3">
+                                                <dt className="shrink-0 text-muted-foreground">Payment Method</dt>
+                                                <dd className="min-w-0 text-end">
+                                                    {/*
+                                                      The server's own label. A UPI address has no
+                                                      last four, so "•••• 4242" only works for a
+                                                      card — and the label is already worded once,
+                                                      centrally, for exactly this reason.
+                                                    */}
+                                                    {pm?.default_method ? (
+                                                        <span className="font-medium break-words">
+                                                            {pm.default_method.label}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="font-medium text-muted-foreground">Not set up yet</span>
+                                                    )}
+                                                </dd>
+                                            </div>
                                         </dl>
+
                                         <Separator />
-                                        <p className="text-[11px] break-words text-muted-foreground">
-                                            {unavailable.payment_methods}
-                                        </p>
+
+                                        {/*
+                                          The design's "Manage Payment Method" button. It moves to the
+                                          Payment Methods tab, which is a screen that exists — not to a
+                                          gateway portal, which does not.
+                                        */}
+                                        <Button
+                                            variant="outline"
+                                            className="w-full"
+                                            onClick={() => setTab('payment')}
+                                        >
+                                            Manage Payment Method
+                                        </Button>
+
+                                        {!pm?.gateway.enabled ? (
+                                            <p className="text-[11px] break-words text-muted-foreground">
+                                                {pm?.manual.reason ?? unavailable.payment_methods}
+                                            </p>
+                                        ) : null}
                                     </CardContent>
                                 </Card>
                             </div>
@@ -380,8 +466,35 @@ export default function BillingPage() {
                                             metric={data!.usage.storage as never}
                                         />
                                     </div>
+
+                                    <Separator />
+
+                                    {/*
+                                      The design's "View Usage Details". It points at Analytics —
+                                      the one screen that actually breaks these figures down — rather
+                                      than at a usage page that was never built.
+                                    */}
+                                    <Link
+                                        href="/dashboard/analytics"
+                                        className="inline-flex w-fit items-center gap-1.5 text-[12.5px] font-medium text-primary hover:underline"
+                                    >
+                                        View usage details <ArrowRight className="size-3.5" />
+                                    </Link>
                                 </CardContent>
                             </Card>
+
+                            {/* ── Recent invoices · payment method · billing details ── */}
+                            <div className="grid min-w-0 gap-5 lg:grid-cols-[1.4fr_1fr]">
+                                <RecentInvoicesCard onViewAll={() => setTab('invoices')} />
+
+                                <div className="flex min-w-0 flex-col gap-5">
+                                    <PaymentMethodCard
+                                        data={pm}
+                                        onManage={() => setTab('payment')}
+                                    />
+                                    <BillingDetailsCard reason={unavailable.billing_address} />
+                                </div>
+                            </div>
                         </>
                     )}
 
@@ -426,31 +539,12 @@ export default function BillingPage() {
 
                 {/* ── INVOICES ─────────────────────────────────────────────── */}
                 <TabsContent value="invoices" className="flex flex-col gap-5">
-                    <InvoicesPanel />
+                    <InvoicesPanel onGoToHistory={() => setTab('history')} />
                 </TabsContent>
 
                 {/* ── PAYMENT METHODS ──────────────────────────────────────── */}
                 <TabsContent value="payment">
-                    <Card className="py-0">
-                        <CardContent className="flex flex-col gap-4 p-6">
-                            {/*
-                              Not a stub for lack of effort — saving a card needs a
-                              payment provider to hold the token, and this project has
-                              none. Storing the card number ourselves is the one thing
-                              the design's own footnote rules out ("We do not store your
-                              card details"), and it would be a PCI problem besides.
-                            */}
-                            <NotAvailable
-                                icon={CreditCard}
-                                title="No saved payment methods"
-                                reason={unavailable.payment_methods}
-                            />
-                            <p className="mx-auto max-w-md text-center text-[11px] break-words text-muted-foreground">
-                                When online payment is switched on, your card is held by the payment
-                                provider — never by us — and appears here.
-                            </p>
-                        </CardContent>
-                    </Card>
+                    <PaymentMethodsPanel />
                 </TabsContent>
 
                 {/* ── BILLING HISTORY ──────────────────────────────────────── */}
@@ -535,17 +629,28 @@ const prettyStatus = (s: string) => s.replace(/_/g, ' ');
  * ── THE TILES COUNT THE WHOLE ACCOUNT, NOT THE FILTERED PAGE ────────────────
  * A "Total Invoices" that changes when you type in the search box is not a
  * total. The API computes them over every invoice and returns them beside the
- * filtered page.
+ * filtered page, and each tile is captioned "All time" so the two numbers on
+ * screen cannot be read as the same claim.
  *
- * ── THERE IS NO PAY BUTTON ──────────────────────────────────────────────────
+ * ── THERE IS NO PAY BUTTON, AND NO PAYMENT METHOD COLUMN ────────────────────
  * `payments_enabled` comes from the API. While it is false the screen says so
  * once, plainly, instead of rendering a disabled Pay control on every row —
  * which reads as a bug rather than as a feature that has not launched.
+ *
+ * The design also draws a "Payment Method" column showing the card each invoice
+ * was paid with. Nothing links a transaction to a saved card:
+ * `client_transactions` carries `gateway` and `gateway_transaction_id` and no
+ * payment-method id, and there are no payments at all yet. The column is
+ * therefore absent rather than a column of em dashes.
  */
-function InvoicesPanel() {
+function InvoicesPanel({ onGoToHistory }: { onGoToHistory: () => void }) {
     const [status, setStatus] = useState<string>('all');
     const [search, setSearch] = useState('');
+    const [from, setFrom] = useState('');
+    const [to, setTo] = useState('');
+    const [limit, setLimit] = useState('10');
     const [page, setPage] = useState(1);
+    const [exporting, setExporting] = useState(false);
 
     // Debounced so typing does not fire a request per keystroke — the same
     // mistake that made the Translations page fire a full scan per character.
@@ -555,15 +660,87 @@ function InvoicesPanel() {
         return () => clearTimeout(t);
     }, [search]);
 
-    const { data, isLoading } = useInvoices({
+    const params = {
         status: status === 'all' ? undefined : status,
-        search: debounced,
-        page,
-    });
+        search: debounced || undefined,
+        from: from || undefined,
+        to: to || undefined,
+        limit: Number(limit),
+    };
+
+    const { data, isLoading, isFetching } = useInvoices({ ...params, page });
 
     const stats = data?.stats;
     const invoices = data?.invoices ?? [];
     const pagination = data?.pagination;
+    const filtered = status !== 'all' || !!debounced || !!from || !!to;
+
+    /** Every filter change returns to page 1 — a narrower result set otherwise lands on an empty page. */
+    const reset = <T,>(set: (v: T) => void) => (v: T) => { set(v); setPage(1); };
+
+    const clearAll = () => {
+        setStatus('all'); setSearch(''); setDebounced(''); setFrom(''); setTo(''); setPage(1);
+    };
+
+    const showingFrom = invoices.length ? ((pagination?.page ?? 1) - 1) * Number(limit) + 1 : 0;
+    const showingTo = showingFrom ? showingFrom + invoices.length - 1 : 0;
+
+    /**
+     * Export.
+     *
+     * Built in the browser from the invoices the CURRENT FILTERS select, paging
+     * the same endpoint the table uses — so the file and the screen can never
+     * disagree. There is no server-side export and this needs none.
+     */
+    async function exportCsv() {
+        setExporting(true);
+        try {
+            const rows: Invoice[] = [];
+            // The API caps `limit` at 100; the guard stops a runaway loop if a
+            // future change ever made totalPages unreliable.
+            for (let pg = 1; pg <= 50; pg += 1) {
+                const res = await api.get<InvoiceList>('/client/billing/invoices', {
+                    ...params, limit: 100, page: pg,
+                });
+                rows.push(...res.invoices);
+                if (!res.pagination || pg >= res.pagination.totalPages) break;
+            }
+
+            if (rows.length === 0) {
+                toast.error('There is nothing to export with these filters.');
+                return;
+            }
+
+            const header = [
+                'Invoice ID', 'Issue Date', 'Period Start', 'Period End', 'Plan',
+                'Currency', 'Subtotal', 'Tax', 'Total', 'Paid', 'Due', 'Status',
+                'Payment Method',
+            ];
+            const body = rows.map((r) => [
+                r.invoice_number, r.issue_date, r.period_start, r.period_end,
+                r.plan?.name ?? '', r.currency_code,
+                r.subtotal, r.tax_amount, r.total, r.amount_paid, r.amount_due,
+                prettyStatus(r.status),
+                r.payment_method?.label ?? '',
+            ]);
+
+            const csv = [header, ...body].map((line) => line.map(csvCell).join(',')).join('\r\n');
+            // The BOM is what makes Excel read the ₹ and any non-ASCII name
+            // correctly instead of as mojibake.
+            const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `invoices-${new Date().toISOString().slice(0, 10)}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+            toast.success(`Exported ${rows.length} invoice${rows.length === 1 ? '' : 's'}.`);
+        } catch {
+            toast.error('Could not export your invoices.');
+        } finally {
+            setExporting(false);
+        }
+    }
 
     if (isLoading && !data) {
         return (
@@ -571,19 +748,33 @@ function InvoicesPanel() {
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                     {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
                 </div>
-                <Skeleton className="h-72 rounded-xl" />
+                <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_300px]">
+                    <Skeleton className="h-96 rounded-xl" />
+                    <Skeleton className="h-96 rounded-xl" />
+                </div>
             </>
         );
     }
 
     return (
         <>
+            <div className="flex flex-wrap items-end justify-between gap-3">
+                <p className="text-[12.5px] text-muted-foreground">
+                    View and download all your invoices.
+                </p>
+                <Button variant="outline" size="sm" disabled={exporting} onClick={exportCsv}>
+                    {exporting ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}
+                    Export Invoices
+                </Button>
+            </div>
+
+            {/* ── Tiles: the whole account, always ──────────────────────────── */}
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 {[
                     { label: 'Total Invoices', value: String(stats?.total_invoices ?? 0), tint: 'bg-violet-500/15 text-violet-600 dark:text-violet-400', icon: FileText },
                     { label: 'Total Amount', value: formatMoney(stats?.total_amount ?? 0), tint: 'bg-blue-500/15 text-blue-600 dark:text-blue-400', icon: Receipt },
                     { label: 'Paid Amount', value: formatMoney(stats?.paid_amount ?? 0), tint: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400', icon: CheckCircle2 },
-                    { label: 'Outstanding', value: formatMoney(stats?.outstanding_amount ?? 0), tint: 'bg-amber-500/15 text-amber-600 dark:text-amber-400', icon: Clock },
+                    { label: 'Outstanding Amount', value: formatMoney(stats?.outstanding_amount ?? 0), tint: 'bg-amber-500/15 text-amber-600 dark:text-amber-400', icon: Clock },
                 ].map((t) => (
                     <Card key={t.label} className="py-0">
                         <CardContent className="flex items-center gap-3 p-4">
@@ -593,295 +784,660 @@ function InvoicesPanel() {
                             <div className="min-w-0">
                                 <p className="text-[11px] text-muted-foreground">{t.label}</p>
                                 <p className="text-lg font-semibold break-words">{t.value}</p>
+                                <p className="text-[10.5px] text-muted-foreground/70">All time</p>
                             </div>
                         </CardContent>
                     </Card>
                 ))}
             </div>
 
-            <Card className="py-0">
-                <CardContent className="flex flex-col gap-4 p-5">
-                    <div className="flex flex-wrap items-center gap-2">
-                        <div className="relative min-w-[180px] flex-1">
-                            <Search className="absolute start-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-                            <Input
-                                value={search}
-                                onChange={(e) => setSearch(e.target.value)}
-                                placeholder="Search by invoice ID..."
-                                className="ps-8"
-                            />
-                        </div>
-                        {/*
-                          Only the statuses that actually occur are offered. A filter
-                          for "refunded" on an account with no refunds selects nothing
-                          and reads as broken.
-                        */}
-                        <div className="flex flex-wrap items-center gap-1.5">
-                            {['all', ...Object.keys(stats?.by_status ?? {})].map((s) => (
-                                <Button
-                                    key={s}
-                                    size="sm"
-                                    variant={status === s ? 'default' : 'outline'}
-                                    onClick={() => { setStatus(s); setPage(1); }}
-                                    className="h-8 capitalize"
-                                >
-                                    {s === 'all' ? 'All' : prettyStatus(s)}
-                                    <span className="ms-1 text-[11px] opacity-70">
-                                        {s === 'all' ? stats?.total_invoices ?? 0 : stats?.by_status?.[s] ?? 0}
-                                    </span>
-                                </Button>
-                            ))}
-                        </div>
-                    </div>
-
-                    {invoices.length === 0 ? (
-                        <NotAvailable
-                            icon={FileText}
-                            title="No invoices found"
-                            reason={
-                                debounced || status !== 'all'
-                                    ? 'Nothing matches these filters.'
-                                    : 'An invoice is raised at the start of each billing term.'
-                            }
-                        />
-                    ) : (
-                        <>
-                            {/* Scrolls inside its own box — the page must never scroll sideways. */}
-                            <div className="w-full overflow-x-auto">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead className="min-w-[150px]">Invoice ID</TableHead>
-                                            <TableHead className="min-w-[110px]">Date</TableHead>
-                                            <TableHead className="min-w-[110px] text-end">Amount</TableHead>
-                                            <TableHead className="min-w-[100px]">Status</TableHead>
-                                            <TableHead className="min-w-[80px] text-end">View</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {invoices.map((inv) => (
-                                            <TableRow key={inv.id}>
-                                                <TableCell className="max-w-[200px] font-medium break-all">
-                                                    {inv.invoice_number}
-                                                </TableCell>
-                                                <TableCell className="text-[12.5px] whitespace-nowrap">
-                                                    {formatDate(inv.issue_date)}
-                                                </TableCell>
-                                                <TableCell className="text-end tabular-nums whitespace-nowrap">
-                                                    {formatMoney(inv.total, inv.currency_code)}
-                                                </TableCell>
-                                                <TableCell>
-                                                    <Badge
-                                                        variant="ghost"
-                                                        className={`${INVOICE_STATUS_STYLE[inv.status] ?? 'bg-muted text-muted-foreground'} capitalize`}
-                                                    >
-                                                        {prettyStatus(inv.status)}
-                                                    </Badge>
-                                                </TableCell>
-                                                <TableCell className="text-end">
-                                                    <Button asChild size="sm" variant="ghost">
-                                                        <Link href={`/dashboard/billing/invoices/${inv.id}`}>
-                                                            <ArrowRight className="size-3.5" />
-                                                        </Link>
-                                                    </Button>
-                                                </TableCell>
-                                            </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
+            <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_300px]">
+                {/* ── Table ─────────────────────────────────────────────────── */}
+                <Card className="py-0">
+                    <CardContent className="flex min-w-0 flex-col gap-4 p-5">
+                        <div className="flex min-w-0 flex-wrap items-center gap-2">
+                            <div className="relative min-w-[200px] flex-1">
+                                <Search className="absolute top-1/2 start-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                                <Input
+                                    value={search}
+                                    onChange={(e) => setSearch(e.target.value)}
+                                    placeholder="Search by invoice ID…"
+                                    className="h-9 ps-8 text-[12.5px]"
+                                />
                             </div>
 
-                            {pagination && pagination.totalPages > 1 ? (
-                                <div className="flex flex-wrap items-center justify-between gap-2">
-                                    <span className="text-[11px] text-muted-foreground">
-                                        Page {pagination.page} of {pagination.totalPages} · {pagination.totalItems} invoices
-                                    </span>
+                            {/*
+                              Only the statuses that actually occur are offered. A
+                              filter for "refunded" on an account with no refunds
+                              selects nothing and reads as broken.
+                            */}
+                            <Select value={status} onValueChange={reset(setStatus)}>
+                                <SelectTrigger className="h-9 w-[165px] text-[12.5px]">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">
+                                        Status: All
+                                        <span className="ms-1.5 text-[11px] opacity-60">
+                                            {stats?.total_invoices ?? 0}
+                                        </span>
+                                    </SelectItem>
+                                    {Object.keys(stats?.by_status ?? {}).map((sKey) => (
+                                        <SelectItem key={sKey} value={sKey} className="capitalize">
+                                            {prettyStatus(sKey)}
+                                            <span className="ms-1.5 text-[11px] opacity-60">
+                                                {stats?.by_status?.[sKey] ?? 0}
+                                            </span>
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+
+                            {/*
+                              Native date inputs, matching Billing History. A custom
+                              range picker is a lot of surface for two dates, and the
+                              native control already knows the locale and the keyboard.
+
+                              The range is INCLUSIVE of the `to` day, server-side.
+                            */}
+                            <Input
+                                type="date" value={from} max={to || undefined}
+                                onChange={(e) => reset(setFrom)(e.target.value)}
+                                className="h-9 w-[145px] text-[12.5px]" aria-label="From date"
+                            />
+                            <Input
+                                type="date" value={to} min={from || undefined}
+                                onChange={(e) => reset(setTo)(e.target.value)}
+                                className="h-9 w-[145px] text-[12.5px]" aria-label="To date"
+                            />
+
+                            {filtered ? (
+                                <Button variant="ghost" size="sm" className="h-9" onClick={clearAll}>
+                                    <X className="size-3.5" /> Clear
+                                </Button>
+                            ) : null}
+                        </div>
+
+                        {invoices.length === 0 ? (
+                            <NotAvailable
+                                icon={FileText}
+                                title="No invoices found"
+                                reason={
+                                    filtered
+                                        ? 'Nothing matches these filters.'
+                                        : 'An invoice is raised at the start of each billing term.'
+                                }
+                            />
+                        ) : (
+                            <>
+                                {/* Scrolls inside its own box — the page must never scroll sideways. */}
+                                <div className="w-full overflow-x-auto">
+                                    <Table className={isFetching ? 'opacity-60 transition-opacity' : undefined}>
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead className="min-w-[150px]">Invoice ID</TableHead>
+                                                {/*
+                                                  The arrow states the order the API actually
+                                                  returns — newest first — rather than offering
+                                                  a sort the endpoint does not accept.
+                                                */}
+                                                <TableHead className="min-w-[120px]">Date ↓</TableHead>
+                                                <TableHead className="min-w-[110px] text-end">Amount</TableHead>
+                                                <TableHead className="min-w-[100px]">Status</TableHead>
+                                                {/*
+                                                  Real since `client_transactions` gained
+                                                  `client_payment_method_id` plus a brand /
+                                                  last4 SNAPSHOT. The snapshot is what an
+                                                  archived invoice keeps saying after the
+                                                  card is renamed or removed.
+                                                */}
+                                                <TableHead className="min-w-[150px]">Payment Method</TableHead>
+                                                <TableHead className="min-w-[80px] text-end">Actions</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {invoices.map((inv) => (
+                                                <TableRow key={inv.id}>
+                                                    <TableCell className="max-w-[200px] font-medium break-all">
+                                                        {inv.invoice_number}
+                                                    </TableCell>
+                                                    <TableCell className="text-[12.5px] whitespace-nowrap">
+                                                        {formatDate(inv.issue_date)}
+                                                    </TableCell>
+                                                    <TableCell className="text-end tabular-nums whitespace-nowrap">
+                                                        {formatMoney(inv.total, inv.currency_code)}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Badge
+                                                            variant="ghost"
+                                                            className={`${INVOICE_STATUS_STYLE[inv.status] ?? 'bg-muted text-muted-foreground'} capitalize`}
+                                                        >
+                                                            {prettyStatus(inv.status)}
+                                                        </Badge>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {inv.payment_method ? (
+                                                            <span className="flex items-center gap-2">
+                                                                <BrandMark brand={inv.payment_method.brand} />
+                                                                <span className="text-[12.5px] tabular-nums">
+                                                                    &bull;&bull;&bull;&bull; {inv.payment_method.last4 ?? '----'}
+                                                                </span>
+                                                            </span>
+                                                        ) : (
+                                                            /* Never a zero or a blank: nothing was paid, so
+                                                               there is no card to name. */
+                                                            <span className="text-[12.5px] text-muted-foreground">—</span>
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell className="text-end">
+                                                        {/*
+                                                          One action, and it is the one that works:
+                                                          the invoice page carries the print action.
+                                                          A download icon that downloads nothing is
+                                                          worse than no icon.
+                                                        */}
+                                                        <Button asChild size="sm" variant="ghost">
+                                                            <Link
+                                                                href={`/dashboard/billing/invoices/${inv.id}`}
+                                                                title="Open this invoice"
+                                                            >
+                                                                View <ArrowRight className="size-3.5" />
+                                                            </Link>
+                                                        </Button>
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                </div>
+
+                                <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+                                    <p className="text-[11.5px] text-muted-foreground">
+                                        Showing {showingFrom} to {showingTo} of{' '}
+                                        {pagination?.totalItems ?? 0} invoice
+                                        {(pagination?.totalItems ?? 0) === 1 ? '' : 's'}
+                                        {filtered && pagination?.totalItems !== stats?.total_invoices
+                                            ? ` (filtered from ${stats?.total_invoices ?? 0})`
+                                            : ''}
+                                    </p>
                                     <div className="flex items-center gap-2">
-                                        <Button size="sm" variant="outline" disabled={page <= 1}
-                                            onClick={() => setPage((p) => p - 1)}>Previous</Button>
-                                        <Button size="sm" variant="outline" disabled={page >= pagination.totalPages}
-                                            onClick={() => setPage((p) => p + 1)}>Next</Button>
+                                        <Button
+                                            size="icon" variant="outline" className="size-8"
+                                            disabled={page <= 1}
+                                            onClick={() => setPage((v) => Math.max(1, v - 1))}
+                                            aria-label="Previous page"
+                                        >
+                                            <ChevronLeft className="size-4" />
+                                        </Button>
+                                        <span className="text-[12px] tabular-nums">
+                                            {pagination?.page ?? 1} / {pagination?.totalPages ?? 1}
+                                        </span>
+                                        <Button
+                                            size="icon" variant="outline" className="size-8"
+                                            disabled={!pagination || page >= pagination.totalPages}
+                                            onClick={() => setPage((v) => v + 1)}
+                                            aria-label="Next page"
+                                        >
+                                            <ChevronRight className="size-4" />
+                                        </Button>
+                                        <Select value={limit} onValueChange={reset(setLimit)}>
+                                            <SelectTrigger className="h-8 w-[95px] text-[12px]">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {['10', '20', '50'].map((n) => (
+                                                    <SelectItem key={n} value={n}>{n} / page</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
                                     </div>
                                 </div>
-                            ) : null}
-                        </>
-                    )}
+                            </>
+                        )}
 
-                    {data && !data.payments_enabled && data.payments_reason ? (
-                        <p className="flex items-start gap-2 rounded-lg border bg-muted/40 px-3 py-2 text-[11px] break-words text-muted-foreground">
-                            <Info className="mt-0.5 size-3.5 shrink-0" />
-                            {data.payments_reason}
-                        </p>
-                    ) : null}
-                </CardContent>
-            </Card>
+                        {data && !data.payments_enabled && data.payments_reason ? (
+                            <p className="flex items-start gap-2 rounded-lg border bg-muted/40 px-3 py-2 text-[11px] break-words text-muted-foreground">
+                                <Info className="mt-0.5 size-3.5 shrink-0" />
+                                {data.payments_reason}
+                            </p>
+                        ) : null}
+                    </CardContent>
+                </Card>
+
+                {/* ── Rail ──────────────────────────────────────────────────── */}
+                <div className="flex min-w-0 flex-col gap-5">
+                    <InvoiceSummaryCard stats={stats} onViewHistory={onGoToHistory} />
+
+                    <Card className="py-0">
+                        <CardContent className="flex flex-col gap-3 p-5">
+                            <span className="text-[13px] font-semibold">Filter by Status</span>
+                            <div className="flex flex-col gap-1">
+                                <StatusFilterRow
+                                    label="All Invoices"
+                                    count={stats?.total_invoices ?? 0}
+                                    dot="bg-primary"
+                                    active={status === 'all'}
+                                    onClick={() => reset(setStatus)('all')}
+                                />
+                                {Object.entries(stats?.by_status ?? {}).map(([sKey, count]) => (
+                                    <StatusFilterRow
+                                        key={sKey}
+                                        label={prettyStatus(sKey)}
+                                        count={count}
+                                        dot={STATUS_DOT[sKey] ?? 'bg-muted-foreground'}
+                                        active={status === sKey}
+                                        onClick={() => reset(setStatus)(sKey)}
+                                    />
+                                ))}
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="py-0">
+                        <CardContent className="flex flex-col gap-3 p-5">
+                            <div className="flex items-center gap-2.5">
+                                <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-muted">
+                                    <Headphones className="size-4 text-muted-foreground" />
+                                </span>
+                                <span className="text-[13px] font-semibold">Need help?</span>
+                            </div>
+                            <p className="text-[12px] break-words text-muted-foreground">
+                                Questions about an invoice or a payment.
+                            </p>
+                            <Button asChild variant="outline" size="sm" className="w-full">
+                                <Link href="/dashboard/billing/contact-sales">
+                                    <Headphones className="size-3.5" /> Contact us
+                                </Link>
+                            </Button>
+                        </CardContent>
+                    </Card>
+                </div>
+            </div>
+
+            {/*
+              The design says "Invoices are generated on the 12th of every
+              month". They are not: one is raised at the start of each billing
+              TERM, which on a yearly plan is once a year.
+            */}
+            <div className="flex min-w-0 items-start gap-2.5 rounded-lg border bg-muted/40 px-4 py-3">
+                <Info className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                <p className="min-w-0 text-[12px] break-words text-muted-foreground">
+                    An invoice is raised at the start of each billing term, so how often you
+                    see one follows your plan&rsquo;s cycle. Every invoice you have ever been
+                    issued stays listed here.
+                </p>
+            </div>
         </>
     );
 }
 
-/* ─────────────────────────────────────────────────────────────────────────────
- * Billing history
- * ────────────────────────────────────────────────────────────────────────── */
+/* ── Invoices: rail pieces ───────────────────────────────────────────────── */
 
-const TX_TYPE_STYLE: Record<string, string> = {
-    payment: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
-    invoice: 'bg-blue-500/15 text-blue-600 dark:text-blue-400',
-    refund: 'bg-violet-500/15 text-violet-600 dark:text-violet-400',
-    setup: 'bg-muted text-muted-foreground',
-    adjustment: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
+const STATUS_DOT: Record<string, string> = {
+    paid: 'bg-emerald-500',
+    unpaid: 'bg-amber-500',
+    partially_paid: 'bg-blue-500',
+    overdue: 'bg-rose-500',
+    cancelled: 'bg-muted-foreground',
+    refunded: 'bg-violet-500',
+    draft: 'bg-muted-foreground',
 };
 
+function StatusFilterRow({ label, count, dot, active, onClick }: {
+    label: string; count: number; dot: string; active: boolean; onClick: () => void;
+}) {
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-start text-[12.5px] transition-colors ${
+                active ? 'bg-primary/10 font-medium text-primary' : 'hover:bg-muted'
+            }`}
+        >
+            <span className={`size-2 shrink-0 rounded-full ${dot}`} />
+            <span className="min-w-0 flex-1 capitalize break-words">{label}</span>
+            <span className="shrink-0 tabular-nums text-muted-foreground">{count}</span>
+        </button>
+    );
+}
+
 /**
- * The Billing History tab.
+ * The design's donut.
  *
- * Rows are the money ledger MERGED with the subscription lifecycle log,
- * server-side — the design's own table mixes "Payment for INV-…" with
- * "Subscription created", and they live in two tables because they are two
- * kinds of fact.
- *
- * An amount of `null` renders as an em dash, never ₹0.00: a plan change is not
- * a zero-rupee transaction, and printing one would be a claim about money that
- * never moved.
+ * Paid against Outstanding, both of which are real sums the API already
+ * returns. It is deliberately NOT "Paid vs Unpaid by COUNT": a single large
+ * unpaid invoice among nine small paid ones is 10% by count and most of the
+ * money, and the tiles above it are money, so the ring is money too.
  */
-function HistoryPanel() {
-    const [type, setType] = useState('all');
-    const [page, setPage] = useState(1);
-    const { data, isLoading } = useBillingHistory({ type, page });
+function InvoiceSummaryCard({ stats, onViewHistory }: {
+    stats: InvoiceList['stats'] | undefined;
+    onViewHistory: () => void;
+}) {
+    const total = stats?.total_amount ?? 0;
+    const paid = stats?.paid_amount ?? 0;
+    const due = stats?.outstanding_amount ?? 0;
 
-    const rows = data?.transactions ?? [];
-    const summary = data?.summary ?? {};
-    const pagination = data?.pagination;
+    const slices = [
+        { key: 'paid', name: 'Paid', value: paid, fill: 'var(--color-emerald-500, #10b981)' },
+        { key: 'due', name: 'Outstanding', value: due, fill: 'var(--color-amber-500, #f59e0b)' },
+    ].filter((s) => s.value > 0);
 
-    if (isLoading && !data) return <Skeleton className="h-72 rounded-xl" />;
+    const share = (v: number) => (total > 0 ? Math.round((v / total) * 100) : 0);
 
     return (
-        <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_260px]">
-            <Card className="py-0">
-                <CardContent className="flex flex-col gap-4 p-5">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                        {['all', 'invoice', 'payment', 'refund', 'setup'].map((t) => (
-                            <Button
-                                key={t}
-                                size="sm"
-                                variant={type === t ? 'default' : 'outline'}
-                                onClick={() => { setType(t); setPage(1); }}
-                                className="h-8 capitalize"
-                            >
-                                {t}
-                                <span className="ms-1 text-[11px] opacity-70">{summary[t] ?? 0}</span>
-                            </Button>
-                        ))}
-                    </div>
+        <Card className="py-0">
+            <CardContent className="flex flex-col gap-4 p-5">
+                <span className="text-[13px] font-semibold">Summary</span>
 
-                    {rows.length === 0 ? (
-                        <NotAvailable
-                            icon={Info}
-                            title="Nothing here yet"
-                            reason={
-                                type === 'all'
-                                    ? 'Your billing activity will appear here.'
-                                    : `No ${type} activity on this account.`
-                            }
-                        />
-                    ) : (
-                        <div className="w-full overflow-x-auto">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead className="min-w-[110px]">Date</TableHead>
-                                        <TableHead className="min-w-[200px]">Description</TableHead>
-                                        <TableHead className="min-w-[90px]">Type</TableHead>
-                                        <TableHead className="min-w-[110px] text-end">Amount</TableHead>
-                                        <TableHead className="min-w-[130px]">Reference</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {rows.map((r) => (
-                                        <TableRow key={r.key}>
-                                            <TableCell className="text-[12.5px] whitespace-nowrap">
-                                                {formatDate(r.occurred_at)}
-                                            </TableCell>
-                                            {/* break-words, never truncate: auto-layout table. */}
-                                            <TableCell className="max-w-[320px] text-[12.5px] break-words">
-                                                {r.description ?? '—'}
-                                            </TableCell>
-                                            <TableCell>
-                                                <Badge
-                                                    variant="ghost"
-                                                    className={`${TX_TYPE_STYLE[r.type] ?? 'bg-muted text-muted-foreground'} capitalize`}
-                                                >
-                                                    {r.type}
-                                                </Badge>
-                                            </TableCell>
-                                            <TableCell className="text-end tabular-nums whitespace-nowrap">
-                                                {r.amount === null
-                                                    ? <span className="text-muted-foreground">—</span>
-                                                    : (
-                                                        <span className={r.amount < 0 ? 'text-emerald-600 dark:text-emerald-400' : ''}>
-                                                            {formatMoney(r.amount, r.currency_code ?? 'INR')}
-                                                        </span>
-                                                    )}
-                                            </TableCell>
-                                            <TableCell className="max-w-[180px] text-[12.5px] break-all">
-                                                {r.invoice_id && r.invoice_number ? (
-                                                    <Link
-                                                        href={`/dashboard/billing/invoices/${r.invoice_id}`}
-                                                        className="text-primary hover:underline"
-                                                    >
-                                                        {r.invoice_number}
-                                                    </Link>
-                                                ) : (
-                                                    <span className="text-muted-foreground">—</span>
-                                                )}
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </div>
-                    )}
-
-                    {pagination && pagination.totalPages > 1 ? (
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                            <span className="text-[11px] text-muted-foreground">
-                                Page {pagination.page} of {pagination.totalPages} · {pagination.totalItems} entries
-                            </span>
-                            <div className="flex items-center gap-2">
-                                <Button size="sm" variant="outline" disabled={page <= 1}
-                                    onClick={() => setPage((p) => p - 1)}>Previous</Button>
-                                <Button size="sm" variant="outline" disabled={page >= pagination.totalPages}
-                                    onClick={() => setPage((p) => p + 1)}>Next</Button>
+                {slices.length === 0 ? (
+                    <p className="rounded-lg border border-dashed px-3 py-6 text-center text-[12px] text-muted-foreground">
+                        Nothing has been invoiced yet.
+                    </p>
+                ) : (
+                    <>
+                        <div className="relative mx-auto h-[150px] w-[150px]">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                    <Pie
+                                        data={slices}
+                                        dataKey="value"
+                                        nameKey="name"
+                                        innerRadius={46}
+                                        outerRadius={70}
+                                        strokeWidth={0}
+                                    >
+                                        {slices.map((sl) => <Cell key={sl.key} fill={sl.fill} />)}
+                                    </Pie>
+                                </PieChart>
+                            </ResponsiveContainer>
+                            {/* Centre label as DOM, not SVG <text> — it inherits
+                                the app font and stays readable in both themes. */}
+                            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                                <span className="text-[15px] leading-none font-bold tabular-nums">
+                                    {share(paid)}%
+                                </span>
+                                <span className="mt-0.5 text-[10px] text-muted-foreground">Paid</span>
                             </div>
                         </div>
-                    ) : null}
-                </CardContent>
-            </Card>
 
-            <Card className="py-0 xl:self-start">
-                <CardContent className="flex flex-col gap-3 p-5">
-                    <span className="text-[12.5px] font-medium">Activity summary</span>
-                    <dl className="flex flex-col gap-2 text-[12.5px]">
-                        {[
-                            ['All activity', summary.all ?? 0],
-                            ['Invoices', summary.invoice ?? 0],
-                            ['Payments', summary.payment ?? 0],
-                            ['Refunds', summary.refund ?? 0],
-                            ['Setup', summary.setup ?? 0],
-                        ].map(([label, value]) => (
-                            <div key={String(label)} className="flex items-center justify-between gap-3">
-                                <dt className="text-muted-foreground">{label}</dt>
-                                <dd className="font-medium tabular-nums">{value}</dd>
-                            </div>
-                        ))}
-                    </dl>
-                    {data?.note ? (
-                        <>
-                            <Separator />
-                            <p className="text-[11px] break-words text-muted-foreground">{data.note}</p>
-                        </>
-                    ) : null}
-                </CardContent>
-            </Card>
+                        <div className="flex flex-col gap-2 text-[12.5px]">
+                            <LegendRow dot="bg-emerald-500" label="Paid" value={formatMoney(paid)} share={share(paid)} />
+                            <LegendRow dot="bg-amber-500" label="Outstanding" value={formatMoney(due)} share={share(due)} />
+                        </div>
+                    </>
+                )}
+
+                <Separator />
+
+                <div className="flex items-center justify-between gap-3 text-[12.5px]">
+                    <span className="font-medium">Total</span>
+                    <span className="font-semibold tabular-nums break-words">{formatMoney(total)}</span>
+                </div>
+
+                <Button variant="outline" size="sm" className="w-full" onClick={onViewHistory}>
+                    View Billing History
+                </Button>
+            </CardContent>
+        </Card>
+    );
+}
+
+function LegendRow({ dot, label, value, share }: {
+    dot: string; label: string; value: string; share: number;
+}) {
+    return (
+        <div className="flex min-w-0 items-center gap-2">
+            <span className={`size-2 shrink-0 rounded-full ${dot}`} />
+            <span className="min-w-0 flex-1 text-muted-foreground">{label}</span>
+            <span className="shrink-0 tabular-nums">
+                {value} <span className="text-muted-foreground">({share}%)</span>
+            </span>
         </div>
+    );
+}
+
+/**
+ * One CSV cell.
+ *
+ * Quoted and quote-doubled, and a leading =, +, - or @ is prefixed with an
+ * apostrophe: a spreadsheet treats those as FORMULAS, so an invoice note could
+ * otherwise execute when the file is opened.
+ */
+function csvCell(v: unknown) {
+    const raw = v === null || v === undefined ? '' : String(v);
+    const safe = /^[=+\-@]/.test(raw) ? `'${raw}` : raw;
+    return `"${safe.replace(/"/g, '""')}"`;
+}
+
+/* -----------------------------------------------------------------------------
+ * Overview: recent invoices
+ *
+ * The five most recent, which is what the design shows. The full list, its
+ * filters and its totals live on the Invoices tab -- this is a glance, so it
+ * carries no search box and no pagination of its own.
+ * -------------------------------------------------------------------------- */
+
+function RecentInvoicesCard({ onViewAll }: { onViewAll: () => void }) {
+    const { data, isLoading } = useInvoices({ page: 1 });
+    const invoices = (data?.invoices ?? []).slice(0, 5);
+
+    return (
+        <Card className="py-0">
+            <CardContent className="flex flex-col gap-4 p-5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-[13px] font-semibold">Recent Invoices</span>
+                    {data?.stats?.total_invoices ? (
+                        <button
+                            type="button"
+                            onClick={onViewAll}
+                            className="inline-flex items-center gap-1.5 text-[12.5px] font-medium text-primary hover:underline"
+                        >
+                            View all invoices <ArrowRight className="size-3.5" />
+                        </button>
+                    ) : null}
+                </div>
+
+                {isLoading && !data ? (
+                    <Skeleton className="h-48 rounded-lg" />
+                ) : invoices.length === 0 ? (
+                    <NotAvailable
+                        icon={FileText}
+                        title="No invoices yet"
+                        reason="An invoice is raised at the start of each billing term."
+                    />
+                ) : (
+                    <div className="w-full overflow-x-auto">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead className="min-w-[150px]">Invoice ID</TableHead>
+                                    <TableHead className="min-w-[110px]">Date</TableHead>
+                                    <TableHead className="min-w-[110px] text-end">Amount</TableHead>
+                                    <TableHead className="min-w-[100px]">Status</TableHead>
+                                    {/*
+                                      The design labels this column "Download". It opens the
+                                      invoice, which carries the print action -- an icon that
+                                      downloads nothing is the one thing worse than no icon.
+                                    */}
+                                    <TableHead className="min-w-[70px] text-end">View</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {invoices.map((inv) => (
+                                    <TableRow key={inv.id}>
+                                        <TableCell className="max-w-[200px] font-medium break-all">
+                                            {inv.invoice_number}
+                                        </TableCell>
+                                        <TableCell className="text-[12.5px] whitespace-nowrap">
+                                            {formatDate(inv.issue_date)}
+                                        </TableCell>
+                                        <TableCell className="text-end tabular-nums whitespace-nowrap">
+                                            {formatMoney(inv.total, inv.currency_code)}
+                                        </TableCell>
+                                        <TableCell>
+                                            <Badge
+                                                variant="ghost"
+                                                className={`${INVOICE_STATUS_STYLE[inv.status] ?? 'bg-muted text-muted-foreground'} capitalize`}
+                                            >
+                                                {prettyStatus(inv.status)}
+                                            </Badge>
+                                        </TableCell>
+                                        <TableCell className="text-end">
+                                            <Button asChild size="icon" variant="ghost" className="size-8">
+                                                <Link
+                                                    href={`/dashboard/billing/invoices/${inv.id}`}
+                                                    title="Open this invoice"
+                                                >
+                                                    <ArrowRight className="size-3.5" />
+                                                </Link>
+                                            </Button>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    </div>
+                )}
+            </CardContent>
+        </Card>
+    );
+}
+
+/* -----------------------------------------------------------------------------
+ * Overview: the default payment method
+ *
+ * Everything READ-side here is real. Only ADD waits on a provider, and the
+ * button carries the server's own reason rather than a string typed here -- so
+ * it switches itself on the day a gateway is configured.
+ * -------------------------------------------------------------------------- */
+
+function PaymentMethodCard({
+    data, onManage,
+}: {
+    data: PaymentMethodList | undefined;
+    onManage: () => void;
+}) {
+    const def = data?.default_method ?? null;
+    // No longer gated on a provider: the manual route needs none, so the cap is
+    // the only thing that can stop an add.
+    const canAdd = Boolean(data?.can_add);
+
+    return (
+        <Card className="py-0">
+            <CardContent className="flex flex-col gap-4 p-5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-[13px] font-semibold">Payment Method</span>
+                    {data?.methods.length ? (
+                        <button
+                            type="button"
+                            onClick={onManage}
+                            className="text-[12.5px] font-medium text-primary hover:underline"
+                        >
+                            Manage
+                        </button>
+                    ) : null}
+                </div>
+
+                {def ? (
+                    <div className="flex min-w-0 items-center gap-3">
+                        <BrandMark brand={def.method_type === 'card' ? def.brand : null} />
+                        <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                                <p className="text-[13px] font-medium break-words">{def.label}</p>
+                                <Badge variant="secondary" className="h-5 text-[10.5px]">Default</Badge>
+                                {def.is_expired ? (
+                                    <Badge variant="destructive" className="h-5 text-[10.5px]">Expired</Badge>
+                                ) : null}
+                            </div>
+                            <p className="mt-0.5 text-[11.5px] break-words text-muted-foreground">
+                                {def.method_type === 'card'
+                                    ? def.expiry_label ? `Expires ${def.expiry_label}` : 'No expiry recorded'
+                                    : `${def.type_label} · ${def.is_verified ? 'verified' : 'not verified'}`}
+                            </p>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="flex min-w-0 items-center gap-3 rounded-lg border border-dashed p-4">
+                        <CreditCard className="size-4 shrink-0 text-muted-foreground" />
+                        <p className="min-w-0 text-[12.5px] break-words text-muted-foreground">
+                            {data?.methods.length
+                                ? 'None of your saved methods is set as the default.'
+                                : 'No payment method saved yet.'}
+                        </p>
+                    </div>
+                )}
+
+                {/*
+                  Disabled with the reason beside it, not hidden: the design has
+                  this button, and a client who cannot find it assumes the feature
+                  is broken rather than not yet launched.
+                */}
+                <Button
+                    variant="outline"
+                    className="w-full border-dashed"
+                    disabled={!canAdd}
+                    onClick={onManage}
+                >
+                    <Plus className="size-4" /> Add Payment Method
+                </Button>
+
+                {!data?.gateway.enabled ? (
+                    <p className="flex min-w-0 items-start gap-2 text-[11px] break-words text-muted-foreground">
+                        <Lock className="mt-0.5 size-3 shrink-0" />
+                        {data?.manual.reason ?? 'Nothing is charged automatically.'}
+                    </p>
+                ) : null}
+            </CardContent>
+        </Card>
+    );
+}
+
+/* -----------------------------------------------------------------------------
+ * Overview: billing details
+ *
+ * The design calls this "Billing Address" and draws a street, a city and a PIN
+ * code. `website_clients` has NO address columns -- name, company, email and
+ * mobile are every contact field this account actually has, which is also why
+ * an invoice's `billing_address` is written as null.
+ *
+ * So the card shows what is real, and states the missing part in the server's
+ * own words instead of rendering a plausible address nobody entered. Edit goes
+ * to Profile, which is where these four fields are actually changed.
+ * -------------------------------------------------------------------------- */
+
+function BillingDetailsCard({ reason }: { reason?: string }) {
+    const { data: me } = useClientProfile();
+
+    const phone = me?.mobile ? `${me.dial_code ?? ''} ${me.mobile}`.trim() : null;
+
+    return (
+        <Card className="py-0">
+            <CardContent className="flex flex-col gap-4 p-5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-[13px] font-semibold">Billing Details</span>
+                    <Link
+                        href="/dashboard/profile"
+                        className="text-[12.5px] font-medium text-primary hover:underline"
+                    >
+                        <Pencil className="me-1 inline size-3" />Edit
+                    </Link>
+                </div>
+
+                <div className="flex min-w-0 flex-col gap-1 text-[12.5px]">
+                    <p className="font-medium break-words">{me?.name ?? '—'}</p>
+                    {me?.company_name ? (
+                        <p className="break-words text-muted-foreground">{me.company_name}</p>
+                    ) : null}
+                    {/* Invoices are addressed to the account's own email. */}
+                    <p className="break-all text-muted-foreground">{me?.email ?? '—'}</p>
+                    {phone ? <p className="break-words text-muted-foreground">{phone}</p> : null}
+                </div>
+
+                <p className="flex min-w-0 items-start gap-2 rounded-lg border border-dashed px-3 py-2 text-[11px] break-words text-muted-foreground">
+                    <MapPin className="mt-0.5 size-3 shrink-0" />
+                    {reason ?? 'No billing address is stored on your account yet.'}
+                </p>
+            </CardContent>
+        </Card>
     );
 }

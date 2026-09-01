@@ -32,6 +32,7 @@ import { useClientEvent, useDeleteEvent, type DerivedStatus } from "@/hooks/use-
 import { useGuestStats, useGuests } from "@/hooks/use-guests";
 import { ApiError } from "@/lib/api-client";
 import { SignInPrompt } from '@/components/common/sign-in-prompt';
+import { useDateFormatter } from '@/hooks/use-client-settings';
 
 /**
  * Event Details — the View Event screen.
@@ -78,27 +79,22 @@ const RSVP_SLICES = [
     { key: "declined", label: "Declined", color: "#EF4444" },
 ] as const;
 
-/** "25 May, 2025" from a DATEONLY, built from parts so UTC cannot shift the day. */
-function formatDate(value: string | null): string {
-    if (!value) return "—";
-    const [y, m, d] = value.split("-").map(Number);
-    const local = new Date(y, (m || 1) - 1, d || 1);
-    return `${String(local.getDate()).padStart(2, "0")} ${local.toLocaleString("en", { month: "short" })}, ${local.getFullYear()}`;
-}
 
-/** "10:30 AM" from HH:MM:SS. */
+
+/**
+ * "10:30 AM" from a stored `HH:MM:SS`.
+ *
+ * Deliberately NOT routed through the client's time-zone preference: this is
+ * the wall-clock time the event starts AT ITS VENUE, not an instant to be
+ * converted. Shifting it would tell a guest in another zone to arrive at the
+ * wrong hour.
+ */
 function formatTime(value: string | null): string {
     if (!value) return "—";
     const [hh, mm] = value.split(":").map(Number);
     const suffix = hh >= 12 ? "PM" : "AM";
     const hour12 = hh % 12 === 0 ? 12 : hh % 12;
     return `${String(hour12).padStart(2, "0")}:${String(mm ?? 0).padStart(2, "0")} ${suffix}`;
-}
-
-function formatStamp(value: string | null): string {
-    if (!value) return "—";
-    const d = new Date(value);
-    return `${String(d.getDate()).padStart(2, "0")} ${d.toLocaleString("en", { month: "short" })}, ${d.getFullYear()} ${d.toLocaleTimeString("en", { hour: "2-digit", minute: "2-digit" })}`;
 }
 
 /** `#EVT20250525-017` — derived from the date and id, never stored. */
@@ -108,6 +104,8 @@ function eventCode(id: number, startDate: string | null): string {
 }
 
 export function EventDetail({ eventId }: { eventId: number }) {
+    // Dates follow the client's own Date Format / Time Zone preference.
+    const fmt = useDateFormatter();
     const router = useRouter();
     const [tab, setTab] = useState<TabValue>("overview");
     const [confirmDelete, setConfirmDelete] = useState(false);
@@ -250,7 +248,7 @@ export function EventDetail({ eventId }: { eventId: number }) {
                         <div className="mt-1 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
                             <FactBox
                                 icon={faCalendarDays}
-                                title={formatDate(event.start_date)}
+                                title={fmt(event.start_date)}
                                 sub={`${formatTime(event.start_time)} - ${formatTime(event.end_time)}`}
                                 tint="#7C5AED"
                             />
@@ -299,8 +297,8 @@ export function EventDetail({ eventId }: { eventId: number }) {
                         </Panel>
 
                         <Panel title="Date & Time">
-                            <Row label="Start Date" value={formatDate(event.start_date)} />
-                            <Row label="End Date" value={formatDate(event.end_date)} />
+                            <Row label="Start Date" value={fmt(event.start_date)} />
+                            <Row label="End Date" value={fmt(event.end_date)} />
                             <Row label="Start Time" value={formatTime(event.start_time)} />
                             <Row label="End Time" value={formatTime(event.end_time)} />
                             <Row label="Time Zone" value={event.timezone || "—"} />
@@ -316,8 +314,8 @@ export function EventDetail({ eventId }: { eventId: number }) {
                                     {status.label}
                                 </span>
                             </div>
-                            <Row label="Created On" value={formatStamp(event.created_at)} />
-                            <Row label="Last Updated" value={formatStamp(event.updated_at)} />
+                            <Row label="Created On" value={fmt(event.created_at)} />
+                            <Row label="Last Updated" value={fmt(event.updated_at)} />
                             <div className="flex items-start justify-between gap-3 py-1.5">
                                 <span className="shrink-0 text-[12px] text-muted-foreground">Event Privacy</span>
                                 <span className="flex items-center gap-1.5 text-[12.5px] font-medium capitalize text-foreground">
@@ -466,8 +464,8 @@ export function EventDetail({ eventId }: { eventId: number }) {
             {tab === "schedule" && (
                 <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
                     <Panel title="Date & Time">
-                        <Row label="Start Date" value={formatDate(event.start_date)} />
-                        <Row label="End Date" value={formatDate(event.end_date)} />
+                        <Row label="Start Date" value={fmt(event.start_date)} />
+                        <Row label="End Date" value={fmt(event.end_date)} />
                         <Row label="Start Time" value={formatTime(event.start_time)} />
                         <Row label="End Time" value={formatTime(event.end_time)} />
                         <Row label="Time Zone" value={event.timezone || "—"} />
@@ -601,10 +599,10 @@ export function EventDetail({ eventId }: { eventId: number }) {
                         {/* Only what the row itself can prove. An audit trail
                             would need its own table; inventing entries for it
                             would be worse than showing these two. */}
-                        <ActivityRow icon={faCircleInfo} label="Event created" value={formatStamp(event.created_at)} />
-                        <ActivityRow icon={faPenToSquare} label="Last updated" value={formatStamp(event.updated_at)} />
+                        <ActivityRow icon={faCircleInfo} label="Event created" value={fmt(event.created_at)} />
+                        <ActivityRow icon={faPenToSquare} label="Last updated" value={fmt(event.updated_at)} />
                         {event.qr_issued_at && (
-                            <ActivityRow icon={faQrcode} label="QR code issued" value={formatStamp(event.qr_issued_at)} />
+                            <ActivityRow icon={faQrcode} label="QR code issued" value={fmt(event.qr_issued_at)} />
                         )}
                     </ul>
                     <Separator className="my-2" />
@@ -656,7 +654,7 @@ export function EventDetail({ eventId }: { eventId: number }) {
                     </div>
                     {event.qr_issued_at && (
                         <p className="text-center text-[10.5px] text-muted-foreground">
-                            Issued {formatStamp(event.qr_issued_at)}
+                            Issued {fmt(event.qr_issued_at)}
                         </p>
                     )}
                     {event.qr_token && (

@@ -323,10 +323,16 @@ export function useChangePassword() {
  *
  * The server clears the session cookies, so there is nothing to sign out of
  * afterwards — the caller just needs to leave the portal.
+ *
+ * The body re-confirms identity: `password` for an account that has one, or
+ * `confirm_email` (the account's own address, re-typed) for a social-only
+ * client that has none. The server decides which it requires and rejects the
+ * request without it, so this is not a check the UI can be talked out of.
  */
 export function useDeleteAccount() {
     return useMutation({
-        mutationFn: () => api.del('/client/me'),
+        mutationFn: (body: { password?: string; confirm_email?: string }) =>
+            api.del('/client/me', body),
         onError: (error) =>
             toast.error(error instanceof ApiError ? error.message : 'Could not close your account.'),
     });

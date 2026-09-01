@@ -169,5 +169,11 @@ export const api = {
     post: <T>(path: string, body?: unknown) => request<T>('POST', path, body),
     put: <T>(path: string, body?: unknown) => request<T>('PUT', path, body),
     patch: <T>(path: string, body?: unknown) => request<T>('PATCH', path, body),
-    del: <T>(path: string) => request<T>('DELETE', path),
+    /**
+     * DELETE carries an optional body — the account-closure route re-confirms
+     * identity (a password, or the account's own email for a social-only
+     * client), and that confirmation cannot travel in the URL where it would
+     * land in server and proxy access logs.
+     */
+    del: <T>(path: string, body?: unknown) => request<T>('DELETE', path, body),
 };

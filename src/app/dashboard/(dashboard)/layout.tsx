@@ -9,6 +9,7 @@ import Footer from "@/components/layout/Footer/Footer";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { ClientAuthGate } from "@/components/common/client-auth-gate";
 import { ClientPlanGate } from "@/components/common/client-plan-gate";
+import { ThemeSync } from "@/components/common/theme-sync";
 
 /**
  * The template shipped this layout with per-route special cases (chat, email,
@@ -33,6 +34,10 @@ export default function DashboardLayout({
     {/* Inside the auth gate, never outside it: the plan is read off the signed-in
         client, so there is nothing to check until a session is confirmed. */}
     <ClientPlanGate>
+    {/* Pushes the account's stored theme into next-themes, so the choice
+        follows the client between their laptop and their phone rather than
+        living in one browser's localStorage. Renders nothing. */}
+    <ThemeSync />
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset className="bg-background flex flex-col min-w-0 min-h-screen transition-all duration-300">

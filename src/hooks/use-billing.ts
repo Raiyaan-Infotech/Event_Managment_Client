@@ -153,7 +153,14 @@ export interface BillingHistoryRow {
 export interface BillingHistory {
     transactions: BillingHistoryRow[];
     pagination: Pagination;
+    /**
+     * Counts for the WHOLE account, not the filtered page — the design's
+     * "Transaction Summary" rail is a fact about the account, and a count that
+     * moved while you typed in the search box would be reporting the search.
+     */
     summary: Record<string, number>;
+    /** How many rows the current filters matched — "Showing 1 to 10 of 26". */
+    filtered_count: number;
     note: string;
 }
 
@@ -162,15 +169,50 @@ export interface BillingHistory {
 export interface InvoiceTaxComponent { label: string; rate: number; amount: number }
 
 /**
+ * The card a payment was made with.
+ *
+ * Read from the transaction's own SNAPSHOT columns, so an archived invoice keeps
+ * saying what it said the day it was settled even if the card is later renamed
+ * or removed. `label` is assembled server-side — "Visa ending in 4242" — so the
+ * list, the invoice and the Billing Summary cannot word it three ways.
+ *
+ * Null on every payment today: no provider is connected, so nothing has been
+ * paid by card.
+ */
+export interface InvoicePaymentMethod {
+    payment_method_id: number | null;
+    brand: string | null;
+    last4: string | null;
+    gateway: string | null;
+    gateway_transaction_id: string | null;
+    label: string;
+}
+
+/**
  * `status` is DERIVED server-side — `unpaid`, `paid`, `partially_paid`,
  * `overdue`, `cancelled`, `refunded`, `draft`. `stored_status` is the column.
  *
  * `overdue` cannot occur while payments are disabled: no due date is stamped,
  * because an invoice nobody can pay must not be shown as the client's fault.
  */
+export interface InvoiceTimelineEntry {
+    key: string;
+    label: string;
+    detail: string;
+    at: string;
+}
+
 export interface Invoice {
     id: number;
     invoice_number: string;
+    /**
+     * "One Thousand Four Hundred Ninety Nine Rupees Only" — computed on the
+     * server so the words and the figure can never disagree. Null for a
+     * non-INR invoice, which has no rupees/paise reading.
+     */
+    amount_in_words?: string | null;
+    /** Derived from real timestamps; never stored. See buildTimeline(). */
+    timeline?: InvoiceTimelineEntry[];
     status: string;
     stored_status: string;
     issue_date: string;
@@ -194,6 +236,8 @@ export interface Invoice {
     billing_gstin: string | null;
     notes: string | null;
     plan: { id: number; name: string } | null;
+    /** The card that settled this invoice, lifted out of the ledger by the API. */
+    payment_method?: InvoicePaymentMethod | null;
     items?: {
         id: number; item_type: string; description: string;
         period_start: string | null; period_end: string | null;
@@ -201,7 +245,10 @@ export interface Invoice {
     }[];
     transactions?: {
         id: number; type: string; status: string; description: string | null;
-        amount: number; reference: string | null; occurred_at: string;
+        amount: number; reference: string | null;
+        gateway: string | null; gateway_transaction_id: string | null;
+        payment_method: InvoicePaymentMethod | null;
+        occurred_at: string;
     }[];
 }
 
@@ -228,6 +275,7 @@ const KEY = {
     plans: ['billing', 'plans'] as const,
     history: ['billing', 'history'] as const,
     invoices: ['billing', 'invoices'] as const,
+    paymentMethods: ['billing', 'payment-methods'] as const,
 };
 
 export function useBillingOverview() {
@@ -246,28 +294,194 @@ export function useBillingPlans() {
     });
 }
 
-export function useBillingHistory(params: { type?: string; page?: number } = {}) {
+export interface HistoryParams {
+    type?: string;
+    status?: string;
+    search?: string;
+    from?: string;
+    to?: string;
+    page?: number;
+    limit?: number;
+}
+
+export function useBillingHistory(params: HistoryParams = {}) {
     return useQuery({
-        queryKey: [...KEY.history, params.type ?? 'all', params.page ?? 1],
+        queryKey: [
+            ...KEY.history,
+            params.type ?? 'all', params.status ?? 'all', params.search ?? '',
+            params.from ?? '', params.to ?? '', params.page ?? 1, params.limit ?? 10,
+        ],
         queryFn: () =>
             api.get<BillingHistory>('/client/billing/history', {
                 type: params.type,
+                status: params.status,
+                search: params.search,
+                from: params.from,
+                to: params.to,
                 page: params.page,
+                limit: params.limit,
             }),
+        staleTime: 60 * 1000,
+        // Keeps the previous page on screen while the next one loads, so
+        // paging and typing in the search box do not blank the table.
+        placeholderData: (prev) => prev,
+    });
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Payment methods
+ *
+ * ⚠ NO CARD DETAILS PASS THROUGH HERE, IN EITHER MODE.
+ *
+ * TOKENISED — the gateway's own hosted field takes the card in the browser and
+ *   returns a token; only that token is posted.
+ * MANUAL — no gateway exists, so a method is a RECORD OF HOW THE CLIENT PAYS: a
+ *   UPI address, or a bank account named by its last four. Nothing here can be
+ *   charged; a payment arrives out of band and is recorded afterwards.
+ *
+ * The backend refuses a card-shaped body on BOTH paths, and refuses a full bank
+ * account number rather than trimming it — so this is not a convention the UI
+ * can quietly break.
+ * ────────────────────────────────────────────────────────────────────────── */
+
+export interface PaymentMethod {
+    id: number;
+    /** 'razorpay' / 'stripe' for a tokenised card, 'manual' for a recorded one. */
+    gateway: string;
+    method_type: 'card' | 'upi' | 'bank_transfer' | string;
+    brand: string | null;
+    last4: string | null;
+    exp_month: number | null;
+    exp_year: number | null;
+
+    /* ── Manual methods ─────────────────────────────────────────────────── */
+    upi_id: string | null;
+    bank_name: string | null;
+    account_last4: string | null;
+    ifsc: string | null;
+    /** A manual method is client-typed; nobody has checked it. Say so on screen. */
+    is_verified: boolean;
+    /** Whether it could ever be CHARGED, as opposed to merely recorded. */
+    is_chargeable: boolean;
+    /** "UPI" / "Bank transfer" / "Card" — for a heading, above the detail. */
+    type_label: string;
+    /** "06/27", assembled server-side so every screen pads it the same way. */
+    expiry_label: string | null;
+    holder_name: string | null;
+    is_default: boolean;
+    is_expired: boolean;
+    status: 'active' | 'expired' | 'removed';
+    /** "Visa ending in 4242" — one wording, decided by the server. */
+    label: string;
+    created_at: string;
+}
+
+export interface PaymentMethodList {
+    methods: PaymentMethod[];
+    default_method: PaymentMethod | null;
+    max_methods: number;
+    can_add: boolean;
+    gateway: {
+        enabled: boolean;
+        name: string | null;
+        /** Safe to hand the browser — it is what a hosted card field needs. */
+        publishable_key: string | null;
+        reason: string | null;
+    };
+    /**
+     * The route that needs no provider. `types` is served by the API rather
+     * than listed here, so adding one later does not need a frontend release —
+     * and the form cannot offer a type the server would reject.
+     */
+    manual: {
+        enabled: boolean;
+        types: { value: string; label: string }[];
+        reason: string;
+    };
+}
+
+/**
+ * What the Add form posts.
+ *
+ * No token, no card fields. The server decides which mode it is by whether a
+ * token arrived, so there is no flag to get wrong.
+ */
+export interface NewManualMethod {
+    method_type: string;
+    upi_id?: string;
+    bank_name?: string;
+    /** EXACTLY four digits. The server refuses a longer value rather than trimming it. */
+    account_last4?: string;
+    ifsc?: string;
+    holder_name?: string;
+    is_default?: boolean;
+}
+
+export function usePaymentMethods() {
+    return useQuery({
+        queryKey: KEY.paymentMethods,
+        queryFn: () => api.get<PaymentMethodList>('/client/billing/payment-methods'),
         staleTime: 60 * 1000,
     });
 }
 
-export function useInvoices(params: { status?: string; search?: string; page?: number } = {}) {
+export function useAddPaymentMethod() {
+    return useBillingMutation<NewManualMethod>(
+        (body) => api.post('/client/billing/payment-methods', body),
+        {
+            success: 'Payment method saved',
+            // The server's own message is shown when there is one — it names the
+            // field and the shape it wanted, which this cannot.
+            failure: 'Could not save that payment method.',
+        },
+    );
+}
+
+export function useSetDefaultPaymentMethod() {
+    return useBillingMutation<number>(
+        (id) => api.put(`/client/billing/payment-methods/${id}/default`),
+        { success: 'Default payment method updated', failure: 'Could not change your default card.' },
+    );
+}
+
+export function useRemovePaymentMethod() {
+    return useBillingMutation<number>(
+        (id) => api.del(`/client/billing/payment-methods/${id}`),
+        { success: 'Payment method removed', failure: 'Could not remove that card.' },
+    );
+}
+
+export interface InvoiceParams {
+    status?: string;
+    search?: string;
+    /** Both bounds are INCLUSIVE — the server filters `issue_date` on the day itself. */
+    from?: string;
+    to?: string;
+    page?: number;
+    limit?: number;
+}
+
+export function useInvoices(params: InvoiceParams = {}) {
     return useQuery({
-        queryKey: [...KEY.invoices, params.status ?? 'all', params.search ?? '', params.page ?? 1],
+        queryKey: [
+            ...KEY.invoices,
+            params.status ?? 'all', params.search ?? '',
+            params.from ?? '', params.to ?? '',
+            params.page ?? 1, params.limit ?? 10,
+        ],
         queryFn: () =>
             api.get<InvoiceList>('/client/billing/invoices', {
                 status: params.status,
                 search: params.search || undefined,
+                from: params.from || undefined,
+                to: params.to || undefined,
                 page: params.page,
+                limit: params.limit,
             }),
         staleTime: 60 * 1000,
+        // Keeps the current page on screen while the next one loads, so paging
+        // and typing in the search box do not blank the table.
+        placeholderData: (prev) => prev,
     });
 }
 
@@ -275,9 +489,17 @@ export function useInvoice(id: number | null) {
     return useQuery({
         queryKey: [...KEY.invoices, 'detail', id],
         queryFn: () =>
-            api.get<{ invoice: Invoice; payments_enabled: boolean; payments_reason: string | null }>(
-                `/client/billing/invoices/${id}`,
-            ),
+            api.get<{
+                invoice: Invoice;
+                payments_enabled: boolean;
+                payments_reason: string | null;
+                /**
+                 * Usage for THIS INVOICE'S period, not the current one — an
+                 * invoice records a past term, and today's numbers under last
+                 * month's dates would be a different fact wearing the same label.
+                 */
+                usage: BillingUsage;
+            }>(`/client/billing/invoices/${id}`),
         enabled: id !== null && Number.isFinite(id),
         staleTime: 5 * 60 * 1000,
     });
@@ -342,7 +564,7 @@ function useBillingMutation<TArgs>(
         mutationFn: fn,
         onSuccess: () => {
             toast.success(messages.success);
-            for (const key of [KEY.overview, KEY.plans, KEY.history, KEY.invoices, ['client', 'me']]) {
+            for (const key of [KEY.overview, KEY.plans, KEY.history, KEY.invoices, KEY.paymentMethods, ['client', 'me']]) {
                 qc.invalidateQueries({ queryKey: key, refetchType: 'all' });
             }
         },

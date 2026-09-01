@@ -1,12 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useState } from 'react';
 import {
     ShieldCheck, Lock, KeyRound, MonitorSmartphone, Settings2, ArrowRight,
     Palette, Mail, Megaphone, BellRing, Zap, Download, FileDown, Trash2,
-    CalendarDays, MapPin, Users, Send, Crown, ChevronRight, BadgeCheck, Loader2,
+    CalendarDays, MapPin, Users, Send, Crown, ChevronRight, BadgeCheck,
 } from 'lucide-react';
 
 import { Card, CardContent } from '@/components/ui/card';
@@ -15,11 +13,9 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-    Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
-} from '@/components/ui/dialog';
 import { ProfileAvatar } from '@/components/common/profile-avatar';
-import { useClientProfile, useDeleteAccount } from '@/hooks/use-client-portal';
+import { useClientProfile } from '@/hooks/use-client-portal';
+import { useDateFormatter } from '@/hooks/use-client-settings';
 import { useDashboardStats } from '@/hooks/use-client-events';
 import { useGuestStats } from '@/hooks/use-guests';
 
@@ -81,6 +77,7 @@ export default function ProfilePage() {
 /* ── Header ──────────────────────────────────────────────────────────────── */
 
 function HeaderCard() {
+    const fmt = useDateFormatter();
     const { data: client } = useClientProfile();
     const verified = !!Number(client?.email_verified);
 
@@ -127,7 +124,7 @@ function HeaderCard() {
 
                     <div className="mt-4 flex flex-wrap items-center gap-x-8 gap-y-3">
                         <Fact icon={<CalendarDays className="size-4" />} label="Member since"
-                            value={formatDate(client?.created_at)} />
+                            value={fmt(client?.created_at)} />
                         {/* ⚠ NO COLUMN. `website_clients` has no location of any
                             kind — not city, country or coordinates. */}
                         <Fact icon={<MapPin className="size-4" />} label="Location" value="—" />
@@ -362,10 +359,6 @@ function PreferencesCard() {
 }
 
 function QuickActions() {
-    const del = useDeleteAccount();
-    const router = useRouter();
-    const [confirmOpen, setConfirmOpen] = useState(false);
-
     return (
         <>
             <Card className="py-0">
@@ -379,9 +372,15 @@ function QuickActions() {
                             trailing="Not available" />
                         <RailRow icon={<FileDown className="size-4" />} label="Export Events"
                             trailing="Not available" />
-                        <button
-                            type="button"
-                            onClick={() => setConfirmOpen(true)}
+                        {/*
+                          Links to the one screen that owns closing an account,
+                          rather than confirming it a second way here. This page
+                          used to run its own dialog with its own wording and no
+                          identity check at all — the §308 divergence, in the flow
+                          where it matters most.
+                        */}
+                        <Link
+                            href="/dashboard/settings/delete-account"
                             className="flex items-center gap-3 border-t py-3 text-left text-destructive"
                         >
                             <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-destructive/10">
@@ -389,30 +388,11 @@ function QuickActions() {
                             </span>
                             <span className="min-w-0 flex-1 text-sm font-medium">Close Account</span>
                             <ChevronRight className="size-4 shrink-0" />
-                        </button>
+                        </Link>
                     </div>
                 </CardContent>
             </Card>
 
-            <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Close your account?</DialogTitle>
-                        <DialogDescription>
-                            Your account will be closed and you will be signed out immediately. Your
-                            events are not deleted, but you will no longer be able to reach them.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setConfirmOpen(false)}>Cancel</Button>
-                        <Button variant="destructive" disabled={del.isPending}
-                            onClick={() => del.mutate(undefined, { onSuccess: () => router.replace('/') })}>
-                            {del.isPending && <Loader2 className="size-4 animate-spin" />}
-                            Close my account
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
         </>
     );
 }
@@ -457,16 +437,6 @@ function RailRow({
     ) : (
         <div className="flex items-center gap-3 border-t py-3 first:border-t-0 opacity-70">{body}</div>
     );
-}
-
-/** `2026-08-19T…` to `19 Aug 2026`, split from the ISO parts rather than
- *  localised — rendering a timestamp through the browser's zone is how
- *  "Member since" shows the day before its own value west of UTC. */
-function formatDate(value?: string | null): string {
-    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value ?? ''));
-    if (!m) return '—';
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    return `${m[3]} ${months[Number(m[2]) - 1]} ${m[1]}`;
 }
 
 function ProfileSkeleton() {

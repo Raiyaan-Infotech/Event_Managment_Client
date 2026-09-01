@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useState } from 'react';
+import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import {
     User, Bell, ShieldCheck, SlidersHorizontal, Plug, ChevronRight,
     Download, Users, HelpCircle, MessageSquare, Check, Loader2,
@@ -16,12 +17,13 @@ import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-    Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
-} from '@/components/ui/dialog';
 import { ProfileAvatar } from '@/components/common/profile-avatar';
+import { useDateFormatter } from '@/hooks/use-client-settings';
+import { useBillingOverview } from '@/hooks/use-billing';
+import { PreferencesTab } from './_components/preferences-tab';
+import { NotificationsTab } from './_components/notifications-tab';
 import {
-    useClientProfile, useUpdateProfile, useChangePassword, useDeleteAccount,
+    useClientProfile, useUpdateProfile, useChangePassword,
 } from '@/hooks/use-client-portal';
 
 /**
@@ -49,9 +51,9 @@ import {
  * stateless JWTs with no server-side store, so nothing can enumerate or revoke
  * them.
  */
-export default function SettingsPage() {
-    const { data: client, isLoading } = useClientProfile();
+const TAB_VALUES = ['profile', 'account', 'notifications', 'security', 'preferences', 'integrations'];
 
+export default function SettingsPage() {
     return (
         <div className="flex flex-col gap-6">
             <div className="min-w-0">
@@ -61,7 +63,48 @@ export default function SettingsPage() {
                 </p>
             </div>
 
-            <Tabs defaultValue="profile" className="gap-6">
+            {/* SettingsTabs reads useSearchParams(), which opts a page out of
+                prerendering unless it sits behind a Suspense boundary — the same
+                reason the layout wraps Breadcrumb. */}
+            <Suspense fallback={<ProfileSkeleton />}>
+                <SettingsTabs />
+            </Suspense>
+        </div>
+    );
+}
+
+/**
+ * The tab lives in the URL (`?tab=notifications`) so a link can point at one —
+ * Preferences links across to Notifications rather than duplicating the email
+ * switches. Kept as STATE as well, so clicking a tab does not push a history
+ * entry for every glance; the effect only syncs when an incoming link changes
+ * the parameter.
+ */
+function SettingsTabs() {
+    const { data: client, isLoading } = useClientProfile();
+    const params = useSearchParams();
+    const requested = params.get('tab');
+    const [tab, setTab] = useState(() =>
+        requested && TAB_VALUES.includes(requested) ? requested : 'profile');
+
+    /*
+      ADJUSTED DURING RENDER, not in an effect.
+
+      An effect that calls setState runs after the browser has already painted
+      the old tab, so an incoming ?tab= link flashes Profile and then switches.
+      Comparing against the previous value during render is React's own
+      documented pattern for deriving state from props, and is what §308 landed
+      on for the Settings form after the same lint rule caught a real bug there.
+    */
+    const [seen, setSeen] = useState(requested);
+    if (requested !== seen) {
+        setSeen(requested);
+        if (requested && TAB_VALUES.includes(requested)) setTab(requested);
+    }
+
+    return (
+        <>
+            <Tabs value={tab} onValueChange={setTab} className="gap-6">
                 <TabsList variant="line" className="w-full justify-start overflow-x-auto">
                     <TabsTrigger value="profile">Profile</TabsTrigger>
                     <TabsTrigger value="account">Account</TabsTrigger>
@@ -80,11 +123,7 @@ export default function SettingsPage() {
                 </TabsContent>
 
                 <TabsContent value="notifications">
-                    <NotBuilt
-                        title="Notification settings"
-                        needs="a notification-preferences table"
-                        detail="Email, in-app and SMS preferences each need somewhere to persist. There is no preferences table yet, and no notification feed to drive them from."
-                    />
+                    <NotificationsTab />
                 </TabsContent>
 
                 <TabsContent value="security">
@@ -92,11 +131,7 @@ export default function SettingsPage() {
                 </TabsContent>
 
                 <TabsContent value="preferences">
-                    <NotBuilt
-                        title="Preferences"
-                        needs="a client-preferences table"
-                        detail="Language, date format, time zone, theme, default view and page size all need a row per client to save into."
-                    />
+                    <PreferencesTab />
                 </TabsContent>
 
                 <TabsContent value="integrations">
@@ -107,7 +142,7 @@ export default function SettingsPage() {
                     />
                 </TabsContent>
             </Tabs>
-        </div>
+        </>
     );
 }
 
@@ -277,7 +312,10 @@ function ShortcutRow({ icon, title, body }: { icon: React.ReactNode; title: stri
 /* ── Right rail ──────────────────────────────────────────────────────────── */
 
 function AccountOverview() {
+    const fmt = useDateFormatter();
     const { data: client } = useClientProfile();
+    const { data: billing } = useBillingOverview();
+    const next = billing?.subscription?.next_billing_date ?? null;
 
     return (
         <Card className="py-0">
@@ -285,18 +323,20 @@ function AccountOverview() {
                 <h3 className="text-sm font-semibold">Account Overview</h3>
                 <dl className="mt-4 flex flex-col gap-3 text-sm">
                     <Row label="Plan" value={client?.plan?.name ?? 'No plan assigned'} />
-                    <Row label="Member Since" value={formatDate(client?.created_at)} />
-                    {/*
-                      ⚠ NO DATA. "Next Billing Date" needs a subscription PERIOD,
-                      and nothing records one — a plan has a price but no start,
-                      end or renewal date, and there is no plan_subscriptions
-                      table. An invented date here is the kind someone acts on.
-                    */}
-                    <Row label="Next Billing Date" value="—" muted />
+                    <Row label="Member Since" value={fmt(client?.created_at)} />
+                {/* Real since §313 — `client_subscriptions` records the term.
+                    A cancelled or lifetime term has no next charge, and says so
+                    rather than printing a dash that reads as missing data. */}
+                    <Row
+                        label="Next Billing Date"
+                        value={next ? fmt(next) : 'No upcoming charge'}
+                        muted={!next}
+                    />
                 </dl>
-                <Button variant="outline" className="mt-4 w-full" disabled
-                    title="Billing is not available yet">
-                    Manage Billing
+                {/* The billing screens exist now (§323), so this leads somewhere
+                    instead of being disabled with a note that is no longer true. */}
+                <Button asChild variant="outline" className="mt-4 w-full">
+                    <Link href="/dashboard/billing">Manage Billing</Link>
                 </Button>
             </CardContent>
         </Card>
@@ -399,9 +439,10 @@ function Row({ label, value, muted }: { label: string; value: string; muted?: bo
 
 function AccountTab() {
     const { data: client } = useClientProfile();
-    const del = useDeleteAccount();
-    const router = useRouter();
-    const [confirmOpen, setConfirmOpen] = useState(false);
+    const { data: billing } = useBillingOverview();
+    const fmt = useDateFormatter();
+
+    const sub = billing?.subscription ?? null;
 
     return (
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
@@ -419,25 +460,61 @@ function AccountTab() {
                                 to drift from the record it names. */}
                             <Row label="Account ID" value={client ? `EVT-${String(client.id).padStart(6, '0')}` : '—'} />
                             <Separator />
-                            <Row label="Account Created" value={formatDate(client?.created_at, true)} />
+                            <Row label="Account Created" value={fmt(client?.created_at, true)} />
                             <Separator />
                             <Row label="Current Plan" value={client?.plan?.name ?? 'No plan assigned'} />
                             <Separator />
-                            <Row label="Member Since" value={formatDate(client?.created_at)} />
+                            <Row label="Member Since" value={fmt(client?.created_at)} />
                             <Separator />
-                            {/* ⚠ NO DATA — see AccountOverview. */}
-                            <Row label="Next Billing Date" value="—" muted />
+                            {/*
+                              Real since §313 — `client_subscriptions` records the
+                              term. Null is not "missing data": a cancelled or
+                              lifetime term genuinely has no next charge, so it
+                              says that rather than printing a dash.
+                            */}
+                            <Row
+                                label="Next Billing Date"
+                                value={sub?.next_billing_date ? fmt(sub.next_billing_date) : 'No upcoming charge'}
+                                muted={!sub?.next_billing_date}
+                            />
                             <Separator />
-                            <Row label="Billing Email" value="—" muted />
+                            {/*
+                              There is no separate billing-email column, and there
+                              does not need to be — invoices are addressed to the
+                              account's own email, and that is what this shows. A
+                              second address would be a second thing to keep in
+                              step with the first.
+                            */}
+                            <Row label="Billing Email" value={client?.email ?? '—'} />
                             <Separator />
-                            <Row label="Payment Method" value="—" muted />
+                            {/*
+                              ⚠ NO CARD IS STORED ANYWHERE. Checked every column in
+                              the database: there is no card table, no last4, no
+                              expiry, and no gateway library installed. `payments`
+                              and `client_transactions` carry `gateway` /
+                              `gateway_transaction_id` as SEAMS for a provider that
+                              does not exist yet, and `payments` has 0 rows.
+
+                              That is also the right place for it to stay — a card
+                              belongs at the gateway, which returns a token. Storing
+                              one here would make this system handle card data
+                              itself, which is a PCI obligation nobody has taken on.
+                            */}
+                            <Row label="Payment Method" value="Not set up yet" muted />
                             <Separator />
-                            <Row label="Currency" value="—" muted />
+                            {/*
+                              Every plan in the catalogue is priced in INR, and the
+                              subscription snapshots its own currency at purchase
+                              (§313.1). Read from the subscription so it stays true
+                              if that ever stops being the case, rather than being
+                              typed in here.
+                            */}
+                            <Row label="Currency" value={`${sub?.currency_code ?? 'INR'} (₹)`} />
                         </dl>
 
                         <p className="mt-4 text-xs text-muted-foreground">
-                            Billing details are not available yet — nothing in this system records a
-                            subscription period, payment method or currency.
+                            Invoices go to your account email. There is no card on file — no payment
+                            provider is connected yet, so nothing can be charged automatically.
                         </p>
                     </CardContent>
                 </Card>
@@ -448,9 +525,18 @@ function AccountTab() {
                         <p className="mt-1 text-sm text-muted-foreground">
                             Once you delete your account, there is no going back. Please be certain.
                         </p>
-                        <Button variant="outline" className="mt-4 border-destructive/50 text-destructive"
-                            onClick={() => setConfirmOpen(true)}>
-                            Delete My Account
+                        {/*
+                          A dedicated screen, not a dialog. The confirmation needs
+                          a password (or an email for a social-only account), the
+                          real consequences and the ones the design got wrong — too
+                          much to read inside a modal, and the success state has to
+                          live outside the authenticated shell anyway. One place
+                          owns the flow, for the §308 reason a second editor is a
+                          second place to diverge.
+                        */}
+                        <Button asChild variant="outline"
+                            className="mt-4 border-destructive/50 text-destructive">
+                            <Link href="/dashboard/settings/delete-account">Delete My Account</Link>
                         </Button>
                     </CardContent>
                 </Card>
@@ -461,37 +547,6 @@ function AccountTab() {
                 <AccountStatus />
             </div>
 
-            <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Delete your account?</DialogTitle>
-                        <DialogDescription>
-                            Your account will be closed and you will be signed out immediately. Your
-                            events are not deleted, but you will no longer be able to reach them.
-                            This cannot be undone from here.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setConfirmOpen(false)}>Cancel</Button>
-                        <Button
-                            variant="destructive"
-                            disabled={del.isPending}
-                            onClick={() =>
-                                del.mutate(undefined, {
-                                    // The server has already cleared the session
-                                    // cookies, so a full navigation out is all
-                                    // that is left — staying would sit on a
-                                    // screen whose next request 401s.
-                                    onSuccess: () => router.replace('/'),
-                                })
-                            }
-                        >
-                            {del.isPending && <Loader2 className="size-4 animate-spin" />}
-                            Delete my account
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
         </div>
     );
 }
@@ -596,21 +651,6 @@ function NotBuilt({ title, needs, detail }: { title: string; needs: string; deta
             </CardContent>
         </Card>
     );
-}
-
-/**
- * `2026-08-28T…` to `28 Aug 2026`.
- *
- * Parsed from the ISO parts rather than handed to `new Date()` and localised:
- * `created_at` is a timestamp, but rendering it through the browser's zone is
- * how "Member Since" shows the day before its own value west of UTC.
- */
-function formatDate(value?: string | null, withTime = false): string {
-    const m = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2}))?/.exec(String(value ?? ''));
-    if (!m) return '—';
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const date = `${m[3]} ${months[Number(m[2]) - 1]} ${m[1]}`;
-    return withTime && m[4] ? `${date}, ${m[4]}:${m[5]}` : date;
 }
 
 function ProfileSkeleton() {

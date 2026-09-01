@@ -33,6 +33,7 @@ import {
 } from "@/hooks/use-guests";
 import { ApiError } from "@/lib/api-client";
 import { SignInPrompt } from '@/components/common/sign-in-prompt';
+import { useDateFormatter } from '@/hooks/use-client-settings';
 
 /**
  * Manage Groups.
@@ -50,6 +51,8 @@ import { SignInPrompt } from '@/components/common/sign-in-prompt';
 const PAGE_SIZE = 8;
 
 export default function ManageGroupsPage() {
+    // Dates follow the client's own Date Format / Time Zone preference.
+    const fmt = useDateFormatter();
     const [search, setSearch] = useState("");
     const [debouncedSearch, setDebouncedSearch] = useState("");
     const [visibility, setVisibility] = useState("all");
@@ -308,7 +311,7 @@ export default function ManageGroupsPage() {
                                                 </td>
 
                                                 <td className="py-3 pr-3 align-top text-[12px] text-muted-foreground">
-                                                    {formatDate(group.created_at)}
+                                                    {fmt(group.created_at)}
                                                 </td>
 
                                                 <td className="py-3 pr-4 align-top">
@@ -489,9 +492,3 @@ export default function ManageGroupsPage() {
     );
 }
 
-/** "10 May 2025", built from parts so UTC cannot shift the day. */
-function formatDate(value: string | null): string {
-    if (!value) return "—";
-    const d = new Date(value);
-    return `${String(d.getDate()).padStart(2, "0")} ${d.toLocaleString("en", { month: "short" })} ${d.getFullYear()}`;
-}
