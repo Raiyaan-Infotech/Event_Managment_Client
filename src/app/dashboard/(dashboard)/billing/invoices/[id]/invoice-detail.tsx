@@ -71,8 +71,8 @@ const STATUS_STYLE: Record<string, string> = {
  */
 const PRINT_CSS = `
 @media print {
-    /* Everything goes; the invoice comes back. `visibility` rather than
-       `display` on the app chrome, so nothing above reflows on its way out. */
+    /* Everything goes; the invoice comes back. 'visibility' rather than
+       'display' on the app chrome, so nothing above reflows on its way out. */
     body * { visibility: hidden !important; }
     #invoice-print, #invoice-print * { visibility: visible !important; }
 
@@ -84,7 +84,7 @@ const PRINT_CSS = `
       half the paper wide, which clipped the Qty and Amount columns off the
       items table.
 
-      \`*:has(#invoice-print)\` selects exactly the ancestor chain and nothing
+      \'*:has(#invoice-print)\' selects exactly the ancestor chain and nothing
       else, and flattens every one of them: no positioning, no padding, no width
       cap, no flex track. That is why the invoice can then just be a normal
       static block — no absolute positioning, which is what made it resolve
