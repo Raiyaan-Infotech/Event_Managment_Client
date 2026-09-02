@@ -315,3 +315,102 @@
 .animate-gear {
   animation: gear-rotate 4s linear infinite;
 }
+/* ---------------------------------------------------------------------------
+   Quill (react-quill-new), used by the message composer.
+
+   Its Snow theme ships hard-coded light colours and a 1px border of its own.
+   Without these the editor is a white box with black text in dark mode, and
+   it draws a second border inside the one RichTextEditor already provides.
+   Everything below maps Quill onto the app's tokens rather than restyling it.
+--------------------------------------------------------------------------- */
+.quill-host .ql-toolbar.ql-snow,
+.quill-host .ql-container.ql-snow {
+  border: 0;
+}
+
+.quill-host .ql-toolbar.ql-snow {
+  border-bottom: 1px solid var(--border);
+  padding: 6px 8px;
+}
+
+.quill-host .ql-container.ql-snow {
+  font-family: inherit;
+  font-size: 12.5px;
+  color: var(--foreground);
+}
+
+.quill-host .ql-editor {
+  min-height: 200px;
+  padding: 14px;
+  line-height: 1.6;
+}
+
+/* Quill's placeholder is an ::before on the editor, not a real placeholder. */
+.quill-host .ql-editor.ql-blank::before {
+  color: var(--muted-foreground);
+  font-style: normal;
+  left: 14px;
+  right: 14px;
+}
+
+/* The toolbar's icons are inline SVG with `stroke`/`fill` attributes, so they
+   have to be recoloured by attribute rather than by `color`. */
+.quill-host .ql-snow .ql-stroke { stroke: var(--muted-foreground); }
+.quill-host .ql-snow .ql-fill { fill: var(--muted-foreground); }
+.quill-host .ql-snow .ql-picker { color: var(--muted-foreground); }
+
+.quill-host .ql-snow .ql-active .ql-stroke,
+.quill-host .ql-snow button:hover .ql-stroke { stroke: var(--primary); }
+.quill-host .ql-snow .ql-active .ql-fill,
+.quill-host .ql-snow button:hover .ql-fill { fill: var(--primary); }
+.quill-host .ql-snow .ql-picker-label:hover,
+.quill-host .ql-snow .ql-picker-item:hover { color: var(--primary); }
+
+/* The dropdown panels default to a white card. */
+.quill-host .ql-snow .ql-picker-options {
+  background: var(--popover);
+  color: var(--popover-foreground);
+  border-color: var(--border);
+  border-radius: 8px;
+}
+
+/* The link tooltip, same problem. */
+.quill-host .ql-snow .ql-tooltip {
+  background: var(--popover);
+  color: var(--popover-foreground);
+  border-color: var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.12);
+}
+.quill-host .ql-snow .ql-tooltip input[type="text"] {
+  background: var(--background);
+  color: var(--foreground);
+  border-color: var(--border);
+  border-radius: 6px;
+}
+
+/* ---------------------------------------------------------------------------
+   Rendering a stored HTML body back out (previews, the message detail).
+
+   Tailwind's preflight strips list markers and heading sizes, so HTML written
+   in the editor renders as an unstyled run of text unless these are restored.
+--------------------------------------------------------------------------- */
+.rich-html { line-height: 1.6; }
+.rich-html p { margin: 0 0 0.6em; }
+.rich-html p:last-child { margin-bottom: 0; }
+.rich-html strong, .rich-html b { font-weight: 600; }
+.rich-html em, .rich-html i { font-style: italic; }
+.rich-html u { text-decoration: underline; }
+.rich-html a { color: var(--primary); text-decoration: underline; }
+.rich-html ul { list-style: disc; padding-inline-start: 1.35em; margin: 0 0 0.6em; }
+.rich-html ol { list-style: decimal; padding-inline-start: 1.35em; margin: 0 0 0.6em; }
+.rich-html li { margin: 0.15em 0; }
+.rich-html blockquote {
+  border-inline-start: 3px solid var(--border);
+  padding-inline-start: 0.8em;
+  margin: 0 0 0.6em;
+  color: var(--muted-foreground);
+}
+.rich-html .ql-align-center { text-align: center; }
+.rich-html .ql-align-right { text-align: right; }
+.rich-html .ql-align-justify { text-align: justify; }

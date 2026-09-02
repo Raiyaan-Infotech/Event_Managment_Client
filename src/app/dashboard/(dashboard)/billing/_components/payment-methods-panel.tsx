@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import {
     CreditCard, Star, Trash2, Plus, ShieldCheck, Lock, Info, TriangleAlert,
-    Loader2, MoreVertical, Headphones, Landmark, Smartphone, BadgeCheck,
+    Loader2, MoreVertical, Headphones, Landmark, Smartphone, BadgeCheck, Banknote,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Link from 'next/link';
@@ -302,11 +302,13 @@ function MethodRow({
                     )}
                 </div>
                 <p className="mt-0.5 text-[11.5px] break-words text-muted-foreground">
-                    {method.method_type === 'bank_transfer'
-                        ? method.ifsc ?? 'No IFSC recorded'
-                        : method.method_type === 'upi'
-                            ? 'You transfer to us — nothing is charged automatically'
-                            : method.expiry_label ? `Expires ${method.expiry_label}` : 'No expiry recorded'}
+                    {method.method_type === 'cash'
+                        ? 'Paid in person — nothing is charged automatically'
+                        : method.method_type === 'bank_transfer'
+                            ? method.ifsc ?? 'No IFSC recorded'
+                            : method.method_type === 'upi'
+                                ? 'You transfer to us — nothing is charged automatically'
+                                : method.expiry_label ? `Expires ${method.expiry_label}` : 'No expiry recorded'}
                     {method.holder_name ? ` · ${method.holder_name}` : ''}
                     {` · added ${fmt(method.created_at)}`}
                 </p>
@@ -360,7 +362,11 @@ export function BrandMark({ brand }: { brand: string | null }) {
 /** The same block, but a UPI or bank method gets its own mark rather than a card's. */
 function MethodMark({ method }: { method: PaymentMethod }) {
     if (method.method_type === 'card') return <BrandMark brand={method.brand} />;
-    const Icon = method.method_type === 'upi' ? Smartphone : Landmark;
+    const Icon = method.method_type === 'upi'
+        ? Smartphone
+        : method.method_type === 'cash'
+            ? Banknote
+            : Landmark;
     return (
         <span className="grid h-8 w-12 shrink-0 place-items-center rounded-md border bg-muted">
             <Icon className="size-4 text-muted-foreground" />
@@ -416,10 +422,11 @@ function AddMethodCard({
         const bad: Record<string, boolean> = {};
         if (type === 'upi') {
             if (!upi.trim()) bad.upi = true;
-        } else {
+        } else if (type === 'bank_transfer') {
             if (!bank.trim()) bad.bank = true;
             if (last4.length !== 4) bad.last4 = true;
         }
+        // Cash has nothing to validate — that is the point of it.
         if (Object.keys(bad).length) {
             setErrors(bad);
             toast.error('Please fill all mandatory fields.');
@@ -430,13 +437,15 @@ function AddMethodCard({
         add.mutate(
             type === 'upi'
                 ? { method_type: 'upi', upi_id: upi.trim(), holder_name: holder.trim() || undefined }
-                : {
-                    method_type: 'bank_transfer',
-                    bank_name: bank.trim(),
-                    account_last4: last4,
-                    ifsc: ifsc.trim() || undefined,
-                    holder_name: holder.trim() || undefined,
-                },
+                : type === 'bank_transfer'
+                    ? {
+                        method_type: 'bank_transfer',
+                        bank_name: bank.trim(),
+                        account_last4: last4,
+                        ifsc: ifsc.trim() || undefined,
+                        holder_name: holder.trim() || undefined,
+                    }
+                    : { method_type: 'cash', holder_name: holder.trim() || undefined },
             { onSuccess: reset },
         );
     }
@@ -512,7 +521,9 @@ function AddMethodCard({
                                         >
                                             {t.value === 'upi'
                                                 ? <Smartphone className="size-3.5" />
-                                                : <Landmark className="size-3.5" />}
+                                                : t.value === 'cash'
+                                                    ? <Banknote className="size-3.5" />
+                                                    : <Landmark className="size-3.5" />}
                                             {t.label}
                                         </Button>
                                     ))}
@@ -533,6 +544,15 @@ function AddMethodCard({
                                         aria-invalid={errors.upi || undefined}
                                     />
                                 </Field>
+                            ) : type === 'cash' ? (
+                                // Nothing to type: cash has no address and no account.
+                                // The row it saves exists so there is something to pick
+                                // as the record, not to describe how the money moved.
+                                <p className="flex min-w-0 items-start gap-2 rounded-lg border border-dashed px-3.5 py-2.5 text-[11.5px] break-words text-muted-foreground">
+                                    <Banknote className="mt-0.5 size-3.5 shrink-0" />
+                                    No details are needed for cash — saving this just gives you
+                                    something to pick when you record the payment.
+                                </p>
                             ) : (
                                 <>
                                     <Field id="bank-name" label="Bank name" required error={errors.bank}>
@@ -581,12 +601,16 @@ function AddMethodCard({
                                 </>
                             )}
 
-                            <Field id="holder" label="Name on the account" hint="Optional.">
+                            <Field
+                                id="holder"
+                                label={type === 'bank_transfer' ? 'Name on the account' : 'Your name'}
+                                hint="Optional."
+                            >
                                 <Input
                                     id="holder"
                                     value={holder}
                                     onChange={(e) => setHolder(e.target.value)}
-                                    placeholder="As it appears on your statement"
+                                    placeholder={type === 'bank_transfer' ? 'As it appears on your statement' : 'Optional'}
                                 />
                             </Field>
 

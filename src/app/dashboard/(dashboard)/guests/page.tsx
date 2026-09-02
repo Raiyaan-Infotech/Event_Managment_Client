@@ -482,10 +482,23 @@ export default function GuestsPage() {
                                                                 </AvatarFallback>
                                                             </Avatar>
                                                             <div className="min-w-0">
-                                                                {/* break-words, never truncate. */}
-                                                                <p className="text-[12.5px] font-semibold text-foreground break-words">
+                                                                {/*
+                                                                  The NAME goes to the PERSON,
+                                                                  matching the RSVP list and the
+                                                                  group members table. Edit guest
+                                                                  stays in the row menu — the
+                                                                  form is a different question
+                                                                  from the profile.
+
+                                                                  break-words, never truncate.
+                                                                */}
+                                                                <Link
+                                                                    href={`/dashboard/guests/${guest.id}/profile`}
+                                                                    title={`View ${guest.name}'s profile`}
+                                                                    className="block text-[12.5px] font-semibold text-foreground break-words hover:text-primary hover:underline"
+                                                                >
                                                                     {guest.name}
-                                                                </p>
+                                                                </Link>
                                                                 <p className="text-[11px] text-muted-foreground break-all">
                                                                     {guest.email}
                                                                 </p>
@@ -561,6 +574,9 @@ export default function GuestsPage() {
                                                                     </DropdownMenuLabel>
                                                                     <DropdownMenuSeparator />
                                                                     <DropdownMenuItem asChild className="text-[12.5px]">
+                                                                        <Link href={`/dashboard/guests/${guest.id}/profile`}>View profile</Link>
+                                                                    </DropdownMenuItem>
+                                                                    <DropdownMenuItem asChild className="text-[12.5px]">
                                                                         <Link href={`/dashboard/guests/${guest.id}`}>Edit guest</Link>
                                                                     </DropdownMenuItem>
                                                                     <DropdownMenuItem
@@ -577,7 +593,7 @@ export default function GuestsPage() {
                                                                 aria-label={`Message ${guest.name}`}
                                                                 className="h-8 w-8 rounded-md text-muted-foreground"
                                                             >
-                                                                <Link href={`/dashboard/messages/send?guest=${guest.id}`}>
+                                                                <Link href={`/dashboard/messages/send?guest=${guest.id}&from=guests`}>
                                                                     <FontAwesomeIcon icon={faEnvelope} className="!size-[12px]" />
                                                                 </Link>
                                                             </Button>

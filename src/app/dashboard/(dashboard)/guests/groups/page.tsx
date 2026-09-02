@@ -340,7 +340,7 @@ export default function ManageGroupsPage() {
                                                                     <Link href={`/dashboard/guests?group=${group.id}`}>View members</Link>
                                                                 </DropdownMenuItem>
                                                                 <DropdownMenuItem asChild className="text-[12.5px]">
-                                                                    <Link href={`/dashboard/messages/send?group=${group.id}`}>
+                                                                    <Link href={`/dashboard/messages/send?group=${group.id}&from=guest-groups`}>
                                                                         Send message to group
                                                                     </Link>
                                                                 </DropdownMenuItem>

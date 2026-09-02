@@ -36,6 +36,7 @@ import {
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
 import { useClientProfile, useLogout } from "@/hooks/use-client-portal";
+import { useUnreadCount, useNotifications, timeAgo } from "@/hooks/use-messages";
 
 /**
  * Top bar.
@@ -46,9 +47,13 @@ import { useClientProfile, useLogout } from "@/hooks/use-client-portal";
  * badge. Both looked exactly like working features. The identity now comes from
  * `GET /client/me` and the plan name is the client's real one.
  *
- * NOTIFICATIONS have no endpoint at all, so the bell shows an empty state and
- * carries NO badge. An unread count is a claim; inventing one trains people to
- * ignore the bell.
+ * NOTIFICATIONS are real now. The badge is `GET /client/notifications/count`,
+ * which is one indexed COUNT — this renders on every page, so it must not be
+ * the whole feed fetched to draw one number.
+ *
+ * ⚠ The badge is rendered ONLY when the count is greater than zero, and never
+ * from a guess. An unread count is a claim; the invented red "3" this file
+ * shipped with is exactly what trains people to ignore a bell.
  *
  * SEARCH now goes somewhere: it hands the term to My Events, which is the only
  * screen that can search anything. It previously focused on ⌘K and did nothing
@@ -75,6 +80,17 @@ export default function Header() {
     const searchRef = React.useRef<HTMLInputElement>(null);
 
     const profile = useClientProfile();
+
+    /*
+      Two queries, deliberately. The COUNT is one indexed lookup and renders on
+      every page; the five most recent are fetched only for the dropdown's
+      preview and are cheap to keep warm. Fetching the feed just to draw the
+      badge would be a page of rows for one number.
+    */
+    const unread = useUnreadCount();
+    const unreadCount = unread.data?.unread ?? 0;
+    const recentFeed = useNotifications({ limit: 5 });
+    const recent = recentFeed.data?.notifications ?? [];
     const logout = useLogout();
 
     React.useEffect(() => setMounted(true), []);
@@ -174,31 +190,77 @@ export default function Header() {
                     </Button>
                 )}
 
-                {/* Notifications — no endpoint exists, so no badge and an honest
-                    empty state. See the header comment. */}
+                {/* Notifications — a real count, and a real feed behind it. */}
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                         <Button
                             variant="ghost"
                             size="icon"
-                            aria-label="Notifications"
-                            className="h-9 w-9 rounded-md text-muted-foreground hover:bg-secondary"
+                            aria-label={unreadCount ? `Notifications, ${unreadCount} unread` : 'Notifications'}
+                            className="relative h-9 w-9 rounded-md text-muted-foreground hover:bg-secondary"
                         >
                             <FontAwesomeIcon icon={faBell} className="!size-[14px]" />
+                            {/* Only when there IS something. A badge showing 0 is a
+                                claim that something needs attention. */}
+                            {unreadCount > 0 ? (
+                                <span className="absolute -right-0.5 -top-0.5 grid min-w-[17px] place-items-center rounded-full bg-primary px-1 text-[10px] font-semibold leading-[17px] text-primary-foreground">
+                                    {unreadCount > 99 ? '99+' : unreadCount}
+                                </span>
+                            ) : null}
                         </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-[300px] p-0">
-                        <DropdownMenuLabel className="px-4 py-3 text-[13px] font-bold">
+                    <DropdownMenuContent align="end" className="w-[320px] p-0">
+                        <DropdownMenuLabel className="flex items-center justify-between px-4 py-3 text-[13px] font-bold">
                             Notifications
+                            {unreadCount > 0 ? (
+                                <span className="text-[11px] font-medium text-muted-foreground">
+                                    {unreadCount} unread
+                                </span>
+                            ) : null}
                         </DropdownMenuLabel>
                         <Separator />
-                        <div className="flex flex-col items-center gap-1.5 px-4 py-8 text-center">
-                            <FontAwesomeIcon icon={faBell} className="!size-[18px] text-muted-foreground/40" />
-                            <p className="text-[12.5px] font-semibold text-foreground">You&rsquo;re all caught up</p>
-                            <p className="text-[11.5px] leading-snug text-muted-foreground">
-                                Event and RSVP notifications will appear here.
-                            </p>
-                        </div>
+                        {recent.length === 0 ? (
+                            <div className="flex flex-col items-center gap-1.5 px-4 py-8 text-center">
+                                <FontAwesomeIcon icon={faBell} className="!size-[18px] text-muted-foreground/40" />
+                                <p className="text-[12.5px] font-semibold text-foreground">You&rsquo;re all caught up</p>
+                                <p className="text-[11.5px] leading-snug text-muted-foreground">
+                                    Event and RSVP notifications will appear here.
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="flex max-h-[320px] flex-col overflow-y-auto">
+                                {recent.map((n) => (
+                                    <Link
+                                        key={n.id}
+                                        href="/dashboard/notifications"
+                                        className="flex min-w-0 items-start gap-2.5 px-4 py-3 transition-colors hover:bg-muted/50"
+                                    >
+                                        <span className={cn(
+                                            'mt-1.5 size-1.5 shrink-0 rounded-full',
+                                            n.is_read ? 'bg-transparent' : 'bg-primary',
+                                        )} />
+                                        <span className="min-w-0 flex-1">
+                                            <span className="block text-[12px] font-medium break-words">{n.title}</span>
+                                            {n.body ? (
+                                                <span className="mt-0.5 block line-clamp-2 text-[11px] break-words text-muted-foreground">
+                                                    {n.body}
+                                                </span>
+                                            ) : null}
+                                            <span className="mt-0.5 block text-[10.5px] text-muted-foreground">
+                                                {timeAgo(n.created_at)}
+                                            </span>
+                                        </span>
+                                    </Link>
+                                ))}
+                            </div>
+                        )}
+                        <Separator />
+                        <Link
+                            href="/dashboard/notifications"
+                            className="block px-4 py-2.5 text-center text-[12px] font-medium text-primary hover:underline"
+                        >
+                            View all notifications
+                        </Link>
                     </DropdownMenuContent>
                 </DropdownMenu>
 

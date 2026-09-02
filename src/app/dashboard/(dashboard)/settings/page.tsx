@@ -4,7 +4,7 @@ import { Suspense, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import {
-    User, Bell, ShieldCheck, SlidersHorizontal, Plug, ChevronRight,
+    User, Bell, ShieldCheck, SlidersHorizontal, ChevronRight,
     Download, Users, HelpCircle, MessageSquare, Check, Loader2,
 } from 'lucide-react';
 
@@ -51,7 +51,7 @@ import {
  * stateless JWTs with no server-side store, so nothing can enumerate or revoke
  * them.
  */
-const TAB_VALUES = ['profile', 'account', 'notifications', 'security', 'preferences', 'integrations'];
+const TAB_VALUES = ['profile', 'account', 'notifications', 'security', 'preferences'];
 
 export default function SettingsPage() {
     return (
@@ -87,6 +87,15 @@ function SettingsTabs() {
     const [tab, setTab] = useState(() =>
         requested && TAB_VALUES.includes(requested) ? requested : 'profile');
 
+    const handleTabChange = (nextTab: string) => {
+        setTab(nextTab);
+        if (typeof window !== 'undefined') {
+            const url = new URL(window.location.href);
+            url.searchParams.set('tab', nextTab);
+            window.history.replaceState(null, '', url.pathname + url.search);
+        }
+    };
+
     /*
       ADJUSTED DURING RENDER, not in an effect.
 
@@ -104,18 +113,17 @@ function SettingsTabs() {
 
     return (
         <>
-            <Tabs value={tab} onValueChange={setTab} className="gap-6">
+            <Tabs value={tab} onValueChange={handleTabChange} className="gap-6">
                 <TabsList variant="line" className="w-full justify-start overflow-x-auto">
                     <TabsTrigger value="profile">Profile</TabsTrigger>
                     <TabsTrigger value="account">Account</TabsTrigger>
                     <TabsTrigger value="notifications">Notifications</TabsTrigger>
                     <TabsTrigger value="security">Security</TabsTrigger>
                     <TabsTrigger value="preferences">Preferences</TabsTrigger>
-                    <TabsTrigger value="integrations">Integrations</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="profile">
-                    {isLoading ? <ProfileSkeleton /> : <ProfileTab />}
+                    {isLoading ? <ProfileSkeleton /> : <ProfileTab onSelectTab={handleTabChange} />}
                 </TabsContent>
 
                 <TabsContent value="account">
@@ -133,14 +141,6 @@ function SettingsTabs() {
                 <TabsContent value="preferences">
                     <PreferencesTab />
                 </TabsContent>
-
-                <TabsContent value="integrations">
-                    <NotBuilt
-                        title="Integrations"
-                        needs="an integrations and API-key model"
-                        detail="Connecting third-party apps needs credential storage, scopes and a revocation path — none of which exists yet."
-                    />
-                </TabsContent>
             </Tabs>
         </>
     );
@@ -148,7 +148,7 @@ function SettingsTabs() {
 
 /* ── Profile ─────────────────────────────────────────────────────────────── */
 
-function ProfileTab() {
+function ProfileTab({ onSelectTab }: { onSelectTab?: (tab: string) => void }) {
     const { data: client } = useClientProfile();
     const save = useUpdateProfile();
 
@@ -261,16 +261,30 @@ function ProfileTab() {
                 {/* The design's shortcut rows. Each points at its own tab rather
                     than a route, because these are tabs on this page. */}
                 <div className="flex flex-col gap-3">
-                    <ShortcutRow icon={<User className="size-4" />} title="Account"
-                        body="Manage your account details, plan, and billing information." />
-                    <ShortcutRow icon={<Bell className="size-4" />} title="Notifications"
-                        body="Choose how and when you want to be notified." />
-                    <ShortcutRow icon={<ShieldCheck className="size-4" />} title="Security"
-                        body="Update your password and manage account security." />
-                    <ShortcutRow icon={<SlidersHorizontal className="size-4" />} title="Preferences"
-                        body="Customize your experience and default event settings." />
-                    <ShortcutRow icon={<Plug className="size-4" />} title="Integrations"
-                        body="Connect with third-party apps and services." />
+                    <ShortcutRow
+                        icon={<User className="size-4" />}
+                        title="Account"
+                        body="Manage your account details, plan, and billing information."
+                        onClick={() => onSelectTab?.('account')}
+                    />
+                    <ShortcutRow
+                        icon={<Bell className="size-4" />}
+                        title="Notifications"
+                        body="Choose how and when you want to be notified."
+                        onClick={() => onSelectTab?.('notifications')}
+                    />
+                    <ShortcutRow
+                        icon={<ShieldCheck className="size-4" />}
+                        title="Security"
+                        body="Update your password and manage account security."
+                        onClick={() => onSelectTab?.('security')}
+                    />
+                    <ShortcutRow
+                        icon={<SlidersHorizontal className="size-4" />}
+                        title="Preferences"
+                        body="Customize your experience and default event settings."
+                        onClick={() => onSelectTab?.('preferences')}
+                    />
                 </div>
             </div>
 
@@ -292,9 +306,30 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     );
 }
 
-function ShortcutRow({ icon, title, body }: { icon: React.ReactNode; title: string; body: string }) {
+function ShortcutRow({
+    icon,
+    title,
+    body,
+    onClick,
+}: {
+    icon: React.ReactNode;
+    title: string;
+    body: string;
+    onClick?: () => void;
+}) {
     return (
-        <Card className="py-0">
+        <Card
+            className="cursor-pointer py-0 transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            tabIndex={0}
+            role="button"
+            onClick={onClick}
+            onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onClick?.();
+                }
+            }}
+        >
             <CardContent className="flex items-center gap-3 p-4">
                 <span className="grid size-9 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
                     {icon}
