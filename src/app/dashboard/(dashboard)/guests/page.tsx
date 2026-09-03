@@ -495,7 +495,7 @@ export default function GuestsPage() {
                                                                 <Link
                                                                     href={`/dashboard/guests/${guest.id}/profile`}
                                                                     title={`View ${guest.name}'s profile`}
-                                                                    className="block text-[12.5px] font-semibold text-foreground break-words hover:text-primary hover:underline"
+                                                                    className="block py-1.5 text-[12.5px] font-semibold text-foreground break-words hover:text-primary hover:underline"
                                                                 >
                                                                     {guest.name}
                                                                 </Link>

@@ -42,3 +42,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Playwright — auth state and run artefacts, never committed.
+/.auth
+/e2e-report
+/test-results
+/playwright-report

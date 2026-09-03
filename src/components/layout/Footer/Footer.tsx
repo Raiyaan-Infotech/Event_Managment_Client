@@ -35,7 +35,7 @@ export default function Footer() {
             href={WEBSITE_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-primary hover:underline font-extrabold"
+            className="inline-block py-2 -my-2 text-primary hover:underline font-extrabold"
           >
             Event Invite
           </a>
@@ -51,7 +51,11 @@ export default function Footer() {
             key={link.label}
             asChild
             variant="link"
-            className="p-0 h-auto text-[12.5px] font-bold text-slate-400 hover:text-primary transition-colors no-underline"
+            // px-0 keeps the horizontal gap exactly what `gap-6` already sets;
+            // py-2.5 / -my-2.5 cancel out visually and only grow the vertical
+            // tap target. Safe here — the footer has plenty of surrounding
+            // whitespace, unlike a dense table row.
+            className="h-auto px-0 py-2.5 -my-2.5 text-[12.5px] font-bold text-slate-400 hover:text-primary transition-colors no-underline"
           >
             <a href={link.href} target="_blank" rel="noopener noreferrer">
               {link.label}

@@ -86,7 +86,14 @@ export default function Breadcrumb() {
               {item.isLast ? (
                 <span className="text-primary font-bold truncate">{item.label}</span>
               ) : (
-                <Link href={item.url} className="text-[#6c757d] hover:text-primary transition-colors">
+                <Link
+                  href={item.url}
+                  // py-1.5, not more: the bar itself is a fixed h-[30px]
+                  // strip, so there is no room for a full 44px tap target
+                  // without redesigning it. This still meaningfully grows the
+                  // hit area and stays centered inside the bar.
+                  className="py-1.5 text-[#6c757d] hover:text-primary transition-colors"
+                >
                   {item.label}
                 </Link>
               )}

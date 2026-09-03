@@ -196,11 +196,13 @@ export function PaymentMethodsPanel() {
 
                 <Card className="py-0">
                     <CardContent className="p-5">
-                        <span className="grid size-9 place-items-center rounded-full bg-primary/10">
-                            <Headphones className="size-[17px] text-primary" />
-                        </span>
-                        <h3 className="mt-3 text-[13.5px] font-semibold">Need Help?</h3>
-                        <p className="mt-1.5 text-[12px] break-words text-muted-foreground">
+                        <div className="flex items-center gap-2.5">
+                            <span className="grid size-9 shrink-0 place-items-center rounded-full bg-primary/10">
+                                <Headphones className="size-[17px] text-primary" />
+                            </span>
+                            <h3 className="text-[13.5px] font-semibold">Need Help?</h3>
+                        </div>
+                        <p className="mt-2.5 text-[12px] break-words text-muted-foreground">
                             Questions about your payment methods or billing? Send us a note and
                             somebody will come back to you.
                         </p>
@@ -219,11 +221,13 @@ export function PaymentMethodsPanel() {
                 */}
                 <Card className="py-0">
                     <CardContent className="p-5">
-                        <span className="grid size-9 place-items-center rounded-full bg-emerald-500/15">
-                            <ShieldCheck className="size-[17px] text-emerald-600 dark:text-emerald-400" />
-                        </span>
-                        <h3 className="mt-3 text-[13.5px] font-semibold">How your card is kept safe</h3>
-                        <p className="mt-1.5 text-[12px] break-words text-muted-foreground">
+                        <div className="flex items-center gap-2.5">
+                            <span className="grid size-9 shrink-0 place-items-center rounded-full bg-emerald-500/15">
+                                <ShieldCheck className="size-[17px] text-emerald-600 dark:text-emerald-400" />
+                            </span>
+                            <h3 className="text-[13.5px] font-semibold">How your card is kept safe</h3>
+                        </div>
+                        <p className="mt-2.5 text-[12px] break-words text-muted-foreground">
                             {gateway.enabled
                                 ? `Your card is held by ${titleCase(gateway.name)} — never by us. We keep only the
                                    last four digits and the expiry, so you can recognise it. Those cannot

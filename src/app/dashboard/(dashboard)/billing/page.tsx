@@ -7,7 +7,7 @@ import {
     Calendar, Users, Mail, HardDrive, CheckCircle2, AlertTriangle, Crown,
     Headphones, ArrowRight, Loader2, Info, Clock, RotateCcw,
     FileText, Receipt, Search, CreditCard, Plus, Pencil, MapPin, Lock,
-    Download, X, ChevronLeft, ChevronRight,
+    Download, X, ChevronLeft, ChevronRight, MoreVertical, Eye,
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { toast } from 'sonner';
@@ -28,6 +28,9 @@ import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import {
+    DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import {
     Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
@@ -285,7 +288,7 @@ function BillingScreen() {
                                 <Card className="py-0">
                                     <CardContent className="flex flex-col gap-5 p-5">
                                         <div className="flex flex-wrap items-center gap-2">
-                                            <span className="text-[12.5px] font-medium text-muted-foreground">
+                                            <span className="text-sm font-bold text-muted-foreground">
                                                 Current Plan
                                             </span>
                                             {status ? (
@@ -295,7 +298,7 @@ function BillingScreen() {
                                             ) : null}
                                         </div>
 
-                                        <div className="grid min-w-0 gap-5 sm:grid-cols-2">
+                                        <div className="grid min-w-0 gap-5 sm:grid-cols-[1fr_auto_1fr]">
                                             <div className="flex min-w-0 flex-col gap-2">
                                                 <h2 className="text-xl font-semibold break-words">
                                                     {sub.plan?.name ?? 'Unknown plan'}
@@ -319,6 +322,8 @@ function BillingScreen() {
                                                 </span>
                                             </div>
 
+                                            <Separator orientation="vertical" className="hidden self-stretch sm:block" />
+
                                             {/*
                                               The feature list is the menus this plan actually GRANTS —
                                               the only per-plan feature data in the database that is true.
@@ -340,7 +345,7 @@ function BillingScreen() {
 
                                         <Separator />
 
-                                        <div className="flex flex-wrap items-center gap-3">
+                                        <div className="flex flex-col gap-3">
                                             <span className="text-[12.5px] text-muted-foreground">
                                                 {sub.next_billing_date
                                                     ? <>Next billing date: <span className="font-medium text-foreground">{formatDate(sub.next_billing_date)}</span></>
@@ -348,7 +353,7 @@ function BillingScreen() {
                                                         ? 'This plan does not renew.'
                                                         : 'No further billing is scheduled.'}
                                             </span>
-                                            <div className="ms-auto flex flex-wrap items-center gap-2">
+                                            <div className="flex flex-wrap items-center gap-2">
                                                 <Button asChild variant="outline" size="sm">
                                                     <Link href="/dashboard/billing/change-plan">Change Plan</Link>
                                                 </Button>
@@ -370,7 +375,7 @@ function BillingScreen() {
                                 {/* Summary */}
                                 <Card className="py-0">
                                     <CardContent className="flex flex-col gap-4 p-5">
-                                        <span className="text-[12.5px] font-medium text-muted-foreground">
+                                        <span className="text-sm font-bold text-muted-foreground">
                                             Billing Summary
                                         </span>
                                         <dl className="flex flex-col gap-3 text-[12.5px]">
@@ -436,7 +441,7 @@ function BillingScreen() {
                             <Card className="py-0">
                                 <CardContent className="flex flex-col gap-5 p-5">
                                     <div className="flex flex-wrap items-baseline justify-between gap-2">
-                                        <span className="text-[12.5px] font-medium">Usage this billing period</span>
+                                        <span className="text-sm font-bold">Usage this billing period</span>
                                         {/*
                                           Labelled by the PERIOD, not "this month". The design says
                                           "Usage This Month", but a plan ceiling applies to the term —
@@ -447,24 +452,32 @@ function BillingScreen() {
                                             {formatDate(data?.usage.period_start)} – {formatDate(data?.usage.period_end)}
                                         </span>
                                     </div>
-                                    <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
-                                        <UsageTile
-                                            icon={Calendar} label="Events" tint="bg-violet-500/15 text-violet-600 dark:text-violet-400"
-                                            metric={data!.usage.events}
-                                        />
-                                        <UsageTile
-                                            icon={Users} label="Guests" tint="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
-                                            metric={data!.usage.guests}
-                                        />
-                                        <UsageTile
-                                            icon={Mail} label="Messages Sent" tint="bg-amber-500/15 text-amber-600 dark:text-amber-400"
-                                            metric={data!.usage.messages}
-                                        />
-                                        <UsageTile
-                                            icon={HardDrive} label="Storage Used" unit="GB"
-                                            tint="bg-blue-500/15 text-blue-600 dark:text-blue-400"
-                                            metric={data!.usage.storage as never}
-                                        />
+                                    <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4 xl:gap-0 xl:divide-x xl:divide-border">
+                                        <div className="xl:pr-6">
+                                            <UsageTile
+                                                icon={Calendar} label="Events" tint="bg-violet-500/15 text-violet-600 dark:text-violet-400"
+                                                metric={data!.usage.events}
+                                            />
+                                        </div>
+                                        <div className="xl:px-6">
+                                            <UsageTile
+                                                icon={Users} label="Guests" tint="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                                                metric={data!.usage.guests}
+                                            />
+                                        </div>
+                                        <div className="xl:px-6">
+                                            <UsageTile
+                                                icon={Mail} label="Messages Sent" tint="bg-amber-500/15 text-amber-600 dark:text-amber-400"
+                                                metric={data!.usage.messages}
+                                            />
+                                        </div>
+                                        <div className="xl:pl-6">
+                                            <UsageTile
+                                                icon={HardDrive} label="Storage Used" unit="GB"
+                                                tint="bg-blue-500/15 text-blue-600 dark:text-blue-400"
+                                                metric={data!.usage.storage as never}
+                                            />
+                                        </div>
                                     </div>
 
                                     <Separator />
@@ -769,15 +782,15 @@ function InvoicesPanel({ onGoToHistory }: { onGoToHistory: () => void }) {
             </div>
 
             {/* ── Tiles: the whole account, always ──────────────────────────── */}
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                {[
-                    { label: 'Total Invoices', value: String(stats?.total_invoices ?? 0), tint: 'bg-violet-500/15 text-violet-600 dark:text-violet-400', icon: FileText },
-                    { label: 'Total Amount', value: formatMoney(stats?.total_amount ?? 0), tint: 'bg-blue-500/15 text-blue-600 dark:text-blue-400', icon: Receipt },
-                    { label: 'Paid Amount', value: formatMoney(stats?.paid_amount ?? 0), tint: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400', icon: CheckCircle2 },
-                    { label: 'Outstanding Amount', value: formatMoney(stats?.outstanding_amount ?? 0), tint: 'bg-amber-500/15 text-amber-600 dark:text-amber-400', icon: Clock },
-                ].map((t) => (
-                    <Card key={t.label} className="py-0">
-                        <CardContent className="flex items-center gap-3 p-4">
+            <Card className="py-0">
+                <CardContent className="grid gap-4 p-4 sm:grid-cols-2 sm:divide-x sm:divide-border xl:grid-cols-4">
+                    {[
+                        { label: 'Total Invoices', value: String(stats?.total_invoices ?? 0), tint: 'bg-violet-500/15 text-violet-600 dark:text-violet-400', icon: FileText },
+                        { label: 'Total Amount', value: formatMoney(stats?.total_amount ?? 0), tint: 'bg-blue-500/15 text-blue-600 dark:text-blue-400', icon: Receipt },
+                        { label: 'Paid Amount', value: formatMoney(stats?.paid_amount ?? 0), tint: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400', icon: CheckCircle2 },
+                        { label: 'Outstanding Amount', value: formatMoney(stats?.outstanding_amount ?? 0), tint: 'bg-amber-500/15 text-amber-600 dark:text-amber-400', icon: Clock },
+                    ].map((t, i) => (
+                        <div key={t.label} className={`flex items-center gap-3 ${i > 0 ? 'sm:pl-4' : ''}`}>
                             <span className={`grid size-9 shrink-0 place-items-center rounded-lg ${t.tint}`}>
                                 <t.icon className="size-4" />
                             </span>
@@ -786,10 +799,10 @@ function InvoicesPanel({ onGoToHistory }: { onGoToHistory: () => void }) {
                                 <p className="text-lg font-semibold break-words">{t.value}</p>
                                 <p className="text-[10.5px] text-muted-foreground/70">All time</p>
                             </div>
-                        </CardContent>
-                    </Card>
-                ))}
-            </div>
+                        </div>
+                    ))}
+                </CardContent>
+            </Card>
 
             <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_300px]">
                 {/* ── Table ─────────────────────────────────────────────────── */}
@@ -813,7 +826,11 @@ function InvoicesPanel({ onGoToHistory }: { onGoToHistory: () => void }) {
                             */}
                             <Select value={status} onValueChange={reset(setStatus)}>
                                 <SelectTrigger className="h-9 w-[165px] text-[12.5px]">
-                                    <SelectValue />
+                                    {/* Custom children so the count badge (below, inside each
+                                        SelectItem) does not get mirrored into the collapsed trigger. */}
+                                    <SelectValue>
+                                        {status === 'all' ? 'Status: All' : `Status: ${prettyStatus(status)}`}
+                                    </SelectValue>
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="all">
@@ -883,7 +900,7 @@ function InvoicesPanel({ onGoToHistory }: { onGoToHistory: () => void }) {
                                                 */}
                                                 <TableHead className="min-w-[120px]">Date ↓</TableHead>
                                                 <TableHead className="min-w-[110px] text-end">Amount</TableHead>
-                                                <TableHead className="min-w-[100px]">Status</TableHead>
+                                                <TableHead className="min-w-[100px] ps-6">Status</TableHead>
                                                 {/*
                                                   Real since `client_transactions` gained
                                                   `client_payment_method_id` plus a brand /
@@ -907,7 +924,7 @@ function InvoicesPanel({ onGoToHistory }: { onGoToHistory: () => void }) {
                                                     <TableCell className="text-end tabular-nums whitespace-nowrap">
                                                         {formatMoney(inv.total, inv.currency_code)}
                                                     </TableCell>
-                                                    <TableCell>
+                                                    <TableCell className="ps-6">
                                                         <Badge
                                                             variant="ghost"
                                                             className={`${INVOICE_STATUS_STYLE[inv.status] ?? 'bg-muted text-muted-foreground'} capitalize`}
@@ -931,19 +948,38 @@ function InvoicesPanel({ onGoToHistory }: { onGoToHistory: () => void }) {
                                                     </TableCell>
                                                     <TableCell className="text-end">
                                                         {/*
-                                                          One action, and it is the one that works:
-                                                          the invoice page carries the print action.
-                                                          A download icon that downloads nothing is
-                                                          worse than no icon.
+                                                          Both actions land on the same invoice page --
+                                                          it carries the print action, which is the only
+                                                          thing that actually produces a file. A download
+                                                          icon that downloads nothing is worse than no icon.
                                                         */}
-                                                        <Button asChild size="sm" variant="ghost">
-                                                            <Link
-                                                                href={`/dashboard/billing/invoices/${inv.id}`}
-                                                                title="Open this invoice"
-                                                            >
-                                                                View <ArrowRight className="size-3.5" />
-                                                            </Link>
-                                                        </Button>
+                                                        <div className="flex items-center justify-end gap-1">
+                                                            <Button asChild size="icon" variant="ghost" className="size-8">
+                                                                <Link
+                                                                    href={`/dashboard/billing/invoices/${inv.id}`}
+                                                                    title="Download this invoice"
+                                                                >
+                                                                    <Download className="size-3.5" />
+                                                                </Link>
+                                                            </Button>
+                                                            <DropdownMenu>
+                                                                <DropdownMenuTrigger asChild>
+                                                                    <Button
+                                                                        size="icon" variant="ghost" className="size-8"
+                                                                        aria-label="More actions"
+                                                                    >
+                                                                        <MoreVertical className="size-3.5" />
+                                                                    </Button>
+                                                                </DropdownMenuTrigger>
+                                                                <DropdownMenuContent align="end">
+                                                                    <DropdownMenuItem asChild>
+                                                                        <Link href={`/dashboard/billing/invoices/${inv.id}`}>
+                                                                            <Eye className="size-3.5" /> View Invoice
+                                                                        </Link>
+                                                                    </DropdownMenuItem>
+                                                                </DropdownMenuContent>
+                                                            </DropdownMenu>
+                                                        </div>
                                                     </TableCell>
                                                 </TableRow>
                                             ))}
@@ -951,7 +987,7 @@ function InvoicesPanel({ onGoToHistory }: { onGoToHistory: () => void }) {
                                     </Table>
                                 </div>
 
-                                <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+                                <div className="grid min-w-0 grid-cols-1 items-center gap-3 sm:grid-cols-3">
                                     <p className="text-[11.5px] text-muted-foreground">
                                         Showing {showingFrom} to {showingTo} of{' '}
                                         {pagination?.totalItems ?? 0} invoice
@@ -960,7 +996,7 @@ function InvoicesPanel({ onGoToHistory }: { onGoToHistory: () => void }) {
                                             ? ` (filtered from ${stats?.total_invoices ?? 0})`
                                             : ''}
                                     </p>
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center justify-center gap-2">
                                         <Button
                                             size="icon" variant="outline" className="size-8"
                                             disabled={page <= 1}
@@ -980,6 +1016,8 @@ function InvoicesPanel({ onGoToHistory }: { onGoToHistory: () => void }) {
                                         >
                                             <ChevronRight className="size-4" />
                                         </Button>
+                                    </div>
+                                    <div className="flex items-center justify-end gap-2">
                                         <Select value={limit} onValueChange={reset(setLimit)}>
                                             <SelectTrigger className="h-8 w-[95px] text-[12px]">
                                                 <SelectValue />
@@ -1253,13 +1291,14 @@ function RecentInvoicesCard({ onViewAll }: { onViewAll: () => void }) {
                                     <TableHead className="min-w-[150px]">Invoice ID</TableHead>
                                     <TableHead className="min-w-[110px]">Date</TableHead>
                                     <TableHead className="min-w-[110px] text-end">Amount</TableHead>
-                                    <TableHead className="min-w-[100px]">Status</TableHead>
+                                    <TableHead className="min-w-[100px] ps-6">Status</TableHead>
                                     {/*
-                                      The design labels this column "Download". It opens the
-                                      invoice, which carries the print action -- an icon that
-                                      downloads nothing is the one thing worse than no icon.
+                                      Labelled "Download" to match the design. It still opens the
+                                      invoice page -- the print action there is the only thing that
+                                      actually produces a file, so the icon points at where that
+                                      really happens rather than promising a direct download.
                                     */}
-                                    <TableHead className="min-w-[70px] text-end">View</TableHead>
+                                    <TableHead className="min-w-[70px] text-end">Download</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -1274,7 +1313,7 @@ function RecentInvoicesCard({ onViewAll }: { onViewAll: () => void }) {
                                         <TableCell className="text-end tabular-nums whitespace-nowrap">
                                             {formatMoney(inv.total, inv.currency_code)}
                                         </TableCell>
-                                        <TableCell>
+                                        <TableCell className="ps-6">
                                             <Badge
                                                 variant="ghost"
                                                 className={`${INVOICE_STATUS_STYLE[inv.status] ?? 'bg-muted text-muted-foreground'} capitalize`}
@@ -1286,9 +1325,9 @@ function RecentInvoicesCard({ onViewAll }: { onViewAll: () => void }) {
                                             <Button asChild size="icon" variant="ghost" className="size-8">
                                                 <Link
                                                     href={`/dashboard/billing/invoices/${inv.id}`}
-                                                    title="Open this invoice"
+                                                    title="Download this invoice"
                                                 >
-                                                    <ArrowRight className="size-3.5" />
+                                                    <Download className="size-3.5" />
                                                 </Link>
                                             </Button>
                                         </TableCell>
@@ -1327,15 +1366,13 @@ function PaymentMethodCard({
             <CardContent className="flex flex-col gap-4 p-5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="text-[13px] font-semibold">Payment Method</span>
-                    {data?.methods.length ? (
-                        <button
-                            type="button"
-                            onClick={onManage}
-                            className="text-[12.5px] font-medium text-primary hover:underline"
-                        >
-                            Manage
-                        </button>
-                    ) : null}
+                    <button
+                        type="button"
+                        onClick={onManage}
+                        className="text-[12.5px] font-medium text-primary hover:underline"
+                    >
+                        Manage
+                    </button>
                 </div>
 
                 {def ? (

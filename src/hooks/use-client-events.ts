@@ -210,7 +210,7 @@ export function useClientEvent(id: number | null) {
 
 export type RsvpStatus = 'attending' | 'not_attending' | 'maybe' | 'no_response';
 export type MessageChannel = 'whatsapp' | 'email' | 'sms';
-export type InviteSource = MessageChannel | 'manual';
+export type InviteSource = MessageChannel | 'manual' | 'import';
 
 /**
  * Everything the Analytics screen shows, in one payload.

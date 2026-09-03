@@ -87,7 +87,31 @@ const SOURCE_META: Record<InviteSource, { label: string; color: string }> = {
     email: { label: "Email Invite", color: "#3B82F6" },
     sms: { label: "SMS Invite", color: "#A78BFA" },
     manual: { label: "Manual / Other", color: "#CBD5E1" },
+    import: { label: "Imported", color: "#F59E0B" },
 };
+
+/**
+ * Looks up a key in one of the three maps above, and never throws.
+ *
+ * ── ⚠ WHY THIS EXISTS ────────────────────────────────────────────────────────
+ * A raw `metaOf(SOURCE_META, row.key)` crashed the whole page once with "undefined is
+ * not an object" — not reproducible on demand, only ever seen once under heavy
+ * concurrent load, and the live API was independently confirmed to return only
+ * the five keys this map already covers. The trigger was never pinned down.
+ *
+ * That is exactly the situation this guards against: these three maps happen
+ * to mirror the backend's enums TODAY. "Happens to mirror" is not a guarantee
+ * — a value added to one side before the other catches up is a real, if rare,
+ * gap, and a crashed blank page is a strictly worse failure than a row that
+ * reads "Unknown".
+ */
+const UNKNOWN_META = { label: "Unknown", color: "#94A3B8" };
+function metaOf<T extends { label: string; color: string }>(
+    map: Record<string, T>,
+    key: string,
+): T {
+    return map[key] ?? (UNKNOWN_META as T);
+}
 
 const RANGES = [
     { value: "7", label: "Last 7 days" },
@@ -130,7 +154,7 @@ export default function AnalyticsPage() {
                 // Recharts renders a zero slice as an invisible wedge that still
                 // owns a tooltip target.
                 .filter((r) => r.count > 0)
-                .map((r) => ({ ...r, name: RSVP_META[r.key].label, fill: RSVP_META[r.key].color })),
+                .map((r) => ({ ...r, name: metaOf(RSVP_META, r.key).label, fill: metaOf(RSVP_META, r.key).color })),
         [data]
     );
 
@@ -138,7 +162,7 @@ export default function AnalyticsPage() {
         () =>
             (data?.messages_by_channel ?? [])
                 .filter((c) => c.sent > 0)
-                .map((c) => ({ ...c, name: CHANNEL_META[c.key].label, fill: CHANNEL_META[c.key].color })),
+                .map((c) => ({ ...c, name: metaOf(CHANNEL_META, c.key).label, fill: metaOf(CHANNEL_META, c.key).color })),
         [data]
     );
 
@@ -152,12 +176,12 @@ export default function AnalyticsPage() {
             ["Totals", "Message Open Rate", pct(data.totals.open_rate)],
             ["Totals", "Response Rate", pct(data.totals.response_rate)],
             ["Totals", "Link Click Rate", pct(data.totals.click_rate)],
-            ...data.rsvp_breakdown.map((r) => ["RSVP", RSVP_META[r.key].label, `${r.count} (${r.percent}%)`]),
+            ...data.rsvp_breakdown.map((r) => ["RSVP", metaOf(RSVP_META, r.key).label, `${r.count} (${r.percent}%)`]),
             ...data.messages_by_channel.map((c) => [
-                "Channel", CHANNEL_META[c.key].label,
+                "Channel", metaOf(CHANNEL_META, c.key).label,
                 `sent ${c.sent}, delivered ${c.delivered}, open ${pct(c.open_rate)}, click ${pct(c.click_rate)}`,
             ]),
-            ...data.engagement_by_source.map((s) => ["Source", SOURCE_META[s.key].label, `${s.count} (${s.percent}%)`]),
+            ...data.engagement_by_source.map((s) => ["Source", metaOf(SOURCE_META, s.key).label, `${s.count} (${s.percent}%)`]),
             ...data.top_events.map((e) => [
                 "Event", e.name,
                 `guests ${e.guests}, rsvp ${pct(e.rsvp_rate)}, response ${pct(e.response_rate)}`,
@@ -361,10 +385,10 @@ export default function AnalyticsPage() {
                                             <li key={row.key} className="flex items-center gap-2 text-[12px]">
                                                 <span
                                                     className="h-2 w-2 shrink-0 rounded-full"
-                                                    style={{ background: RSVP_META[row.key].color }}
+                                                    style={{ background: metaOf(RSVP_META, row.key).color }}
                                                 />
                                                 <span className="min-w-0 flex-1 text-muted-foreground break-words">
-                                                    {RSVP_META[row.key].label}
+                                                    {metaOf(RSVP_META, row.key).label}
                                                 </span>
                                                 <span className="shrink-0 whitespace-nowrap tabular-nums text-foreground">
                                                     {row.count} <span className="text-muted-foreground">({row.percent}%)</span>
@@ -392,8 +416,8 @@ export default function AnalyticsPage() {
                                 <div className="mb-2 mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-muted-foreground">
                                     {(Object.keys(RSVP_META) as RsvpStatus[]).map((key) => (
                                         <span key={key} className="flex items-center gap-1.5">
-                                            <span className="h-2 w-2 rounded-full" style={{ background: RSVP_META[key].color }} />
-                                            {RSVP_META[key].label}
+                                            <span className="h-2 w-2 rounded-full" style={{ background: metaOf(RSVP_META, key).color }} />
+                                            {metaOf(RSVP_META, key).label}
                                         </span>
                                     ))}
                                 </div>
@@ -419,7 +443,7 @@ export default function AnalyticsPage() {
                                                 key={key}
                                                 type="monotone"
                                                 dataKey={key}
-                                                stroke={RSVP_META[key].color}
+                                                stroke={metaOf(RSVP_META, key).color}
                                                 strokeWidth={2}
                                                 dot={false}
                                             />
@@ -471,10 +495,10 @@ export default function AnalyticsPage() {
                                             <li key={row.key} className="flex items-center gap-2 text-[12px]">
                                                 <span
                                                     className="h-2 w-2 shrink-0 rounded-full"
-                                                    style={{ background: CHANNEL_META[row.key].color }}
+                                                    style={{ background: metaOf(CHANNEL_META, row.key).color }}
                                                 />
                                                 <span className="min-w-0 flex-1 text-muted-foreground break-words">
-                                                    {CHANNEL_META[row.key].label}
+                                                    {metaOf(CHANNEL_META, row.key).label}
                                                 </span>
                                                 <span className="shrink-0 whitespace-nowrap tabular-nums text-foreground">
                                                     {row.sent} <span className="text-muted-foreground">({row.percent}%)</span>
@@ -574,7 +598,7 @@ export default function AnalyticsPage() {
                                         </thead>
                                         <tbody>
                                             {data.messages_by_channel.map((row) => {
-                                                const meta = CHANNEL_META[row.key];
+                                                const meta = metaOf(CHANNEL_META, row.key);
                                                 return (
                                                     <tr key={row.key} className="border-t border-border">
                                                         <td className="py-3 pr-2">
@@ -636,7 +660,7 @@ export default function AnalyticsPage() {
                                     {data.engagement_by_source.map((row) => (
                                         <li key={row.key} className="flex items-center gap-3">
                                             <span className="w-[86px] shrink-0 text-[11.5px] text-muted-foreground">
-                                                {SOURCE_META[row.key].label}
+                                                {metaOf(SOURCE_META, row.key).label}
                                             </span>
                                             {/* Each source keeps its own colour, as in the
                                                 design. `indicatorColor` was added to the
@@ -645,7 +669,7 @@ export default function AnalyticsPage() {
                                             <Progress
                                                 value={row.percent}
                                                 className="h-2 flex-1 bg-muted"
-                                                indicatorColor={SOURCE_META[row.key].color}
+                                                indicatorColor={metaOf(SOURCE_META, row.key).color}
                                             />
                                             <span className="w-[42px] shrink-0 text-right text-[11.5px] tabular-nums text-foreground">
                                                 {row.percent}%
@@ -719,7 +743,7 @@ function InsightsStrip({ data }: { data: EventAnalytics }) {
             const share = engagement_by_source.find((s) => s.key === best.key);
             out.push({
                 icon: faLink, color: "#06B6D4", bg: "bg-[#06B6D4]/10",
-                title: `Links in ${CHANNEL_META[best.key].label} messages`,
+                title: `Links in ${metaOf(CHANNEL_META, best.key).label} messages`,
                 detail: `have the highest click rate (${best.click_rate}%)${share ? `, and bring ${share.percent}% of guests` : ""}.`,
             });
         }

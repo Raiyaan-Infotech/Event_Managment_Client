@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, CheckCircle2, Info, Loader2, Clock, Minus } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Info, Loader2, Clock, Minus, Headphones } from 'lucide-react';
 
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -141,11 +141,15 @@ export default function ChangePlanPage() {
                         className={`py-0 ${plan.is_current ? 'border-primary ring-1 ring-primary' : ''}`}
                     >
                         <CardContent className="flex h-full flex-col gap-4 p-5">
+                            {plan.is_current ? (
+                                <div className="flex justify-center">
+                                    <Badge className="bg-primary px-3 py-1 text-[10.5px] font-bold tracking-wide text-primary-foreground uppercase">
+                                        Current Plan
+                                    </Badge>
+                                </div>
+                            ) : null}
                             <div className="flex flex-wrap items-center gap-2">
                                 <h2 className="min-w-0 text-base font-semibold break-words">{plan.name}</h2>
-                                {plan.is_current ? (
-                                    <Badge variant="ghost" className="bg-primary/15 text-primary">Current</Badge>
-                                ) : null}
                                 {plan.is_pending ? (
                                     <Badge variant="ghost" className="bg-amber-500/15 text-amber-600 dark:text-amber-400">
                                         Scheduled
@@ -233,7 +237,10 @@ export default function ChangePlanPage() {
                                     <TableRow>
                                         <TableHead className="min-w-[180px]">Feature</TableHead>
                                         {plans.map((p) => (
-                                            <TableHead key={p.id} className="min-w-[120px] text-center">
+                                            <TableHead
+                                                key={p.id}
+                                                className={`min-w-[120px] text-center ${p.is_current ? 'border-x-2 border-primary bg-primary/5' : ''}`}
+                                            >
                                                 <span className="block break-words">{p.name}</span>
                                                 <span className="block text-[11px] font-normal text-muted-foreground">
                                                     {formatMoney(p.amount.subtotal, p.currency_code)}
@@ -251,7 +258,10 @@ export default function ChangePlanPage() {
                                                 {f.label}
                                             </TableCell>
                                             {plans.map((p) => (
-                                                <TableCell key={p.id} className="text-center">
+                                                <TableCell
+                                                    key={p.id}
+                                                    className={`text-center ${p.is_current ? 'border-x-2 border-primary bg-primary/5' : ''}`}
+                                                >
                                                     {p.features.some((x) => x.id === f.id) ? (
                                                         <CheckCircle2 className="mx-auto size-4 text-emerald-500" />
                                                     ) : (
@@ -267,6 +277,26 @@ export default function ChangePlanPage() {
                     </CardContent>
                 </Card>
             ) : null}
+
+            {/*
+              The mockup's "Need a custom plan?" strip. Routes to the same
+              Contact Sales screen the rest of Billing already uses -- there is
+              no separate custom-plan intake anywhere in this system.
+            */}
+            <div className="flex flex-wrap items-center gap-4 rounded-lg border bg-muted/30 px-5 py-4">
+                <span className="grid size-10 shrink-0 place-items-center rounded-full bg-primary/10">
+                    <Headphones className="size-[18px] text-primary" />
+                </span>
+                <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium">Need a custom plan?</p>
+                    <p className="text-[12.5px] break-words text-muted-foreground">
+                        Have specific requirements? Contact our sales team for a custom solution.
+                    </p>
+                </div>
+                <Button asChild variant="outline" size="sm">
+                    <Link href="/dashboard/billing/contact-sales">Contact Sales</Link>
+                </Button>
+            </div>
 
             {/* Confirm */}
             <Dialog open={confirmId !== null} onOpenChange={(o) => !o && setConfirmId(null)}>

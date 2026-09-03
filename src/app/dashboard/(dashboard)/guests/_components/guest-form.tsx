@@ -26,7 +26,11 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { EventThumbnail } from "@/components/common/event-thumbnail";
+import { TemplateArtwork } from "@/components/common/template-artwork";
+import type { InvitationData } from "@/components/common/invitation-card";
+import { resolveArtwork } from "@/lib/event-templates";
 import { useClientEvents } from "@/hooks/use-client-events";
+import { useEventOptions } from "@/hooks/use-client-portal";
 import {
     useAllGuestGroups, useCreateGuest, useUpdateGuest, useGuest,
     type GuestPayload, type RsvpStatus, type ResponseType,
@@ -118,6 +122,7 @@ export function GuestForm({ guestId }: { guestId?: number }) {
     const [sendInvite, setSendInvite] = useState(false);
 
     const events = useClientEvents({ limit: 100 });
+    const eventOptions = useEventOptions();
     const groups = useAllGuestGroups();
     const existing = useGuest(guestId ?? null);
 
@@ -178,6 +183,32 @@ export function GuestForm({ guestId }: { guestId?: number }) {
     const eventRows = events.data?.data ?? [];
     const selectedEvent = eventRows.find((e) => String(e.id) === form.event_id);
     const selectedGroup = (groups.data ?? []).find((g) => String(g.id) === form.group_id);
+
+    // The real invitation — same resolution rule as the wizard's own preview
+    // (§ event-templates.ts): an admin template if the theme_id matches one,
+    // the older gradient-only card otherwise.
+    const selectedArtwork = selectedEvent
+        ? resolveArtwork(selectedEvent.theme_id, eventOptions.data?.templates)
+        : null;
+    const selectedInvitation: InvitationData | null = selectedEvent
+        ? {
+            name: selectedEvent.name,
+            hostOne: selectedEvent.host_one,
+            hostTwo: selectedEvent.host_two,
+            tagline: selectedEvent.tagline,
+            description: selectedEvent.description,
+            startDate: selectedEvent.start_date,
+            startTime: selectedEvent.start_time,
+            endTime: selectedEvent.end_time,
+            venueName: selectedEvent.venue_name,
+            venueAddress: selectedEvent.venue_address,
+            organizer: selectedEvent.organizer,
+            contact: selectedEvent.contact_phone,
+            footerNote: selectedEvent.footer_note,
+            primaryColor: selectedEvent.primary_color,
+            qrToken: selectedEvent.qr_token,
+        }
+        : null;
 
     /** Picking a response moves the status with it, and vice versa. */
     const pickResponse = (value: ResponseType) => {
@@ -345,7 +376,7 @@ export function GuestForm({ guestId }: { guestId?: number }) {
                                         value={form.group_id || "none"}
                                         onValueChange={(v) => setField("group_id", v === "none" ? "" : v)}
                                     >
-                                        <SelectTrigger className="h-11 rounded-md text-[13px]">
+                                        <SelectTrigger className="h-11 w-full rounded-md text-[13px]">
                                             <FontAwesomeIcon icon={faPeopleGroup} className="mr-2 !size-[12px] text-muted-foreground" />
                                             <SelectValue placeholder="Select a group (optional)" />
                                         </SelectTrigger>
@@ -444,7 +475,7 @@ export function GuestForm({ guestId }: { guestId?: number }) {
                                         <Field label="Title / Salutation">
                                             <Select value={form.title || "none"}
                                                 onValueChange={(v) => setField("title", v === "none" ? "" : v)}>
-                                                <SelectTrigger className="h-11 rounded-md text-[13px]">
+                                                <SelectTrigger className="h-11 w-full rounded-md text-[13px]">
                                                     <SelectValue placeholder="Select (Optional)" />
                                                 </SelectTrigger>
                                                 <SelectContent>
@@ -530,7 +561,7 @@ export function GuestForm({ guestId }: { guestId?: number }) {
                             <div className="grid gap-4 sm:grid-cols-2">
                                 <Field label="Select Event" required error={errors.event_id}>
                                     <Select value={form.event_id} onValueChange={(v) => setField("event_id", v)}>
-                                        <SelectTrigger className={cn("h-11 rounded-md text-[13px]", errors.event_id && "border-destructive")}>
+                                        <SelectTrigger className={cn("h-11 w-full rounded-md text-[13px]", errors.event_id && "border-destructive")}>
                                             <SelectValue placeholder="Select an event" />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -542,22 +573,39 @@ export function GuestForm({ guestId }: { guestId?: number }) {
 
                                     {selectedEvent && (
                                         <div className="mt-3 flex items-center gap-3 rounded-md bg-muted/40 p-3">
-                                            <EventThumbnail
-                                                themeId={selectedEvent.theme_id}
-                                                name={selectedEvent.name}
-                                                primaryColor={selectedEvent.primary_color}
-                                                className="h-[52px] w-[72px]"
-                                            />
-                                            <div className="min-w-0 text-[11.5px] text-muted-foreground">
+                                            <div className="relative h-[178px] w-[100px] shrink-0 overflow-hidden rounded-lg border border-border">
+                                                {/*
+                                                  The real invitation — same rule the wizard's own
+                                                  preview uses: an admin template renders properly
+                                                  (frame, decorations, the client's own text) via
+                                                  `TemplateArtwork`; a legacy theme has no template
+                                                  row to draw from, so it keeps the plain gradient card.
+                                                */}
+                                                {selectedArtwork?.kind === "template" && selectedInvitation ? (
+                                                    <TemplateArtwork
+                                                        template={selectedArtwork.template}
+                                                        data={selectedInvitation}
+                                                        cardClassName="rounded-lg shadow-none"
+                                                    />
+                                                ) : (
+                                                    <EventThumbnail
+                                                        themeId={selectedEvent.theme_id}
+                                                        name={selectedEvent.name}
+                                                        primaryColor={selectedEvent.primary_color}
+                                                        className="absolute inset-0 h-full w-full rounded-lg border-0"
+                                                    />
+                                                )}
+                                            </div>
+                                            <div className="min-w-0 text-[12.5px] text-muted-foreground">
                                                 <p className="flex items-center gap-1.5">
-                                                    <FontAwesomeIcon icon={faCalendarDays} className="!size-[10px]" />
+                                                    <FontAwesomeIcon icon={faCalendarDays} className="!size-[11px]" />
                                                     <span className="break-words">
                                                         {selectedEvent.start_date ?? "Date not set"}
                                                         {selectedEvent.start_time ? `, ${selectedEvent.start_time.slice(0, 5)}` : ""}
                                                     </span>
                                                 </p>
-                                                <p className="mt-0.5 flex items-center gap-1.5">
-                                                    <FontAwesomeIcon icon={faLocationDot} className="!size-[10px]" />
+                                                <p className="mt-1 flex items-center gap-1.5">
+                                                    <FontAwesomeIcon icon={faLocationDot} className="!size-[11px]" />
                                                     <span className="break-words">{selectedEvent.venue_name || "Venue not set"}</span>
                                                 </p>
                                             </div>
@@ -568,7 +616,7 @@ export function GuestForm({ guestId }: { guestId?: number }) {
                                 <div className="flex flex-col gap-4">
                                     <Field label="Initial RSVP Status">
                                         <Select value={form.rsvp_status} onValueChange={(v) => pickStatus(v as RsvpStatus)}>
-                                            <SelectTrigger className="h-11 rounded-md text-[13px]">
+                                            <SelectTrigger className="h-11 w-full rounded-md text-[13px]">
                                                 <FontAwesomeIcon icon={faCircleCheck} className="mr-2 !size-[12px] text-success" />
                                                 <SelectValue />
                                             </SelectTrigger>

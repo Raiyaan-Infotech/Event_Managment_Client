@@ -252,7 +252,7 @@ export function GroupForm({ groupId }: { groupId?: number }) {
                                         value={form.visibility}
                                         onValueChange={(v) => setField("visibility", v as "private" | "public")}
                                     >
-                                        <SelectTrigger className="h-11 rounded-md text-[13px]">
+                                        <SelectTrigger className="h-11 w-full rounded-md text-[13px]">
                                             <FontAwesomeIcon
                                                 icon={form.visibility === "private" ? faLock : faGlobe}
                                                 className="mr-2 !size-[12px] text-muted-foreground"

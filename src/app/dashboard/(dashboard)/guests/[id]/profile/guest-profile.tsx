@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { mediaUrl } from '@/lib/media-url';
 import {
     ArrowLeft, Mail, Phone, MapPin, Calendar, Users, Link2, Clock,
     Pencil, Send, Info, CircleCheck, Inbox, Eye,
@@ -122,8 +123,14 @@ export function GuestProfileScreen({ guestId }: { guestId: number }) {
                               Conditionally rendered, with a key. A bare
                               src={undefined} does not reliably trigger the
                               fallback in Radix.
+
+                              ⚠ mediaUrl(), not the raw path. Local storage
+                              writes `/uploads/...`, which is relative to the
+                              BACKEND, not this app — rendered as-is it 404s
+                              against this app's own origin. Same bug as the
+                              header's avatar; see media-url.ts.
                             */}
-                            {g.photo ? <AvatarImage key={g.photo} src={g.photo} alt={g.name} /> : null}
+                            {g.photo ? <AvatarImage key={g.photo} src={mediaUrl(g.photo)} alt={g.name} /> : null}
                             <AvatarFallback className="text-[15px] font-semibold">{initials}</AvatarFallback>
                         </Avatar>
                         <div className="flex min-w-0 flex-col gap-1">

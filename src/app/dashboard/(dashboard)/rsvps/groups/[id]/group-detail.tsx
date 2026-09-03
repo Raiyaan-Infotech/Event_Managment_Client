@@ -253,7 +253,7 @@ export default function GroupDetailScreen({ groupId }: { groupId: number }) {
                                                     <Link
                                                         href={`/dashboard/guests/${m.id}/profile`}
                                                         title={`View ${m.guest.name}'s profile`}
-                                                        className="text-[12.5px] font-medium break-words hover:text-primary hover:underline"
+                                                        className="inline-block py-1.5 text-[12.5px] font-medium break-words hover:text-primary hover:underline"
                                                     >
                                                         {m.guest.name}
                                                     </Link>

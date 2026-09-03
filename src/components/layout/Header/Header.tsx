@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
+import { mediaUrl } from "@/lib/media-url";
 import { useClientProfile, useLogout } from "@/hooks/use-client-portal";
 import { useUnreadCount, useNotifications, timeAgo } from "@/hooks/use-messages";
 
@@ -274,10 +275,20 @@ export default function Header() {
                             )}
                         >
                             <Avatar className="h-8 w-8">
-                                {/* Conditional, with a key — a bare src={undefined}
-                                    does not reliably trigger the fallback. */}
+                                {/*
+                                  Conditional, with a key — a bare src={undefined}
+                                  does not reliably trigger the fallback.
+
+                                  ⚠ mediaUrl(), not the raw value. `avatar_url`
+                                  from the API is relative to the BACKEND
+                                  (`/uploads/...`); rendered as-is it resolves
+                                  against this app's own origin instead and
+                                  404s on every single page load — the upload
+                                  succeeded, the image is just being fetched
+                                  from the wrong port.
+                                */}
                                 {client?.avatar_url && (
-                                    <AvatarImage key={client.avatar_url} src={client.avatar_url} alt="" />
+                                    <AvatarImage key={client.avatar_url} src={mediaUrl(client.avatar_url)} alt="" />
                                 )}
                                 <AvatarFallback className="bg-primary/10 text-[11px] font-bold text-primary">
                                     {initialsOf(client?.name)}

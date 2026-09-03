@@ -490,7 +490,7 @@ function Row({ rsvp: r, fmt, onReset }: {
                 <Link
                     href={`/dashboard/guests/${r.id}/profile`}
                     title={`View ${r.guest.name}'s profile`}
-                    className="text-[12.5px] font-medium break-words hover:text-primary hover:underline"
+                    className="inline-block py-1.5 text-[12.5px] font-medium break-words hover:text-primary hover:underline"
                 >
                     {r.guest.name}
                 </Link>
@@ -514,7 +514,7 @@ function Row({ rsvp: r, fmt, onReset }: {
                 {r.group ? (
                     <Link
                         href={`/dashboard/rsvps/groups/${r.group.id}${r.event ? `?event_id=${r.event.id}` : ''}`}
-                        className="hover:underline"
+                        className="inline-block py-1.5 hover:underline"
                     >
                         {r.group.name}
                     </Link>

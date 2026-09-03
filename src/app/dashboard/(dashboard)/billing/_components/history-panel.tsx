@@ -114,7 +114,11 @@ export function HistoryPanel() {
 
                             <Select value={type} onValueChange={reset(setType)}>
                                 <SelectTrigger className="h-9 w-[170px] text-[12.5px]">
-                                    <SelectValue />
+                                    {/* Custom children so the count badge in each SelectItem
+                                        does not get mirrored into the collapsed trigger. */}
+                                    <SelectValue>
+                                        {TYPE_OPTIONS.find((o) => o.value === type)?.label ?? 'All Transactions'}
+                                    </SelectValue>
                                 </SelectTrigger>
                                 <SelectContent>
                                     {TYPE_OPTIONS.map((o) => (
@@ -176,7 +180,7 @@ export function HistoryPanel() {
                                             <TableHead className="min-w-[220px]">Description</TableHead>
                                             <TableHead className="min-w-[90px]">Type</TableHead>
                                             <TableHead className="min-w-[110px] text-end">Amount</TableHead>
-                                            <TableHead className="min-w-[100px]">Status</TableHead>
+                                            <TableHead className="min-w-[100px] ps-6">Status</TableHead>
                                             <TableHead className="min-w-[150px]">Invoice / Reference</TableHead>
                                         </TableRow>
                                     </TableHeader>
@@ -189,14 +193,14 @@ export function HistoryPanel() {
 
                         {/* ── Paging ────────────────────────────────────── */}
                         {rows.length > 0 && (
-                            <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+                            <div className="grid min-w-0 grid-cols-1 items-center gap-3 sm:grid-cols-3">
                                 <p className="text-[11.5px] text-muted-foreground">
                                     Showing {showingFrom} to {showingTo} of {data?.filtered_count ?? 0}
                                     {filtered && data?.filtered_count !== summary.all
                                         ? ` (filtered from ${summary.all ?? 0})`
                                         : ''}
                                 </p>
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center justify-center gap-2">
                                     <Button
                                         size="icon" variant="outline" className="size-8"
                                         disabled={page <= 1}
@@ -216,6 +220,8 @@ export function HistoryPanel() {
                                     >
                                         <ChevronRight className="size-4" />
                                     </Button>
+                                </div>
+                                <div className="flex items-center justify-end gap-2">
                                     <Select value={limit} onValueChange={reset(setLimit)}>
                                         <SelectTrigger className="h-8 w-[95px] text-[12px]">
                                             <SelectValue />
@@ -302,11 +308,13 @@ export function HistoryPanel() {
 
                 <Card className="py-0">
                     <CardContent className="p-5">
-                        <span className="grid size-9 place-items-center rounded-full bg-primary/10">
-                            <Headphones className="size-[17px] text-primary" />
-                        </span>
-                        <h3 className="mt-3 text-[13.5px] font-semibold">Need Help?</h3>
-                        <p className="mt-1.5 text-[12px] break-words text-muted-foreground">
+                        <div className="flex items-center gap-2.5">
+                            <span className="grid size-9 shrink-0 place-items-center rounded-full bg-primary/10">
+                                <Headphones className="size-[17px] text-primary" />
+                            </span>
+                            <h3 className="text-[13.5px] font-semibold">Need Help?</h3>
+                        </div>
+                        <p className="mt-2.5 text-[12px] break-words text-muted-foreground">
                             Questions about a charge or an invoice? Send us the details and somebody
                             will come back to you.
                         </p>
@@ -364,7 +372,7 @@ function HistoryRow({
                         </span>
                     )}
             </TableCell>
-            <TableCell>
+            <TableCell className="ps-6">
                 <StatusBadge status={row.status} />
             </TableCell>
             <TableCell>
