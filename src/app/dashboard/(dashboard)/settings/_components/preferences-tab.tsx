@@ -3,7 +3,9 @@
 import { useMemo } from 'react';
 import Link from 'next/link';
 import { useTheme } from 'next-themes';
-import { Info, RotateCcw, Loader2, Monitor, Globe, SlidersHorizontal, Mail } from 'lucide-react';
+import {
+    Info, RotateCcw, Loader2, Monitor, Globe, SlidersHorizontal, Mail, HelpCircle, ArrowUpRight,
+} from 'lucide-react';
 
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -260,6 +262,39 @@ export function PreferencesTab() {
                         <Button asChild variant="outline" size="sm" className="mt-4 w-full">
                             <Link href="/dashboard/settings?tab=notifications">Go to Notifications</Link>
                         </Button>
+                    </CardContent>
+                </Card>
+
+                {/*
+                  ⚠ Design-only, per this session — the mock's four links
+                  (Managing Preferences, Email Settings Guide, Account Settings
+                  Guide, Help Center) have no real page behind any of them yet,
+                  so these are plain text, not `<Link>`s. A link to a route that
+                  does not exist reads as a broken portal; unclickable text that
+                  looks the same does not promise a destination it can't reach.
+                */}
+                <Card className="py-0">
+                    <CardContent className="p-6">
+                        <span className="grid size-9 place-items-center rounded-full bg-primary/10">
+                            <HelpCircle className="size-[17px] text-primary" />
+                        </span>
+                        <h2 className="mt-3 text-[13.5px] font-semibold">Need Help?</h2>
+                        <div className="mt-3 flex flex-col gap-2.5">
+                            {[
+                                'Managing Preferences',
+                                'Email Settings Guide',
+                                'Account Settings Guide',
+                                'Help Center',
+                            ].map((label) => (
+                                <span
+                                    key={label}
+                                    className="flex items-center gap-1.5 text-[12.5px] font-medium text-muted-foreground"
+                                >
+                                    {label}
+                                    <ArrowUpRight className="size-3.5" />
+                                </span>
+                            ))}
+                        </div>
                     </CardContent>
                 </Card>
 

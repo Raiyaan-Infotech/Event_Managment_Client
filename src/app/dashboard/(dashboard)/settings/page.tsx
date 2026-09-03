@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import {
     User, Bell, ShieldCheck, SlidersHorizontal, ChevronRight,
     Download, Users, HelpCircle, MessageSquare, Check, Loader2,
+    Fingerprint, Calendar, Crown, CalendarClock, Mail, CreditCard, Coins, Copy, Pencil,
 } from 'lucide-react';
 
 import { Card, CardContent } from '@/components/ui/card';
@@ -13,18 +14,16 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ProfileAvatar } from '@/components/common/profile-avatar';
 import { useDateFormatter } from '@/hooks/use-client-settings';
-import { useBillingOverview } from '@/hooks/use-billing';
+import { useBillingOverview, usePaymentMethods } from '@/hooks/use-billing';
 import { PreferencesTab } from './_components/preferences-tab';
 import { NotificationsTab } from './_components/notifications-tab';
-import {
-    useClientProfile, useUpdateProfile, useChangePassword,
-} from '@/hooks/use-client-portal';
+import { SecurityTab } from './_components/security-tab';
+import { useClientProfile, useUpdateProfile } from '@/hooks/use-client-portal';
 
 /**
  * Settings.
@@ -81,7 +80,7 @@ export default function SettingsPage() {
  * the parameter.
  */
 function SettingsTabs() {
-    const { data: client, isLoading } = useClientProfile();
+    const { isLoading } = useClientProfile();
     const params = useSearchParams();
     const requested = params.get('tab');
     const [tab, setTab] = useState(() =>
@@ -135,8 +134,9 @@ function SettingsTabs() {
                 </TabsContent>
 
                 <TabsContent value="security">
-                    {isLoading ? <ProfileSkeleton /> : <SecurityTab hasPassword={!!client?.has_password} />}
+                    {isLoading ? <ProfileSkeleton /> : <SecurityTab />}
                 </TabsContent>
+
 
                 <TabsContent value="preferences">
                     <PreferencesTab />
@@ -244,17 +244,18 @@ function ProfileTab({ onSelectTab }: { onSelectTab?: (tab: string) => void }) {
                                         />
                                     </Field>
                                 </div>
+
+                                <div className="sm:col-span-2">
+                                    <Button
+                                        disabled={save.isPending}
+                                        onClick={() => save.mutate(form)}
+                                    >
+                                        {save.isPending && <Loader2 className="size-4 animate-spin" />}
+                                        Save Changes
+                                    </Button>
+                                </div>
                             </div>
                         </div>
-
-                        <Button
-                            className="mt-6"
-                            disabled={save.isPending}
-                            onClick={() => save.mutate(form)}
-                        >
-                            {save.isPending && <Loader2 className="size-4 animate-spin" />}
-                            Save Changes
-                        </Button>
                     </CardContent>
                 </Card>
 
@@ -475,9 +476,29 @@ function Row({ label, value, muted }: { label: string; value: string; muted?: bo
 function AccountTab() {
     const { data: client } = useClientProfile();
     const { data: billing } = useBillingOverview();
+    // Real since the manual payment-methods feature shipped: a client can
+    // record a UPI id / bank account / cash as "how they pay", even with no
+    // gateway connected. Not a chargeable instrument — see PaymentMethodsPanel
+    // — but it IS a real saved row, so this row must not keep claiming there
+    // is none.
+    const { data: pmData } = usePaymentMethods();
     const fmt = useDateFormatter();
+    const [copied, setCopied] = useState(false);
 
     const sub = billing?.subscription ?? null;
+    const accountId = client ? `EVT-${String(client.id).padStart(6, '0')}` : '—';
+    const defaultMethod = pmData?.default_method ?? null;
+
+    const copyAccountId = async () => {
+        try {
+            await navigator.clipboard.writeText(accountId);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1500);
+        } catch {
+            // Clipboard access can be blocked (permissions, insecure context).
+            // Failing silently beats throwing over a copy-to-clipboard nicety.
+        }
+    };
 
     return (
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
@@ -489,67 +510,111 @@ function AccountTab() {
                             View and manage your account information.
                         </p>
 
-                        <dl className="mt-6 flex flex-col gap-4 text-sm">
+                        <div className="mt-4">
                             {/* Derived from the row id, not stored. A stable,
                                 human-quotable handle for support, with no column
                                 to drift from the record it names. */}
-                            <Row label="Account ID" value={client ? `EVT-${String(client.id).padStart(6, '0')}` : '—'} />
-                            <Separator />
-                            <Row label="Account Created" value={fmt(client?.created_at, true)} />
-                            <Separator />
-                            <Row label="Current Plan" value={client?.plan?.name ?? 'No plan assigned'} />
-                            <Separator />
-                            <Row label="Member Since" value={fmt(client?.created_at)} />
-                            <Separator />
-                            {/*
-                              Real since §313 — `client_subscriptions` records the
-                              term. Null is not "missing data": a cancelled or
-                              lifetime term genuinely has no next charge, so it
-                              says that rather than printing a dash.
-                            */}
-                            <Row
+                            <AccountDetailRow
+                                icon={Fingerprint}
+                                iconClassName="bg-blue-500/10 text-blue-600"
+                                label="Account ID"
+                                value={accountId}
+                                action={
+                                    <Button
+                                        size="icon" variant="ghost" className="size-7"
+                                        onClick={copyAccountId} aria-label="Copy account ID"
+                                    >
+                                        {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+                                    </Button>
+                                }
+                            />
+                            <AccountDetailRow
+                                icon={Calendar}
+                                iconClassName="bg-violet-500/10 text-violet-600"
+                                label="Account Created"
+                                value={fmt(client?.created_at, true)}
+                            />
+                            <AccountDetailRow
+                                icon={Crown}
+                                iconClassName="bg-amber-500/10 text-amber-600"
+                                label="Current Plan"
+                                value={client?.plan?.name ?? 'No plan assigned'}
+                                action={
+                                    <Button asChild size="sm" variant="outline">
+                                        <Link href="/dashboard/billing/change-plan">Change Plan</Link>
+                                    </Button>
+                                }
+                            />
+                            <AccountDetailRow
+                                icon={Users}
+                                iconClassName="bg-emerald-500/10 text-emerald-600"
+                                label="Member Since"
+                                value={fmt(client?.created_at)}
+                            />
+                            {/* Real since §313 — `client_subscriptions` records the
+                                term. Null is not "missing data": a cancelled or
+                                lifetime term genuinely has no next charge, so it
+                                says that rather than printing a dash. */}
+                            <AccountDetailRow
+                                icon={CalendarClock}
+                                iconClassName="bg-sky-500/10 text-sky-600"
                                 label="Next Billing Date"
                                 value={sub?.next_billing_date ? fmt(sub.next_billing_date) : 'No upcoming charge'}
                                 muted={!sub?.next_billing_date}
                             />
-                            <Separator />
-                            {/*
-                              There is no separate billing-email column, and there
-                              does not need to be — invoices are addressed to the
-                              account's own email, and that is what this shows. A
-                              second address would be a second thing to keep in
-                              step with the first.
-                            */}
-                            <Row label="Billing Email" value={client?.email ?? '—'} />
-                            <Separator />
-                            {/*
-                              ⚠ NO CARD IS STORED ANYWHERE. Checked every column in
-                              the database: there is no card table, no last4, no
-                              expiry, and no gateway library installed. `payments`
-                              and `client_transactions` carry `gateway` /
-                              `gateway_transaction_id` as SEAMS for a provider that
-                              does not exist yet, and `payments` has 0 rows.
-
-                              That is also the right place for it to stay — a card
-                              belongs at the gateway, which returns a token. Storing
-                              one here would make this system handle card data
-                              itself, which is a PCI obligation nobody has taken on.
-                            */}
-                            <Row label="Payment Method" value="Not set up yet" muted />
-                            <Separator />
-                            {/*
-                              Every plan in the catalogue is priced in INR, and the
-                              subscription snapshots its own currency at purchase
-                              (§313.1). Read from the subscription so it stays true
-                              if that ever stops being the case, rather than being
-                              typed in here.
-                            */}
-                            <Row label="Currency" value={`${sub?.currency_code ?? 'INR'} (₹)`} />
-                        </dl>
+                            {/* There is no separate billing-email column, and
+                                there does not need to be — invoices are addressed
+                                to the account's own email, and that is what this
+                                shows. Edit jumps to the Change Email card rather
+                                than opening a second editor for the same field. */}
+                            <AccountDetailRow
+                                icon={Mail}
+                                iconClassName="bg-rose-500/10 text-rose-600"
+                                label="Billing Email"
+                                value={client?.email ?? '—'}
+                                action={
+                                    <Button
+                                        size="sm" variant="outline"
+                                        onClick={() => document.getElementById('change-email-card')
+                                            ?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+                                    >
+                                        <Pencil className="size-3.5" /> Edit
+                                    </Button>
+                                }
+                            />
+                            <AccountDetailRow
+                                icon={CreditCard}
+                                iconClassName="bg-indigo-500/10 text-indigo-600"
+                                label="Payment Method"
+                                value={defaultMethod ? defaultMethod.label : 'Not set up yet'}
+                                muted={!defaultMethod}
+                                action={
+                                    <Button asChild size="sm" variant="outline">
+                                        <Link href="/dashboard/billing?tab=payment">
+                                            {defaultMethod ? 'Manage' : 'Add'}
+                                        </Link>
+                                    </Button>
+                                }
+                            />
+                            {/* Every plan in the catalogue is priced in INR, and
+                                the subscription snapshots its own currency at
+                                purchase (§313.1). Read from the subscription so
+                                it stays true if that ever stops being the case,
+                                rather than being typed in here. No edit action:
+                                there is no currency-change endpoint. */}
+                            <AccountDetailRow
+                                icon={Coins}
+                                iconClassName="bg-teal-500/10 text-teal-600"
+                                label="Currency"
+                                value={`${sub?.currency_code ?? 'INR'} (₹)`}
+                                last
+                            />
+                        </div>
 
                         <p className="mt-4 text-xs text-muted-foreground">
-                            Invoices go to your account email. There is no card on file — no payment
-                            provider is connected yet, so nothing can be charged automatically.
+                            {defaultMethod
+                                ? `${defaultMethod.type_label} is recorded for reference only — no payment provider is connected, so nothing is ever charged automatically.`
+                                : 'Invoices go to your account email. There is no payment method on file yet, and no provider is connected, so nothing can be charged automatically.'}
                         </p>
                     </CardContent>
                 </Card>
@@ -577,7 +642,15 @@ function AccountTab() {
                 </Card>
             </div>
 
+            {/*
+              Password and 2FA are NOT here. Both designs put them on this tab
+              AND on Security; one credential with two editors is two sets of
+              validation to keep in step (§308), so they live on Security with
+              the sessions and devices they protect, and this tab keeps the
+              account details, the email address and account closure.
+            */}
             <div className="flex flex-col gap-4">
+                <ChangeEmailCard client={client ?? null} />
                 <AccountOverview />
                 <AccountStatus />
             </div>
@@ -586,107 +659,94 @@ function AccountTab() {
     );
 }
 
-/* ── Security ────────────────────────────────────────────────────────────── */
-
-function SecurityTab({ hasPassword }: { hasPassword: boolean }) {
-    const change = useChangePassword();
-    const [pw, setPw] = useState({ current_password: '', new_password: '', confirm: '' });
-
-    const mismatch = pw.confirm.length > 0 && pw.new_password !== pw.confirm;
-    const canSubmit =
-        hasPassword && pw.current_password && pw.new_password.length >= 8 && !mismatch;
-
+/** One row of the Account Details card: icon, label, value, optional action. */
+function AccountDetailRow({
+    icon: Icon,
+    iconClassName,
+    label,
+    value,
+    muted,
+    action,
+    last,
+}: {
+    icon: React.ComponentType<{ className?: string }>;
+    iconClassName?: string;
+    label: string;
+    value: React.ReactNode;
+    muted?: boolean;
+    action?: React.ReactNode;
+    last?: boolean;
+}) {
     return (
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
-            <Card className="py-0">
-                <CardContent className="p-6">
-                    <h2 className="text-base font-semibold">Change Password</h2>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                        We recommend a long, random password that you don&rsquo;t use elsewhere.
-                    </p>
-
-                    {!hasPassword ? (
-                        <p className="mt-6 rounded-md border bg-muted/40 p-4 text-sm text-muted-foreground">
-                            This account signs in with Google or Facebook and has no password to
-                            change.
-                        </p>
-                    ) : (
-                        <div className="mt-6 flex max-w-md flex-col gap-4">
-                            <Field label="Current Password">
-                                <Input type="password" value={pw.current_password}
-                                    onChange={(e) => setPw((p) => ({ ...p, current_password: e.target.value }))} />
-                            </Field>
-                            <Field label="New Password">
-                                <Input type="password" value={pw.new_password}
-                                    onChange={(e) => setPw((p) => ({ ...p, new_password: e.target.value }))} />
-                            </Field>
-                            <Field label="Confirm New Password">
-                                <Input type="password" value={pw.confirm}
-                                    onChange={(e) => setPw((p) => ({ ...p, confirm: e.target.value }))} />
-                            </Field>
-
-                            {mismatch && (
-                                <p className="text-xs text-destructive">
-                                    The two new passwords don&rsquo;t match.
-                                </p>
-                            )}
-                            <p className="text-xs text-muted-foreground">
-                                At least 8 characters, and different from your current one.
-                            </p>
-
-                            <Button
-                                className="self-start"
-                                disabled={!canSubmit || change.isPending}
-                                onClick={() =>
-                                    change.mutate(
-                                        {
-                                            current_password: pw.current_password,
-                                            new_password: pw.new_password,
-                                        },
-                                        { onSuccess: () => setPw({ current_password: '', new_password: '', confirm: '' }) },
-                                    )
-                                }
-                            >
-                                {change.isPending && <Loader2 className="size-4 animate-spin" />}
-                                Update Password
-                            </Button>
-                        </div>
-                    )}
-                </CardContent>
-            </Card>
-
-            <NotBuilt
-                title="Sessions, devices and 2FA"
-                needs="a server-side token store"
-                detail="Active Sessions, Authorized Devices and Two-Factor Authentication are not merely unbuilt. Sign-in issues a stateless JWT with no record kept, so there is nothing to list and nothing to revoke — 'Log out all other sessions' cannot work until sessions are stored."
-            />
+        <div className={`flex flex-wrap items-center justify-between gap-3 py-3.5 ${last ? '' : 'border-b'}`}>
+            <div className="flex min-w-0 items-center gap-3">
+                <span className={`grid size-8 shrink-0 place-items-center rounded-lg ${iconClassName ?? 'bg-primary/10 text-primary'}`}>
+                    <Icon className="size-4" />
+                </span>
+                <span className="min-w-0 text-sm font-medium">{label}</span>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+                <span className={`text-sm font-medium ${muted ? 'text-muted-foreground' : ''}`}>{value}</span>
+                {action}
+            </div>
         </div>
     );
 }
 
-/* ── Shared ──────────────────────────────────────────────────────────────── */
-
 /**
- * An honest placeholder.
- *
- * It names what is missing rather than saying "coming soon", because the two
- * carry different information: one tells whoever reads it what has to be built
- * next, the other tells them nothing.
+ * Change Email — a real write to `PUT /client/me`, the same endpoint the
+ * Profile tab's Email field already uses. Kept as its own card (rather than
+ * only the Profile tab's inline field) because that is where the design put
+ * it, and a "Current Email" / "New Email" pair reads as a deliberate change
+ * rather than an edit that can be left half-typed in a bigger form.
  */
-function NotBuilt({ title, needs, detail }: { title: string; needs: string; detail: string }) {
+function ChangeEmailCard({ client }: { client: { email: string | null } | null }) {
+    const save = useUpdateProfile();
+    const [newEmail, setNewEmail] = useState('');
+
+    const submit = () => {
+        const trimmed = newEmail.trim();
+        if (!trimmed) return;
+        save.mutate({ email: trimmed }, { onSuccess: () => setNewEmail('') });
+    };
+
     return (
-        <Card className="py-0">
-            <CardContent className="flex flex-col items-start gap-2 p-6">
-                <Badge variant="secondary">Not built yet</Badge>
-                <h2 className="text-base font-semibold">{title}</h2>
-                <p className="text-sm text-muted-foreground">
-                    Needs <span className="font-medium text-foreground">{needs}</span>.
+        <Card id="change-email-card" className="py-0">
+            <CardContent className="p-5">
+                <h3 className="text-sm font-semibold">Change Email Address</h3>
+                <p className="mt-1 text-xs text-muted-foreground">
+                    Update your email address used for signing in and account notifications.
                 </p>
-                <p className="max-w-prose text-sm text-muted-foreground">{detail}</p>
+
+                <div className="mt-4 flex flex-col gap-3">
+                    <Field label="Current Email">
+                        <Input value={client?.email ?? ''} disabled />
+                    </Field>
+                    <Field label="New Email Address">
+                        <Input
+                            type="email"
+                            placeholder="Enter new email address"
+                            value={newEmail}
+                            onChange={(e) => setNewEmail(e.target.value)}
+                        />
+                    </Field>
+                </div>
+
+                <Button
+                    className="mt-4 w-full"
+                    disabled={!newEmail.trim() || save.isPending}
+                    onClick={submit}
+                >
+                    {save.isPending ? <Loader2 className="size-4 animate-spin" /> : <Mail className="size-4" />}
+                    Update Email
+                </Button>
             </CardContent>
         </Card>
     );
 }
+
+
+/* ── Shared ──────────────────────────────────────────────────────────────── */
 
 function ProfileSkeleton() {
     return (

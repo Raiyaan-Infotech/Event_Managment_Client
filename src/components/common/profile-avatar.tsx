@@ -39,7 +39,7 @@ export function ProfileAvatar({
     return (
         <div
             className="flex flex-col items-center gap-2"
-            style={{ ['--avatar-size' as string]: `${size / 4}rem` }}
+            style={{ ['--avatar-size' as string]: `${size / 16}rem` }}
         >
             <div className="relative size-[var(--avatar-size)] shrink-0">
                 {client?.avatar_url ? (

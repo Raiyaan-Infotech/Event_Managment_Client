@@ -15,6 +15,7 @@ import {
     faCreditCard,
     faGear,
     faListUl,
+    faWandMagicSparkles,
 } from "@fortawesome/free-solid-svg-icons"
 
 /**
@@ -54,6 +55,9 @@ export const navMain = [
     { title: "Dashboard", url: "/dashboard", icon: faHouse, items: [] },
     { title: "My Events", url: "/dashboard/events", icon: faCalendarDays, items: [] },
     { title: "Templates", url: "/dashboard/templates", icon: faLayerGroup, items: [] },
+    // ⚠ Standalone module — not yet tied to an event. See the page's own
+    // header comment for why "Event Name" on this form is plain text today.
+    { title: "Splash Screens", url: "/dashboard/splash-screens", icon: faWandMagicSparkles, items: [] },
     {
         title: "Guests",
         url: "/dashboard/guests",

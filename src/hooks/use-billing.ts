@@ -9,13 +9,14 @@ import { api, ApiError, type Pagination } from '@/lib/api-client';
  *
  * ── WHAT THESE HOOKS COVER ──────────────────────────────────────────────────
  * The subscription (overview, plans, change, cancel, resume), invoices and
- * their detail, the merged billing history, and the Contact Sales form.
+ * their detail, the merged billing history, the Contact Sales form, and
+ * payment methods (manual UPI / bank / cash records — see `usePaymentMethods`
+ * below for what "payment method" actually means here).
  *
  * ── WHAT IS DELIBERATELY ABSENT ─────────────────────────────────────────────
- * There is no `useCheckout` and no `usePaymentMethods`. Both need a payment
- * provider this project does not have, and stubbing them would mean a
- * "Pay ₹16,228" button that takes no money and a receipt for a payment that
- * never happened.
+ * There is no `useCheckout`. It needs a payment provider this project does
+ * not have, and stubbing it would mean a "Pay ₹16,228" button that takes no
+ * money and a receipt for a payment that never happened.
  *
  * Every invoice payload carries `payments_enabled` and a reason, so the screens
  * describe the real state instead of each hardcoding an assumption — and they

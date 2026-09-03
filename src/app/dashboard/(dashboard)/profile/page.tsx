@@ -18,6 +18,7 @@ import { useClientProfile } from '@/hooks/use-client-portal';
 import { useDateFormatter } from '@/hooks/use-client-settings';
 import { useDashboardStats } from '@/hooks/use-client-events';
 import { useGuestStats } from '@/hooks/use-guests';
+import { useTwoFactor, useSessions } from '@/hooks/use-client-security';
 
 /**
  * My Profile — a READ view of the account, with editing delegated to Settings.
@@ -32,12 +33,16 @@ import { useGuestStats } from '@/hooks/use-guests';
  * Name, email, phone, bio, avatar, plan, member-since and the verified badge
  * come from `/client/me`. Events Created is a real count; Guests Added is a
  * real count that genuinely reads 0 for a client with no guests yet.
+ * Two-Factor Authentication and Active Sessions in the rail below are ALSO
+ * real now — `client_two_factor` and `client_sessions` exist and back the
+ * Security tab; this page reads the same `useTwoFactor` / `useSessions` hooks
+ * so the two screens cannot disagree about whether 2FA is on.
  *
  * ── WHAT IS NOT, AND SAYS SO ────────────────────────────────────────────────
  * Location, Time Zone and Language have no columns. Emails Sent has no source —
  * the messaging module is paused by decision. "/ Unlimited" has no source
  * either: a plan carries a price, a billing cycle and trial days, but no usage
- * ceiling of any kind. Preferences, 2FA and Active Sessions have no schema.
+ * ceiling of any kind. Preferences has no schema.
  *
  * Each of those renders an em dash or a stated absence rather than a plausible
  * number. On a usage panel especially, an invented ceiling is the kind somebody
@@ -304,7 +309,33 @@ function Usage({
 
 /* ── Right rail ──────────────────────────────────────────────────────────── */
 
+/**
+ * ⚠ Both rows below used to say "Not available" unconditionally, from a time
+ * when 2FA and sessions genuinely did not exist anywhere in this backend. That
+ * comment is now WRONG rather than merely outdated — `client_sessions` and
+ * `client_two_factor` are real tables, this page's own Settings tab shows them
+ * working, and a stale "Not available" here reads as a regression to anyone
+ * who has already turned 2FA on. Both now read the same live status the
+ * Security tab does, from the same hooks, so the two screens cannot disagree
+ * about whether 2FA is on.
+ */
 function AccountSecurity() {
+    const { data: twoFactor, isLoading: loadingTwoFactor } = useTwoFactor();
+    const { data: sessionData, isLoading: loadingSessions } = useSessions();
+
+    const twoFactorLabel = loadingTwoFactor
+        ? undefined
+        : twoFactor?.is_enabled
+            ? 'Enabled'
+            : twoFactor?.is_pending
+                ? 'Setup unfinished'
+                : 'Not enabled';
+
+    const sessionCount = sessionData?.sessions.length ?? 0;
+    const sessionsLabel = loadingSessions
+        ? undefined
+        : `${sessionCount} ${sessionCount === 1 ? 'device' : 'devices'}`;
+
     return (
         <Card className="py-0">
             <CardContent className="p-5">
@@ -315,19 +346,16 @@ function AccountSecurity() {
 
                 <div className="mt-4 flex flex-col">
                     <RailRow icon={<Lock className="size-4" />} label="Change Password"
-                        href="/dashboard/settings" />
-                    {/* ⚠ No 2FA column and no TOTP anywhere in this backend. */}
+                        href="/dashboard/settings?tab=security" />
                     <RailRow icon={<KeyRound className="size-4" />} label="Two-Factor Authentication"
-                        trailing="Not available" />
-                    {/* ⚠ Not merely unbuilt: sign-in issues a stateless JWT with
-                        no server-side record, so there is nothing to enumerate. */}
+                        href="/dashboard/settings/security/two-factor" trailing={twoFactorLabel} />
                     <RailRow icon={<MonitorSmartphone className="size-4" />} label="Active Sessions"
-                        trailing="Not available" />
+                        href="/dashboard/settings/security/sessions" trailing={sessionsLabel} />
                     <RailRow icon={<Settings2 className="size-4" />} label="Security Settings"
-                        href="/dashboard/settings" />
+                        href="/dashboard/settings?tab=security" />
                 </div>
 
-                <Link href="/dashboard/settings"
+                <Link href="/dashboard/settings?tab=security"
                     className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline">
                     Go to Security Settings <ArrowRight className="size-3.5" />
                 </Link>

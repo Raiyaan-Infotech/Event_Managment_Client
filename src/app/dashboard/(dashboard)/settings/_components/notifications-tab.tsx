@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import {
     Bell, Mail, Info, Loader2, Volume2, VolumeX, MoonStar, TriangleAlert,
+    Calendar, Users, Wallet, Rocket, ClipboardList, Send,
 } from 'lucide-react';
 
 import { Card, CardContent } from '@/components/ui/card';
@@ -61,6 +62,16 @@ export function NotificationsTab() {
 
 /* ── Email ───────────────────────────────────────────────────────────────── */
 
+/** Which icon fronts a group header — purely visual, keyed on the server's own group name. */
+function GroupIcon({ group, className }: { group: string; className?: string }) {
+    switch (group) {
+        case 'Event Activity': return <Calendar className={className} />;
+        case 'Guests': return <Users className={className} />;
+        case 'Account & Billing': return <Wallet className={className} />;
+        default: return <Bell className={className} />;
+    }
+}
+
 function EmailPanel() {
     const { data } = useClientSettings();
     const save = useUpdateNotifications();
@@ -69,97 +80,299 @@ function EmailPanel() {
 
     const muted = Boolean(Number(data.preferences.emails_disabled));
 
+    /*
+      "From us" (marketing_tips / product_updates) is a pair of yes/no consent
+      flags, not something to tune a frequency on — the design puts them in
+      their own Email Preferences card, so they are pulled out of the main
+      list here rather than rendered twice.
+    */
+    const mainGroups = data.notifications.email.filter((g) => g.group !== 'From us');
+    const fromUs = data.notifications.email.find((g) => g.group === 'From us');
+    const allEnabled = mainGroups.every((g) => g.types.every((t) => t.enabled));
+
+    const toggleAll = (enabled: boolean) => {
+        const items = mainGroups.flatMap((g) => g.types.map((t) => ({
+            channel: 'email' as const, type: t.type, enabled, frequency: t.frequency,
+        })));
+        if (items.length) save.mutate(items);
+    };
+
     return (
         <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
             <div className="flex min-w-0 flex-col gap-4">
                 <DeliveryNotice channel={data.delivery.email} />
 
-                {data.notifications.email.map((group) => (
-                    <Card key={group.group} className="py-0">
-                        <CardContent className="p-6">
-                            <h2 className="text-base font-semibold">{group.group}</h2>
-                            <div className="mt-4 flex flex-col">
-                                {group.types.map((t, i) => (
-                                    <div key={t.type} className="min-w-0">
-                                        {i > 0 && <Separator />}
-                                        <div className="flex min-w-0 flex-col gap-3 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:gap-5">
-                                            <div className="min-w-0">
-                                                <p className="text-[13px] font-medium">{t.label}</p>
-                                                <p className="mt-0.5 text-[11.5px] break-words text-muted-foreground">
-                                                    {t.description}
-                                                </p>
-                                            </div>
-                                            <div className="flex shrink-0 items-center gap-3">
-                                                {/*
-                                                  The frequency stays visible but
-                                                  disabled when the type is off —
-                                                  removing it makes the row jump,
-                                                  and the choice is remembered for
-                                                  when it is switched back on.
-                                                */}
-                                                <Select
-                                                    value={t.frequency}
-                                                    disabled={!t.enabled || muted || save.isPending}
-                                                    onValueChange={(frequency) =>
-                                                        save.mutate([{ channel: 'email', type: t.type, enabled: t.enabled, frequency }])
-                                                    }
-                                                >
-                                                    <SelectTrigger className="w-[170px]">
-                                                        <SelectValue />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        {(t.frequencies ?? []).map((f) => (
-                                                            <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-                                                <Switch
-                                                    checked={t.enabled && !muted}
-                                                    disabled={muted || save.isPending}
-                                                    onCheckedChange={(enabled) =>
-                                                        save.mutate([{ channel: 'email', type: t.type, enabled, frequency: t.frequency }])
-                                                    }
-                                                />
+                <Card className="py-0">
+                    <CardContent className="p-6">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div className="min-w-0">
+                                <h2 className="text-base font-semibold">Email Notifications</h2>
+                                <p className="mt-1 text-sm text-muted-foreground">
+                                    Receive updates about your events and account by email.
+                                </p>
+                            </div>
+                            <div className="flex shrink-0 items-center gap-2">
+                                <span className="text-[12.5px] font-medium text-primary">Select All</span>
+                                <Switch
+                                    checked={allEnabled}
+                                    disabled={muted || save.isPending}
+                                    onCheckedChange={toggleAll}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="mt-5 hidden items-center justify-end gap-3 pr-1 text-[11px] font-medium text-muted-foreground sm:flex">
+                            <span className="w-9 text-center">Email</span>
+                            <span className="w-[170px] text-center">Frequency</span>
+                        </div>
+
+                        {mainGroups.map((group, gi) => (
+                            <div key={group.group} className={`mt-4 pt-4 ${gi > 0 ? 'border-t' : ''}`}>
+                                <div className="flex items-center gap-2.5">
+                                    <span className="grid size-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
+                                        <GroupIcon group={group.group} className="size-3.5" />
+                                    </span>
+                                    <h3 className="text-[13px] font-semibold">{group.group}</h3>
+                                </div>
+
+                                <div className="mt-1 flex flex-col">
+                                    {group.types.map((t, i) => (
+                                        <div key={t.type} className="min-w-0">
+                                            {i > 0 && <Separator />}
+                                            <div className="flex min-w-0 flex-col gap-3 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:gap-5">
+                                                <div className="min-w-0">
+                                                    <p className="text-[13px] font-medium">{t.label}</p>
+                                                    <p className="mt-0.5 text-[11.5px] break-words text-muted-foreground">
+                                                        {t.description}
+                                                    </p>
+                                                </div>
+                                                <div className="flex shrink-0 items-center gap-3">
+                                                    <Switch
+                                                        checked={t.enabled && !muted}
+                                                        disabled={muted || save.isPending}
+                                                        onCheckedChange={(enabled) =>
+                                                            save.mutate([{ channel: 'email', type: t.type, enabled, frequency: t.frequency }])
+                                                        }
+                                                    />
+                                                    {/*
+                                                      The frequency stays visible but
+                                                      disabled when the type is off —
+                                                      removing it makes the row jump,
+                                                      and the choice is remembered for
+                                                      when it is switched back on.
+                                                    */}
+                                                    <Select
+                                                        value={t.frequency}
+                                                        disabled={!t.enabled || muted || save.isPending}
+                                                        onValueChange={(frequency) =>
+                                                            save.mutate([{ channel: 'email', type: t.type, enabled: t.enabled, frequency }])
+                                                        }
+                                                    >
+                                                        <SelectTrigger className="w-[170px]">
+                                                            <SelectValue />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            {(t.frequencies ?? []).map((f) => (
+                                                                <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                ))}
+                                    ))}
+                                </div>
                             </div>
-                        </CardContent>
-                    </Card>
-                ))}
+                        ))}
+                    </CardContent>
+                </Card>
             </div>
 
             <div className="flex min-w-0 flex-col gap-4">
-                <Card className="py-0">
-                    <CardContent className="p-6">
-                        <span className="grid size-9 place-items-center rounded-full bg-primary/10">
-                            <Mail className="size-[17px] text-primary" />
-                        </span>
-                        <h2 className="mt-3 text-[13.5px] font-semibold">Turn off all emails</h2>
-                        <p className="mt-1.5 text-[12.5px] break-words text-muted-foreground">
-                            Overrides everything on this tab. Your individual choices are kept, so
-                            switching this back off restores them exactly as they were.
-                        </p>
-                        <div className="mt-4 flex items-center justify-between gap-3">
-                            <span className="text-[12.5px] font-medium">Disable all emails</span>
-                            <Switch
-                                checked={muted}
-                                disabled={savePrefs.isPending}
-                                onCheckedChange={(v) => savePrefs.mutate({ emails_disabled: v })}
-                            />
-                        </div>
-                    </CardContent>
-                </Card>
-
-                <WhatIsMissing
-                    lines={[
-                        'Team member activity — this system has no team members.',
-                        'Surveys and feedback — there is no survey feature.',
-                    ]}
+                <DisableAllEmailsCard
+                    muted={muted}
+                    pending={savePrefs.isPending}
+                    onToggle={(v) => savePrefs.mutate({ emails_disabled: v })}
                 />
+                <EmailPreferencesCard group={fromUs} muted={muted} save={save} />
+                <EmailPreviewCard delivery={data.delivery.email} />
             </div>
         </div>
+    );
+}
+
+/** The mock's "Do not want any emails?" banner — same switch as before, restyled. */
+function DisableAllEmailsCard({
+    muted, pending, onToggle,
+}: { muted: boolean; pending: boolean; onToggle: (v: boolean) => void }) {
+    return (
+        <Card className="py-0">
+            <CardContent className="flex items-start gap-3 p-5">
+                <span className="grid size-9 shrink-0 place-items-center rounded-full bg-primary/10">
+                    <Bell className="size-[17px] text-primary" />
+                </span>
+                <div className="min-w-0 flex-1">
+                    <h3 className="text-[13.5px] font-semibold">Do not want any emails?</h3>
+                    <p className="mt-1 text-[12px] break-words text-muted-foreground">
+                        You can disable all email notifications at once. Your individual
+                        choices are kept, so switching this back off restores them exactly
+                        as they were.
+                    </p>
+                    <div className="mt-3 flex items-center justify-between gap-3">
+                        <span className="text-[12.5px] font-medium">Disable All Emails</span>
+                        <Switch checked={muted} disabled={pending} onCheckedChange={onToggle} />
+                    </div>
+                </div>
+            </CardContent>
+        </Card>
+    );
+}
+
+/**
+ * Email Preferences — the two real consent flags from the "From us" catalog
+ * group (Marketing & Tips, Product Updates), plus Surveys & Feedback shown
+ * disabled with a note: the design asked for it, but there is no survey
+ * feature anywhere in this system for the switch to mean anything.
+ */
+function EmailPreferencesCard({
+    group, muted, save,
+}: {
+    group: NotificationGroup | undefined;
+    muted: boolean;
+    save: ReturnType<typeof useUpdateNotifications>;
+}) {
+    const marketing = group?.types.find((t) => t.type === 'marketing_tips');
+    const product = group?.types.find((t) => t.type === 'product_updates');
+
+    return (
+        <Card className="py-0">
+            <CardContent className="p-5">
+                <h3 className="text-[13.5px] font-semibold">Email Preferences</h3>
+                <p className="mt-1 text-[12px] break-words text-muted-foreground">
+                    Manage how you receive emails from us.
+                </p>
+
+                <div className="mt-4 flex flex-col gap-4">
+                    {marketing && (
+                        <PreferenceRow
+                            icon={<Mail className="size-4 text-violet-600" />}
+                            iconClassName="bg-violet-500/10"
+                            title="Marketing & Tips"
+                            body={marketing.description}
+                            checked={marketing.enabled && !muted}
+                            disabled={muted || save.isPending}
+                            onCheckedChange={(enabled) =>
+                                save.mutate([{ channel: 'email', type: 'marketing_tips', enabled, frequency: marketing.frequency }])
+                            }
+                        />
+                    )}
+                    {product && (
+                        <PreferenceRow
+                            icon={<Rocket className="size-4 text-emerald-600" />}
+                            iconClassName="bg-emerald-500/10"
+                            title="Product Updates"
+                            body={product.description}
+                            checked={product.enabled && !muted}
+                            disabled={muted || save.isPending}
+                            onCheckedChange={(enabled) =>
+                                save.mutate([{ channel: 'email', type: 'product_updates', enabled, frequency: product.frequency }])
+                            }
+                        />
+                    )}
+                    <PreferenceRow
+                        icon={<ClipboardList className="size-4 text-muted-foreground" />}
+                        iconClassName="bg-muted"
+                        title="Surveys & Feedback"
+                        body="Not built yet — there is no survey feature in this system."
+                        checked={false}
+                        disabled
+                        onCheckedChange={() => {}}
+                    />
+                </div>
+            </CardContent>
+        </Card>
+    );
+}
+
+function PreferenceRow({
+    icon, iconClassName, title, body, checked, disabled, onCheckedChange,
+}: {
+    icon: React.ReactNode;
+    iconClassName: string;
+    title: string;
+    body: string;
+    checked: boolean;
+    disabled?: boolean;
+    onCheckedChange: (v: boolean) => void;
+}) {
+    return (
+        <div className="flex items-start gap-3">
+            <span className={`grid size-8 shrink-0 place-items-center rounded-full ${iconClassName}`}>
+                {icon}
+            </span>
+            <div className="min-w-0 flex-1">
+                <p className="text-[12.5px] font-medium">{title}</p>
+                <p className="mt-0.5 text-[11px] break-words text-muted-foreground">{body}</p>
+            </div>
+            <Switch checked={checked} disabled={disabled} onCheckedChange={onCheckedChange} />
+        </div>
+    );
+}
+
+/**
+ * A static preview — illustrative only, not rendered from a real template
+ * (there is no template wired to these notification types yet).
+ *
+ * ⚠ "Send Test Email" is disabled with the server's own delivery reason
+ * rather than wired to a real send: no email provider is configured, and per
+ * §this-session that stays out until one is — a button that mostly does
+ * nothing yet is worse than a disabled one that says why.
+ */
+function EmailPreviewCard({ delivery }: { delivery: DeliveryChannel }) {
+    return (
+        <Card className="py-0">
+            <CardContent className="p-5">
+                <h3 className="text-[13.5px] font-semibold">Email Preview</h3>
+                <p className="mt-1 text-[12px] break-words text-muted-foreground">
+                    This is how emails from Event Invit would appear in your inbox.
+                </p>
+
+                <div className="mt-4 rounded-lg border p-3.5">
+                    <div className="flex items-center gap-2.5">
+                        <span className="grid size-7 shrink-0 place-items-center rounded-full bg-rose-500/15 text-[11px] font-bold text-rose-600">
+                            EI
+                        </span>
+                        <div className="min-w-0">
+                            <p className="text-[12.5px] font-semibold">Event Invit</p>
+                            <p className="text-[11px] text-muted-foreground">hello@eventinvit.com</p>
+                        </div>
+                    </div>
+                    <p className="mt-3 text-[11.5px] break-words text-muted-foreground">
+                        Subject:{' '}
+                        <span className="text-foreground">
+                            Your event &quot;Annual Meetup 2025&quot; is coming up!
+                        </span>
+                    </p>
+                    <p className="mt-2 text-[12px] break-words leading-relaxed text-muted-foreground">
+                        Hi there,
+                        <br />
+                        Just a quick reminder that your event &quot;Annual Meetup 2025&quot; is
+                        happening soon. We look forward to celebrating with you!
+                        <br />
+                        — Team Event Invit
+                    </p>
+                </div>
+
+                <Button variant="outline" className="mt-4 w-full" disabled>
+                    <Send className="size-4" /> Send Test Email
+                </Button>
+                <p className="mt-2 text-[11px] break-words text-muted-foreground">
+                    {delivery.enabled
+                        ? 'A provider is connected, but sending a test email from this screen isn’t wired up yet.'
+                        : delivery.reason}
+                </p>
+            </CardContent>
+        </Card>
     );
 }
 
