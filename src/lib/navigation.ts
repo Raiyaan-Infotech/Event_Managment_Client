@@ -16,6 +16,7 @@ import {
     faGear,
     faListUl,
     faWandMagicSparkles,
+    faClockRotateLeft,
 } from "@fortawesome/free-solid-svg-icons"
 
 /**
@@ -76,6 +77,15 @@ export const navMain = [
         items: [
             { title: "All Messages", url: "/dashboard/messages", icon: faListUl, ready: true },
             { title: "Send Message", url: "/dashboard/messages/send", icon: faPaperPlane, ready: true },
+            /*
+              Push lives under Messages rather than beside the top-level
+              "Notifications" entry, which is a different thing entirely: that
+              one is the client's OWN inbox, this one sends to guests. Naming
+              them apart matters — "Notifications" and "Push Notifications" are
+              two screens a person will otherwise open interchangeably.
+            */
+            { title: "Push Notifications", url: "/dashboard/messages/notifications", icon: faBell, ready: true },
+            { title: "Notification History", url: "/dashboard/messages/notifications/history", icon: faClockRotateLeft, ready: true },
         ],
     },
     { title: "RSVPs", url: "/dashboard/rsvps", icon: faSquareCheck, items: [] },

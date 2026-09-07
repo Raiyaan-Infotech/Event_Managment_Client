@@ -9,6 +9,7 @@ import {
     Calendar, Loader2, Info, X, Lightbulb, ChevronDown, Check, AlertTriangle,
     Bold, Italic, Strikethrough, Sparkles, CalendarClock, Filter, ArrowRight,
     CheckCheck, Wallet, Link2, ArrowLeft,
+    Bell,
 } from 'lucide-react';
 
 import { Card, CardContent } from '@/components/ui/card';
@@ -114,6 +115,18 @@ const CHANNEL_META: Record<MessageChannel, {
         hint: 'Send via Email', icon: Mail,
         tint: 'text-violet-600 dark:text-violet-400 bg-violet-500/10',
         active: 'border-violet-500/60 bg-violet-500/5',
+    },
+    /*
+      Present so the type is total and a historical push row can describe
+      itself, NOT so push can be chosen here — `OFFERED_CHANNELS` decides which
+      buttons render, and push is absent from it on purpose. Push has its own
+      composer under Messages -> Notifications, because its audience rule and
+      its options have nothing in common with the other three.
+    */
+    push: {
+        hint: 'Send via Push Notification', icon: Bell,
+        tint: 'text-pink-600 dark:text-pink-400 bg-pink-500/10',
+        active: 'border-pink-500/60 bg-pink-500/5',
     },
 };
 

@@ -29,7 +29,7 @@ import { api, ApiError, type Pagination } from '@/lib/api-client';
  * can be created on it — the server's `VALID_CHANNELS` is the gate, and the
  * composer's buttons come from `channels[]` rather than from this type.
  */
-export type MessageChannel = 'whatsapp' | 'sms' | 'email';
+export type MessageChannel = 'whatsapp' | 'sms' | 'email' | 'push';
 
 export interface ChannelState {
     channel: MessageChannel;
@@ -163,9 +163,33 @@ export interface CampaignList {
         by_channel: Record<string, {
             total: number; sent: number; delivered: number;
             failed: number; queued: number; share: number;
+            /* Ours, from `opened_at` / `clicked_at` — Firebase reports neither. */
+            opened: number; clicked: number;
         }>;
     };
     channels: ChannelState[];
+}
+
+/**
+ * The Advanced Options screen.
+ *
+ * ⚠ THERE IS NO SOUND CONTROL, of any kind. A custom sound has to be compiled
+ * into the app bundle, so it cannot be chosen at send time; and a Default vs
+ * Silent switch, while technically deliverable, is overridden by the person's
+ * own notification settings on both Android and iOS — so the portal would be
+ * promising something the handset decides. Every notification uses the device
+ * default, which is what the guest configured for themselves.
+ */
+export interface PushOptions {
+    badge_enabled?: boolean;
+    badge_mode?: 'increment' | 'set' | 'clear';
+    badge_value?: number | null;
+    priority?: 'high' | 'normal';
+    ttl_seconds?: number;
+    send_to_offline?: boolean;
+    collapse_key?: string | null;
+    content_available?: boolean;
+    restricted_package_name?: string | null;
 }
 
 export interface SendPayload {
@@ -180,13 +204,26 @@ export interface SendPayload {
     exclude_unsubscribed?: boolean;
     scheduled_at?: string;
     timezone?: string;
+
+    /* Push only. Ignored by the server on every other channel. */
+    image_url?: string | null;
+    click_action?: 'open_app' | 'deep_link' | 'custom';
+    deep_link?: string | null;
+    data_payload?: Array<{ key: string; value: string }>;
+    push_options?: PushOptions;
 }
 
 export interface SendResult {
     campaign: Campaign;
     recipients: number;
     skipped: number;
-    delivery: { attempted: boolean; reason: string | null };
+    delivery: {
+        attempted: boolean;
+        reason: string | null;
+        /* Present only for push — the one channel that really goes out. */
+        delivered?: number;
+        failed?: number;
+    };
 }
 
 /* ── Notifications ────────────────────────────────────────────────────────── */
@@ -496,10 +533,22 @@ export const CHANNEL_ICON_LABEL: Record<MessageChannel, string> = {
     whatsapp: 'WhatsApp',
     sms: 'SMS',
     email: 'Email',
+    push: 'Push Notification',
 };
 
 /** What a client may choose today. The server enforces the same list. */
 export const OFFERED_CHANNELS: MessageChannel[] = ['whatsapp', 'email'];
+
+/**
+ * Push is deliberately NOT in [OFFERED_CHANNELS].
+ *
+ * It is a real channel the server accepts, but it does not belong in the
+ * general composer's channel switcher: its audience rule is different (the
+ * guest must have the app), and it has a screenful of options none of the
+ * other channels have. It gets its own pages under Messages → Notifications
+ * instead, which is what the mockups show.
+ */
+export const PUSH_CHANNEL: MessageChannel = 'push';
 
 /**
  * Substitute merge fields for the live preview.
@@ -521,5 +570,33 @@ export function renderPreview(
     return text.replace(/\{\{?\s*([a-z_]+)\s*\}?\}/gi, (whole, token: string) => {
         const key = token.toLowerCase();
         return Object.prototype.hasOwnProperty.call(values, key) ? values[key] : whole;
+    });
+}
+
+/* ── Devices ──────────────────────────────────────────────────────────────── */
+
+export interface ClientDevice {
+    id: number;
+    platform: 'android' | 'ios' | 'web';
+    device_name: string | null;
+    app_version: string | null;
+    is_active: boolean;
+    disabled_reason: string | null;
+    last_seen_at: string | null;
+    created_at: string;
+}
+
+/**
+ * The signed-in account's own registered devices.
+ *
+ * Used on the push composer to explain a reachable count of zero: without a
+ * device token nothing can be delivered no matter how Firebase is configured,
+ * and that is not a fact a host can guess from an empty recipient list.
+ */
+export function useMyDevices() {
+    return useQuery({
+        queryKey: ['client', 'devices'],
+        queryFn: () => api.get<{ devices: ClientDevice[]; push_enabled: boolean }>('/client/devices'),
+        staleTime: 60 * 1000,
     });
 }

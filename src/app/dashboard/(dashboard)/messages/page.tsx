@@ -5,6 +5,7 @@ import Link from 'next/link';
 import {
     MessageCircle, Mail, Smartphone, Search, Plus, X,
     ChevronLeft, ChevronRight, ArrowRight, AlertTriangle,
+    Bell,
 } from 'lucide-react';
 
 import { Card, CardContent } from '@/components/ui/card';
@@ -53,6 +54,7 @@ const CHANNEL_META: Record<MessageChannel, { label: string; icon: React.ElementT
     whatsapp: { label: 'WhatsApp', icon: MessageCircle, tint: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' },
     sms: { label: 'SMS', icon: Smartphone, tint: 'bg-blue-500/15 text-blue-600 dark:text-blue-400' },
     email: { label: 'Email', icon: Mail, tint: 'bg-violet-500/15 text-violet-600 dark:text-violet-400' },
+    push: { label: 'Push', icon: Bell, tint: 'bg-pink-500/15 text-pink-600 dark:text-pink-400' },
 };
 
 /**
