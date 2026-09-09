@@ -17,6 +17,7 @@ import {
     faListUl,
     faWandMagicSparkles,
     faClockRotateLeft,
+    faSliders,
 } from "@fortawesome/free-solid-svg-icons"
 
 /**
@@ -90,6 +91,15 @@ export const navMain = [
     },
     { title: "RSVPs", url: "/dashboard/rsvps", icon: faSquareCheck, items: [] },
     { title: "Notifications", url: "/dashboard/notifications", icon: faBell, items: [] },
+    /*
+      Per-event on/off control over the ADMIN's notification templates — a
+      different thing from Messages > Push Notifications, which composes and
+      sends an ad-hoc message. This one toggles which of the catalogue's
+      templates apply to one specific event. Kept top-level rather than
+      nested under Messages: it was invisible three levels deep, and the
+      supplied mockups show it as its own destination.
+    */
+    { title: "Notification Templates", url: "/dashboard/messages/notification-templates", icon: faSliders, items: [] },
     { title: "Analytics", url: "/dashboard/analytics", icon: faChartColumn, items: [] },
     { title: "Integrations", url: "/dashboard/integrations", icon: faPlug, items: [] },
     { title: "Billing", url: "/dashboard/billing", icon: faCreditCard, items: [] },
