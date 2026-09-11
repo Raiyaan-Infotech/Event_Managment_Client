@@ -74,7 +74,9 @@ function initialsOf(name: string | undefined): string {
 
 export default function Header() {
     const router = useRouter();
-    const { theme, setTheme } = useTheme();
+    // resolvedTheme, not theme: with "system" stored, `theme` is "system" on a
+    // dark OS — the icon showed a moon and the first click set "dark" again.
+    const { resolvedTheme, setTheme } = useTheme();
     const [mounted, setMounted] = React.useState(false);
     const [isFullscreen, setIsFullscreen] = React.useState(false);
     const [term, setTerm] = React.useState("");
@@ -132,7 +134,7 @@ export default function Header() {
 
     return (
         <header className="sticky top-0 z-40 flex h-[64px] shrink-0 items-center gap-3 border-b border-border bg-card px-4 sm:px-6">
-            <SidebarTrigger className="h-9 w-9 shrink-0 rounded-md text-muted-foreground hover:bg-secondary" />
+            <SidebarTrigger className="h-9 w-9 shrink-0 rounded-md text-muted-foreground hover:bg-secondary dark:hover:bg-secondary" />
 
             {/* Search — a real form, so Enter submits and the browser treats it
                 as one. Events are the only searchable thing today, so it says so
@@ -183,11 +185,11 @@ export default function Header() {
                     <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+                        onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
                         aria-label="Toggle theme"
-                        className="h-9 w-9 rounded-md text-muted-foreground hover:bg-secondary"
+                        className="h-9 w-9 rounded-md text-muted-foreground hover:bg-secondary dark:hover:bg-secondary"
                     >
-                        <FontAwesomeIcon icon={theme === "dark" ? faSun : faMoon} className="!size-[14px]" />
+                        <FontAwesomeIcon icon={resolvedTheme === "dark" ? faSun : faMoon} className="!size-[14px]" />
                     </Button>
                 )}
 
@@ -198,7 +200,7 @@ export default function Header() {
                             variant="ghost"
                             size="icon"
                             aria-label={unreadCount ? `Notifications, ${unreadCount} unread` : 'Notifications'}
-                            className="relative h-9 w-9 rounded-md text-muted-foreground hover:bg-secondary"
+                            className="relative h-9 w-9 rounded-md text-muted-foreground hover:bg-secondary dark:hover:bg-secondary"
                         >
                             <FontAwesomeIcon icon={faBell} className="!size-[14px]" />
                             {/* Only when there IS something. A badge showing 0 is a

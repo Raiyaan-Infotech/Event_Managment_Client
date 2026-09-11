@@ -27,8 +27,8 @@ export default function Footer() {
     : [];
 
   return (
-    <footer className="px-6 py-6 border-t border-slate-50 bg-white/50 flex flex-col md:flex-row justify-between items-center gap-4">
-      <div className="text-[12.5px] font-bold text-slate-400">
+    <footer className="px-6 py-6 border-t border-border bg-card/50 flex flex-col md:flex-row justify-between items-center gap-4">
+      <div className="text-[12.5px] font-bold text-muted-foreground">
         Copyright © {year} •{" "}
         {WEBSITE_URL ? (
           <a
@@ -55,7 +55,7 @@ export default function Footer() {
             // py-2.5 / -my-2.5 cancel out visually and only grow the vertical
             // tap target. Safe here — the footer has plenty of surrounding
             // whitespace, unlike a dense table row.
-            className="h-auto px-0 py-2.5 -my-2.5 text-[12.5px] font-bold text-slate-400 hover:text-primary transition-colors no-underline"
+            className="h-auto px-0 py-2.5 -my-2.5 text-[12.5px] font-bold text-muted-foreground hover:text-primary transition-colors no-underline"
           >
             <a href={link.href} target="_blank" rel="noopener noreferrer">
               {link.label}

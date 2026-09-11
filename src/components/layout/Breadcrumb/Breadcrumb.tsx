@@ -74,14 +74,14 @@ export default function Breadcrumb() {
   const currentTitle = breadcrumbItems[breadcrumbItems.length - 1]?.label || "Dashboard";
 
   return (
-    <div className="h-[30px] flex items-center bg-white dark:bg-card border-b border-border w-full px-2 md:px-4 min-w-0 overflow-hidden">
+    <div className="h-[30px] flex items-center bg-card border-b border-border w-full px-2 md:px-4 min-w-0 overflow-hidden">
       <div className="flex-1 flex items-center min-w-0 text-[10px]">
         {/* Breadcrumb Links */}
         <div className="flex items-center gap-1 font-medium truncate min-w-0">
           {breadcrumbItems.map((item, index) => (
             <Fragment key={`${item.url}-${index}`}>
               {index > 0 && (
-                <FontAwesomeIcon icon={faChevronRight} className="text-[#c8c8c8] !size-2 mx-1" />
+                <FontAwesomeIcon icon={faChevronRight} className="text-muted-foreground/50 !size-2 mx-1" />
               )}
               {item.isLast ? (
                 <span className="text-primary font-bold truncate">{item.label}</span>
@@ -92,7 +92,7 @@ export default function Breadcrumb() {
                   // strip, so there is no room for a full 44px tap target
                   // without redesigning it. This still meaningfully grows the
                   // hit area and stays centered inside the bar.
-                  className="py-1.5 text-[#6c757d] hover:text-primary transition-colors"
+                  className="py-1.5 text-muted-foreground hover:text-primary transition-colors"
                 >
                   {item.label}
                 </Link>

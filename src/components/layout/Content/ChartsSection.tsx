@@ -142,14 +142,14 @@ const miniStats = [
 ];
 
 export default function ChartsSection() {
-  const { theme } = useTheme();
+  const { resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  const isDark = mounted && theme === "dark";
+  const isDark = mounted && resolvedTheme === "dark";
 
   return (
     <div className="space-y-6">
