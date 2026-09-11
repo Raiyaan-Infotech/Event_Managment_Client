@@ -27,8 +27,8 @@ import {
 } from "@/components/ui/sidebar"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
-import { navMain } from "@/lib/navigation"
-import { useClientProfile } from "@/hooks/use-client-portal"
+import { navMain, grantedSections } from "@/lib/navigation"
+import { useClientProfile, useEventOptions } from "@/hooks/use-client-portal"
 
 /**
  * Client portal sidebar.
@@ -46,6 +46,19 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     const [openMenu, setOpenMenu] = React.useState<string | null>(null)
     const [mounted, setMounted] = React.useState(false)
     const profile = useClientProfile()
+    const options = useEventOptions()
+
+    /**
+     * The entries this client's PLAN allows.
+     *
+     * An entry with a `section` shows only when the plan grants that menu on the
+     * website — see `section` in lib/navigation.ts. Until the options load, gated
+     * entries stay hidden rather than appearing and then vanishing.
+     */
+    const visibleNav = React.useMemo(() => {
+        const granted = grantedSections(options.data)
+        return navMain.filter((item) => !item.section || (options.data && granted.has(item.section)))
+    }, [options.data])
 
     React.useEffect(() => setMounted(true), [])
 
@@ -133,7 +146,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             <SidebarContent className={cn("py-4 bg-sidebar", isCollapsed ? "px-1" : "px-3")}>
                 <SidebarGroup className="p-0">
                     <SidebarMenu className="gap-1">
-                        {navMain.map((item) => {
+                        {visibleNav.map((item) => {
                             const hasChildren = (item.items?.length ?? 0) > 0
                             const selfActive = isActive(item.url)
 

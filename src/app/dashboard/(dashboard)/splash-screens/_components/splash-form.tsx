@@ -22,17 +22,22 @@ import {
 import { cn } from '@/lib/utils';
 
 import {
-    useCreateSplashScreen, useUpdateSplashScreen, useSplashScreen, useUploadSplashMedia,
+    useCreateSplashScreen, useUpdateSplashScreen, useSplashScreen, useSplashScreens,
+    useUploadSplashMedia,
     type SplashScreenPayload, type BackgroundType, type ButtonStyle,
 } from '@/hooks/use-splash-screens';
+import { useClientEvents } from '@/hooks/use-client-events';
 import { SplashPreviewCard, type SplashPreviewData } from './splash-preview';
 
 /**
  * Add / Edit Splash Screen.
  *
- * ── ⚠ NOT TIED TO AN EVENT YET ───────────────────────────────────────────────
- * "Event Name" is free text. See the hook file header for why — this module
- * ships its own CRUD first, and linking to a real event is a later phase.
+ * ── ONE EVENT, ONE SPLASH ───────────────────────────────────────────────────
+ * The event is chosen from a dropdown of the client's own events, and an event
+ * that already has a splash is not offered — the server refuses a duplicate
+ * either way, but finding that out after filling in six panels is a poor way
+ * to learn it. The splash's displayed event name is derived server-side from
+ * the chosen event, so it cannot drift from it.
  *
  * ── ⚠ ANIMATION IS SAVED, NOT DELIVERED ─────────────────────────────────────
  * The Animation panel says so directly rather than implying it already works
@@ -50,7 +55,8 @@ interface FormState {
     name: string;
     main_title: string;
     sub_title: string;
-    event_name: string;
+    /** The chosen event. Null on rows saved before splashes were event-linked. */
+    event_id: number | null;
     tagline: string;
 
     background_type: BackgroundType;
@@ -81,7 +87,7 @@ interface FormState {
 }
 
 const EMPTY: FormState = {
-    name: '', main_title: '', sub_title: '', event_name: '', tagline: '',
+    name: '', main_title: '', sub_title: '', event_id: null, tagline: '',
     background_type: 'image', background_url: '', fallback_image_url: '', background_config: {},
     sound_enabled: false, sound_url: '', sound_config: { auto_play: true, loop: true, volume: 70 },
     loader_enabled: true, loader_config: { style: 'dots', color: '#E91E63', size: 60, background_color: '#0B0F1A' },
@@ -105,6 +111,16 @@ export function SplashForm({ splashId }: { splashId?: number }) {
     const isEdit = !!splashId;
 
     const existing = useSplashScreen(splashId);
+
+    /* The picker's options. A high limit because this is a dropdown, not a
+       paged list — the default page size would silently hide events. */
+    const events = useClientEvents({ limit: 200 });
+    const eventsLoading = events.isLoading;
+
+    /* Which events already have a splash, so taken ones can be left out of the
+       dropdown. Fetched separately rather than joined onto the events: the two
+       lists are different lengths, and pairing them by position would be wrong. */
+    const taken = useSplashScreens({ limit: 200 });
     const create = useCreateSplashScreen((s) => router.push(`/dashboard/splash-screens/${s.id}`));
     const update = useUpdateSplashScreen(() => toast.success('Saved'));
     const saving = create.isPending || update.isPending;
@@ -134,7 +150,7 @@ export function SplashForm({ splashId }: { splashId?: number }) {
         const s = existing.data;
         setForm({
             name: s.name, main_title: s.main_title, sub_title: s.sub_title ?? '',
-            event_name: s.event_name, tagline: s.tagline ?? '',
+            event_id: s.event_id ?? null, tagline: s.tagline ?? '',
             background_type: s.background_type,
             background_url: s.background_url ?? '', fallback_image_url: s.fallback_image_url ?? '',
             background_config: (s.background_config as BackgroundConfig) ?? {},
@@ -165,9 +181,30 @@ export function SplashForm({ splashId }: { splashId?: number }) {
         });
     }
 
+    /*
+      The events this splash may be attached to: the client's own, minus any
+      that already have a splash — except this one's own event, which must stay
+      selectable or editing an existing splash would blank its own field.
+    */
+    const takenEventIds = new Set(
+        (taken.data?.data ?? [])
+            .filter((s) => s.event_id != null && s.id !== splashId)
+            .map((s) => s.event_id as number),
+    );
+    const selectableEvents = (events.data?.data ?? []).filter(
+        (ev) => !takenEventIds.has(ev.id),
+    );
+
+    /* The preview shows the chosen event's real name. Falls back to the saved
+       row's stored name, which is all a pre-link row has. */
+    const chosenEventName =
+        selectableEvents.find((ev) => ev.id === form.event_id)?.name ??
+        existing.data?.event_name ??
+        '';
+
     const buildPayload = (status: 'draft' | 'active'): Partial<SplashScreenPayload> => ({
         name: form.name.trim(), main_title: form.main_title.trim(),
-        sub_title: form.sub_title.trim() || null, event_name: form.event_name.trim(),
+        sub_title: form.sub_title.trim() || null, event_id: form.event_id,
         tagline: form.tagline.trim() || null,
         background_type: form.background_type,
         background_url: form.background_url || null,
@@ -187,7 +224,7 @@ export function SplashForm({ splashId }: { splashId?: number }) {
         const bad: Record<string, boolean> = {};
         if (!form.name.trim()) bad.name = true;
         if (!form.main_title.trim()) bad.main_title = true;
-        if (!form.event_name.trim()) bad.event_name = true;
+        if (!form.event_id) bad.event_id = true;
         if (Object.keys(bad).length) {
             setErrors(bad);
             toast.error('Please fill all mandatory fields.');
@@ -235,7 +272,13 @@ export function SplashForm({ splashId }: { splashId?: number }) {
 
             <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
                 <div className="flex min-w-0 flex-col gap-5">
-                    <ContentCard form={form} errors={errors} set={set} />
+                    <ContentCard
+                        form={form}
+                        errors={errors}
+                        set={set}
+                        selectableEvents={selectableEvents}
+                        eventsLoading={eventsLoading}
+                    />
                     <BackgroundCard form={form} set={set} setBgConfig={setBgConfig} />
                     <SoundCard form={form} set={set} />
                     <LoaderCard form={form} set={set} />
@@ -259,7 +302,7 @@ export function SplashForm({ splashId }: { splashId?: number }) {
                 </div>
 
                 <div className="flex min-w-0 flex-col gap-5">
-                    <SplashPreviewCard data={toPreviewData(form)} />
+                    <SplashPreviewCard data={toPreviewData(form, chosenEventName)} />
                 </div>
             </div>
         </div>
@@ -405,8 +448,15 @@ function MediaUploadField({
 /* ── Content ─────────────────────────────────────────────────────────────── */
 
 function ContentCard({
-    form, errors, set,
-}: { form: FormState; errors: Record<string, boolean>; set: <K extends keyof FormState>(k: K, v: FormState[K]) => void }) {
+    form, errors, set, selectableEvents, eventsLoading,
+}: {
+    form: FormState;
+    errors: Record<string, boolean>;
+    set: <K extends keyof FormState>(k: K, v: FormState[K]) => void;
+    /** The client's events minus those that already have a splash. */
+    selectableEvents: { id: number; name: string }[];
+    eventsLoading: boolean;
+}) {
     return (
         <SectionCard icon={Sparkles} title="1. Content">
             <div className="grid gap-4 sm:grid-cols-2">
@@ -422,11 +472,34 @@ function ContentCard({
                     <Input value={form.sub_title} onChange={(e) => set('sub_title', e.target.value.slice(0, 20))} placeholder="To" />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                    <Field label="Event Name" required maxLength={100} value={form.event_name} error={errors.event_name} />
-                    <Input
-                        value={form.event_name} onChange={(e) => set('event_name', e.target.value.slice(0, 100))}
-                        placeholder="Priya & Arjun Wedding" className={cn(errors.event_name && 'border-destructive')}
-                    />
+                    <Field label="Event" required error={errors.event_id} />
+                    <Select
+                        value={form.event_id ? String(form.event_id) : ''}
+                        onValueChange={(v) => set('event_id', Number(v))}
+                    >
+                        <SelectTrigger className={cn('w-full', errors.event_id && 'border-destructive')}>
+                            <SelectValue placeholder={eventsLoading ? 'Loading events…' : 'Choose an event'} />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {selectableEvents.length === 0 && !eventsLoading ? (
+                                <div className="px-2 py-3 text-sm text-muted-foreground">
+                                    Every event already has a splash screen.
+                                </div>
+                            ) : (
+                                selectableEvents.map((ev) => (
+                                    <SelectItem key={ev.id} value={String(ev.id)}>
+                                        {ev.name}
+                                    </SelectItem>
+                                ))
+                            )}
+                        </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                        {/* One splash per event, so an event that already has one is not
+                            offered — the server rejects a duplicate anyway, and finding
+                            out after filling in six panels is a poor way to learn it. */}
+                        One splash screen per event. Events that already have one are not listed.
+                    </p>
                 </div>
                 <div className="flex flex-col gap-1.5">
                     <Field label="Tagline" hint="Optional" maxLength={150} value={form.tagline} />
@@ -825,11 +898,11 @@ function AdditionalSettingsCard({ form, set }: { form: FormState; set: <K extend
 /** The live form's own shape has no nulls (inputs need a defined value); the
     shared preview component takes the saved-row shape, so this is the one
     place that reconciles the two. */
-function toPreviewData(form: FormState): SplashPreviewData {
+function toPreviewData(form: FormState, eventName: string): SplashPreviewData {
     return {
         main_title: form.main_title,
         sub_title: form.sub_title || null,
-        event_name: form.event_name,
+        event_name: eventName,
         tagline: form.tagline || null,
         background_type: form.background_type,
         background_url: form.background_url || null,

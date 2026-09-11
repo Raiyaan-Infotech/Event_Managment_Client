@@ -7,16 +7,19 @@ import { api, ApiError, type ListResult } from '@/lib/api-client';
 /**
  * Splash Screens — `/api/v1/client/splash-screens`.
  *
- * ── ⚠ NOT TIED TO AN EVENT YET, DELIBERATELY ────────────────────────────────
- * `event_name` is a plain text field the client types, not a picker over
- * their real events. This module ships its own CRUD first; linking a saved
- * splash to a real event is an explicitly later phase — see the backend
- * model header for the full reasoning.
+ * ── ONE EVENT, ONE SPLASH ───────────────────────────────────────────────────
+ * `event_id` picks a real event and is UNIQUE server-side, so an event has at
+ * most one splash and the app's lookup is unambiguous. `event_name` is now
+ * READ-ONLY: the backend copies it from the chosen event and ignores any value
+ * sent for it, so the text on the splash cannot drift from the event.
+ *
+ * Rows saved before the link existed have `event_id: null`. They are still
+ * listed and editable, but must be pointed at an event to be saved again.
  *
  * ── WHAT THIS ACTUALLY IS ────────────────────────────────────────────────────
  * The MOBILE APP's own splash/loading screen, shown when a guest opens an
- * event inside Event Invite — not a web page. There is nothing here that
- * renders to a guest today.
+ * event inside Event Invite — not a web page. The app's renderer is still to
+ * be built, so nothing reaches a guest yet.
  *
  * ── background_config etc. ARE FREE-FORM OBJECTS ────────────────────────────
  * `background_type` picks one of six shapes; the fields that go with it live
@@ -38,7 +41,10 @@ export interface SplashScreen {
     name: string;
     main_title: string;
     sub_title: string | null;
+    /** Derived from `event_id` by the server — never sent by the form. */
     event_name: string;
+    /** Null only on rows saved before splashes were tied to events. */
+    event_id: number | null;
     tagline: string | null;
 
     background_type: BackgroundType;
@@ -73,7 +79,15 @@ export interface SplashScreen {
     updated_at: string;
 }
 
-export type SplashScreenPayload = Omit<SplashScreen, 'id' | 'created_at' | 'updated_at'>;
+/**
+ * `event_name` is omitted as well as the timestamps: the server derives it from
+ * `event_id` and ignores anything sent for it, so keeping it in the payload
+ * type would invite the form to send a value that silently does nothing.
+ */
+export type SplashScreenPayload = Omit<
+    SplashScreen,
+    'id' | 'created_at' | 'updated_at' | 'event_name'
+>;
 
 function reportError(error: unknown, verb: string) {
     if (error instanceof ApiError && error.isAuthError) {

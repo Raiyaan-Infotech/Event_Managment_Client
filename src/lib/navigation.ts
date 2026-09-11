@@ -11,7 +11,6 @@ import {
     faPaperPlane,
     faEnvelope,
     faChartColumn,
-    faPlug,
     faCreditCard,
     faGear,
     faListUl,
@@ -52,18 +51,28 @@ import {
  * says it is not ready — the first looks broken, the second is honest.
  *
  * Flip it to `true` as each page lands. Nothing else needs changing.
+ *
+ * ── `section` — THE PLAN DECIDES ─────────────────────────────────────────────
+ * An entry with a `section` slug shows ONLY when the client's plan grants that
+ * menu on the website (`/client/event-options` → `menus` slugs + `portal_sections`).
+ * `PlanSectionGate` applies the same rule to the page itself, so a typed URL
+ * cannot reach a section the sidebar hides. Entries without `section` —
+ * Dashboard, My Events, Templates, Notifications, Billing, Settings — always show.
+ *
+ * The slugs are `event_menus` rows in the admin's Menu Management: `rsvp` is the
+ * existing event menu; the rest are 'portal' group rows created by
+ * `apply-portal-section-menus.js`. Rename one here and there together.
  */
 export const navMain = [
     { title: "Dashboard", url: "/dashboard", icon: faHouse, items: [] },
     { title: "My Events", url: "/dashboard/events", icon: faCalendarDays, items: [] },
     { title: "Templates", url: "/dashboard/templates", icon: faLayerGroup, items: [] },
-    // ⚠ Standalone module — not yet tied to an event. See the page's own
-    // header comment for why "Event Name" on this form is plain text today.
-    { title: "Splash Screens", url: "/dashboard/splash-screens", icon: faWandMagicSparkles, items: [] },
+    { title: "Splash Screens", url: "/dashboard/splash-screens", icon: faWandMagicSparkles, section: "splash-screens", items: [] },
     {
         title: "Guests",
         url: "/dashboard/guests",
         icon: faUsers,
+        section: "guests",
         items: [
             { title: "All Guests", url: "/dashboard/guests", icon: faListUl, ready: true },
             { title: "Add Guest", url: "/dashboard/guests/add", icon: faUserPlus, ready: true },
@@ -75,6 +84,7 @@ export const navMain = [
         title: "Messages",
         url: "/dashboard/messages",
         icon: faEnvelope,
+        section: "messages",
         items: [
             { title: "All Messages", url: "/dashboard/messages", icon: faListUl, ready: true },
             { title: "Send Message", url: "/dashboard/messages/send", icon: faPaperPlane, ready: true },
@@ -89,7 +99,7 @@ export const navMain = [
             { title: "Notification History", url: "/dashboard/messages/notifications/history", icon: faClockRotateLeft, ready: true },
         ],
     },
-    { title: "RSVPs", url: "/dashboard/rsvps", icon: faSquareCheck, items: [] },
+    { title: "RSVPs", url: "/dashboard/rsvps", icon: faSquareCheck, section: "rsvp", items: [] },
     { title: "Notifications", url: "/dashboard/notifications", icon: faBell, items: [] },
     /*
       Per-event on/off control over the ADMIN's notification templates — a
@@ -99,12 +109,37 @@ export const navMain = [
       nested under Messages: it was invisible three levels deep, and the
       supplied mockups show it as its own destination.
     */
-    { title: "Notification Templates", url: "/dashboard/messages/notification-templates", icon: faSliders, items: [] },
-    { title: "Analytics", url: "/dashboard/analytics", icon: faChartColumn, items: [] },
-    { title: "Integrations", url: "/dashboard/integrations", icon: faPlug, items: [] },
+    { title: "Notification Templates", url: "/dashboard/messages/notification-templates", icon: faSliders, section: "notification-templates", items: [] },
+    { title: "Analytics", url: "/dashboard/analytics", icon: faChartColumn, section: "analytics", items: [] },
+    // "Integrations" was removed: it linked to /dashboard/integrations, which
+    // has no page and fell through to the "coming soon" catch-all.
     { title: "Billing", url: "/dashboard/billing", icon: faCreditCard, items: [] },
     { title: "Settings", url: "/dashboard/settings", icon: faGear, items: [] },
 ]
+
+/**
+ * Every section slug the plan grants on the website: event menu slugs (e.g.
+ * `rsvp`) plus portal section slugs (e.g. `guests`).
+ */
+export function grantedSections(options?: { menus?: { slug: string }[]; portal_sections?: string[] } | null) {
+    return new Set<string>([
+        ...(options?.menus ?? []).map((m) => m.slug),
+        ...(options?.portal_sections ?? []),
+    ])
+}
+
+/**
+ * The gated sidebar entry a path belongs to, or null when the path is not gated.
+ *
+ * Longest URL wins, so `/dashboard/messages/notification-templates/5` belongs to
+ * Notification Templates, not to Messages, whose URL is also a prefix of it.
+ */
+export function sectionForPath(pathname: string) {
+    const owners = navMain
+        .filter((i) => i.section && (pathname === i.url || pathname.startsWith(`${i.url}/`)))
+        .sort((a, b) => b.url.length - a.url.length)
+    return owners[0] ? { title: owners[0].title, slug: owners[0].section as string } : null
+}
 
 /**
  * Icons for the guest sub-pages, used by the Quick Actions cards.

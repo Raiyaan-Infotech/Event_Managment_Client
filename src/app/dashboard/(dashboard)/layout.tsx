@@ -9,6 +9,7 @@ import Footer from "@/components/layout/Footer/Footer";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { ClientAuthGate } from "@/components/common/client-auth-gate";
 import { ClientPlanGate } from "@/components/common/client-plan-gate";
+import { PlanSectionGate } from "@/components/common/plan-section-gate";
 import { ThemeSync } from "@/components/common/theme-sync";
 
 /**
@@ -49,7 +50,9 @@ export default function DashboardLayout({
             <Breadcrumb />
           </Suspense>
           <div className="flex-1 min-w-0 flex flex-col min-h-0 px-4 sm:px-6 lg:px-8 pt-6 pb-6">
-            {children}
+            {/* A section the plan does not include is refused here, the same
+                rule the sidebar uses to hide it — see PlanSectionGate. */}
+            <PlanSectionGate>{children}</PlanSectionGate>
           </div>
           <Footer />
         </div>

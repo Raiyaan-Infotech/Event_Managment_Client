@@ -171,6 +171,12 @@ export interface EventOptions {
     religions: TaxonomyOption[];
     menus: MenuOption[];
     /**
+     * Slugs of the client-portal SIDEBAR sections the plan grants on the website
+     * (`guests`, `messages`, `splash-screens`, …). Kept apart from `menus`, which
+     * are event features. Undefined on an older backend — see `grantedSections`.
+     */
+    portal_sections?: string[];
+    /**
      * Admin-authored templates this plan allows. May be empty on an older
      * backend, so every consumer must tolerate `undefined` — which is why the
      * wizard falls back to the built-in catalogue rather than rendering nothing.
