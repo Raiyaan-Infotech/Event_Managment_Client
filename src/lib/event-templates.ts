@@ -117,10 +117,10 @@ export function resolveArtwork(
  * Haldi-only template for a Reception. A NULL column on the template means "any"
  * — a general template must stay on offer whatever is selected.
  */
-type Scope = { categoryId?: number | null; typeId?: number | null; religionId?: number | null };
+export type Scope = { categoryId?: number | null; typeId?: number | null; religionId?: number | null };
 
 /** NULL on the row means "suits every value of it" — the shared scoping rule. */
-const suitsScope = (
+export const suitsScope = (
     row: { event_category_id?: number | null; event_type_id?: number | null; religion_id?: number | null },
     scope: Scope
 ): boolean => {

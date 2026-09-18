@@ -98,6 +98,10 @@ export interface TaxonomyOption {
 export interface MenuOption extends TaxonomyOption {
     slug: string;
     menu_group: 'core' | 'additional' | 'custom';
+    /** The menu's own scope; NULL = suits every value. Undefined on an older backend. */
+    event_category_id?: number | null;
+    event_type_id?: number | null;
+    religion_id?: number | null;
 }
 
 /**

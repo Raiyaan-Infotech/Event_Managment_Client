@@ -85,6 +85,12 @@ export interface ClientEvent {
     menu_ids: number[];
     theme_id: string | null;
     primary_color: string | null;
+    /**
+     * The event's own photo — shown on the mobile app's event card and at the
+     * top of the event screen. Null falls back to the template artwork. Not part
+     * of the invitation design.
+     */
+    cover_image: string | null;
 
     /**
      * The client's per-event override of the template's component set / order.
@@ -134,6 +140,7 @@ export interface EventPayload {
     menu_ids?: number[];
     theme_id?: string | null;
     primary_color?: string | null;
+    cover_image?: string | null;
 }
 
 export interface EventListParams {
@@ -365,6 +372,24 @@ export function useUpdateEvent(onDone?: (event: ClientEvent) => void) {
             onDone?.(event);
         },
         onError: (e) => reportError(e, 'update'),
+    });
+}
+
+/**
+ * Upload an event's cover photo and get back its URL.
+ *
+ * Fires the moment a file is picked, before the event is saved — a new event
+ * has no id yet — and the wizard sends the URL as `cover_image` on its final
+ * step. Same shape as the splash-screen uploader.
+ */
+export function useUploadEventCover() {
+    return useMutation({
+        mutationFn: (file: File) => {
+            const form = new FormData();
+            form.append('file', file);
+            return api.post<{ url: string }>(`${ENDPOINT}/cover-image`, form).then((r) => r.url);
+        },
+        onError: (e) => reportError(e, 'upload'),
     });
 }
 

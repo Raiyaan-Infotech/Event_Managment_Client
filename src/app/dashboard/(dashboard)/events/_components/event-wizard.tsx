@@ -17,6 +17,7 @@ import {
     faGripVertical,
 } from "@fortawesome/free-solid-svg-icons";
 import { faWhatsapp as faWhatsappBrand } from "@fortawesome/free-brands-svg-icons";
+import { Loader2, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -37,11 +38,13 @@ import {
     useCreateEvent,
     useUpdateEvent,
     useClientEvent,
+    useUploadEventCover,
     type ClientEvent,
 } from "@/hooks/use-client-events";
 import { PRIMARY_SWATCHES } from "@/lib/event-themes";
 import {
     resolveArtwork,
+    suitsScope,
     templatesForEvent,
 } from "@/lib/event-templates";
 import { downloadNodeAsImage, downloadQrAsPng, downloadQrAsSvg, fileSlug } from "@/lib/export-invitation";
@@ -141,6 +144,8 @@ interface FormState {
     status: string;
     theme_id: string;
     primary_color: string;
+    /** Stored URL of the event's own photo; "" = none. See CoverImageField. */
+    cover_image: string;
 }
 
 const EMPTY: FormState = {
@@ -154,6 +159,7 @@ const EMPTY: FormState = {
     // Blank, not a hardcoded slug: the theme catalogue is whatever the client's
     // PLAN grants, so nothing can be preselected until those templates load.
     theme_id: "", primary_color: PRIMARY_SWATCHES[0],
+    cover_image: "",
 };
 
 /** The invitation components, canonical order. Mirrors the backend's list. */
@@ -293,6 +299,7 @@ export function EventWizard({
             status: row.status ?? "upcoming",
             theme_id: row.theme_id || "",
             primary_color: row.primary_color || PRIMARY_SWATCHES[0],
+            cover_image: row.cover_image ?? "",
         });
 
         const picked: Record<number, boolean> = {};
@@ -350,18 +357,19 @@ export function EventWizard({
     }, [form.type_id]);
 
     /**
-     * The menus on offer for THIS event.
+     * The menus on offer for THIS event: what the plan grants, narrowed to the
+     * category / type / religion picked in step 1 — the same rule as templates.
      *
-     * Exactly what the plan grants via `subscription_plan_menus` — that join is
-     * a manual admin assignment ("this plan includes these menus"), NOT a claim
-     * that the menu's own `event_category_id`/`event_type_id`/`religion_id`
-     * matches what was picked in step 1. Those columns are the menu's own
-     * general catalogue tag (Menu Management), unrelated to plan curation, and
-     * an admin can and does attach a menu tagged for one category to a plan
-     * scoped to another — re-filtering here would silently hide menus the
-     * admin explicitly chose to include.
+     * Menu Management requires a religion on every menu, so each menu exists
+     * once per religion (Gallery for Nikah, Gallery for Thirumanam, …). The
+     * plan grants all of them; without this narrowing a Nikah event would list
+     * every religion's copy. A NULL scope column on a menu still means "any".
+     * The server applies the same check on save.
      */
-    const menuRows = useMemo(() => opts?.menus ?? [], [opts]);
+    const menuRows = useMemo(
+        () => (opts?.menus ?? []).filter((m) => suitsScope(m, { categoryId, typeId, religionId })),
+        [opts?.menus, categoryId, typeId, religionId]
+    );
 
     /** Core / Additional / Custom sections, in that fixed order, empty groups dropped. */
     const menuGroups = useMemo(() => {
@@ -663,6 +671,8 @@ export function EventWizard({
                 menu_ids: menuRows.filter((m) => menus[m.id] ?? true).map((m) => m.id),
                 theme_id: form.theme_id,
                 primary_color: form.primary_color,
+                // "" → null, so removing the photo in edit mode clears it.
+                cover_image: form.cover_image || null,
                 // null means "keep following the template". Sent explicitly so
                 // that clearing an override actually clears it server-side
                 // rather than leaving the old one in place.
@@ -962,6 +972,11 @@ export function EventWizard({
                                         />
                                         <Counter value={form.description.length} max={300} />
                                     </Field>
+
+                                    <CoverImageField
+                                        value={form.cover_image}
+                                        onChange={(url) => setField("cover_image", url)}
+                                    />
 
                                     <SectionRule label="Date & Time" />
 
@@ -1794,6 +1809,83 @@ function Field({
             </Label>
             {children}
             {error && <p className="text-[11.5px] text-destructive">This field is required.</p>}
+        </div>
+    );
+}
+
+/**
+ * The event's own photo — shown on the mobile app's event card and at the top
+ * of the event screen. Optional; without one the app draws the template artwork.
+ *
+ * Uploads the moment a file is picked (a new event has no id yet), and the URL
+ * is saved with the rest of the event on step 5 — same shape as the splash
+ * screen's uploader.
+ */
+function CoverImageField({ value, onChange }: { value: string; onChange: (url: string) => void }) {
+    const upload = useUploadEventCover();
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    return (
+        <div className="flex flex-col gap-2">
+            <Label className="text-[12.5px] font-medium">Event Image (Optional)</Label>
+            {value ? (
+                <div className="relative overflow-hidden rounded-lg border">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={value} alt="Event image" className="aspect-[16/9] w-full object-cover" />
+                    <div className="absolute right-2 top-2 flex gap-1.5">
+                        <Button
+                            type="button" size="sm" variant="secondary" className="h-8"
+                            disabled={upload.isPending}
+                            onClick={() => inputRef.current?.click()}
+                        >
+                            {upload.isPending ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
+                            Change
+                        </Button>
+                        <Button
+                            type="button" size="icon" variant="secondary" className="size-8"
+                            aria-label="Remove image"
+                            onClick={() => onChange("")}
+                        >
+                            <X className="size-4" />
+                        </Button>
+                    </div>
+                </div>
+            ) : (
+                <button
+                    type="button"
+                    disabled={upload.isPending}
+                    onClick={() => inputRef.current?.click()}
+                    className="flex flex-col items-center gap-1.5 rounded-lg border border-dashed p-6 text-center transition-colors hover:bg-muted/40 disabled:opacity-60"
+                >
+                    {upload.isPending
+                        ? <Loader2 className="size-5 animate-spin text-muted-foreground" />
+                        : <Upload className="size-5 text-muted-foreground" />}
+                    <span className="text-[12.5px] font-medium">
+                        {upload.isPending ? "Uploading…" : "Click to upload an image"}
+                    </span>
+                    <span className="text-[11px] text-muted-foreground">
+                        JPG, PNG or WEBP, max 5MB. Shown on the event card and event page in the app.
+                    </span>
+                </button>
+            )}
+            <input
+                ref={inputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    e.target.value = "";
+                    if (!file) return;
+                    // Checked here too, so a big file fails instantly instead of
+                    // after the upload — the server enforces the same 5MB.
+                    if (file.size > 5 * 1024 * 1024) {
+                        toast.error("That image is larger than 5MB.");
+                        return;
+                    }
+                    upload.mutate(file, { onSuccess: onChange });
+                }}
+            />
         </div>
     );
 }
