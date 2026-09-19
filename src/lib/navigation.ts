@@ -57,8 +57,8 @@ import {
  * menu on the website (`/client/event-options` → `menus` slugs + `portal_sections`).
  * `PlanSectionGate` applies the same rule to the page itself, so a typed URL
  * cannot reach a section the sidebar hides. Entries without `section` —
- * Dashboard, My Events, Templates, Notifications, Analytics, Billing, Settings —
- * always show.
+ * Dashboard, My Events, Templates, Notifications, Notification Templates,
+ * Analytics, Billing, Settings — always show.
  *
  * The slugs are `event_menus` rows in the admin's Menu Management: `rsvp` is the
  * existing event menu; the rest are 'portal' group rows created by
@@ -110,7 +110,8 @@ export const navMain = [
       nested under Messages: it was invisible three levels deep, and the
       supplied mockups show it as its own destination.
     */
-    { title: "Notification Templates", url: "/dashboard/messages/notification-templates", icon: faSliders, section: "notification-templates", items: [] },
+    // Always shown — not a plan menu.
+    { title: "Notification Templates", url: "/dashboard/messages/notification-templates", icon: faSliders, items: [] },
     // Always shown — Analytics is not a plan menu.
     { title: "Analytics", url: "/dashboard/analytics", icon: faChartColumn, items: [] },
     // "Integrations" was removed: it linked to /dashboard/integrations, which
@@ -133,14 +134,16 @@ export function grantedSections(options?: { menus?: { slug: string }[]; portal_s
 /**
  * The gated sidebar entry a path belongs to, or null when the path is not gated.
  *
- * Longest URL wins, so `/dashboard/messages/notification-templates/5` belongs to
- * Notification Templates, not to Messages, whose URL is also a prefix of it.
+ * Longest URL wins — among ALL entries, gated or not — so
+ * `/dashboard/messages/notification-templates/5` belongs to Notification
+ * Templates, not to Messages, whose URL is also a prefix of it. Notification
+ * Templates is always shown, so it must not inherit Messages' plan gate.
  */
 export function sectionForPath(pathname: string) {
-    const owners = navMain
-        .filter((i) => i.section && (pathname === i.url || pathname.startsWith(`${i.url}/`)))
-        .sort((a, b) => b.url.length - a.url.length)
-    return owners[0] ? { title: owners[0].title, slug: owners[0].section as string } : null
+    const owner = navMain
+        .filter((i) => pathname === i.url || pathname.startsWith(`${i.url}/`))
+        .sort((a, b) => b.url.length - a.url.length)[0]
+    return owner?.section ? { title: owner.title, slug: owner.section as string } : null
 }
 
 /**
