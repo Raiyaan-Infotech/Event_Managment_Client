@@ -15,7 +15,7 @@ import { WEBSITE_URL } from '@/lib/site';
  * subscription plan does not include.
  *
  * `/client/event-options` returns the same data already narrowed to the
- * client's plan: the plan is scoped to a category/type/religion, and
+ * client's plan: the plan is scoped to a category, and
  * subscription_plan_menus lists exactly the menus it grants. One request, and
  * the portal cannot accidentally offer something unpaid for.
  * ─────────────────────────────────────────────────────────────────────────────
@@ -27,9 +27,8 @@ export interface ClientPlan {
     plan_code: string;
     billing_cycle: string;
     short_description: string | null;
+    /** A plan is scoped by category only; NULL = every category. */
     event_category_id: number | null;
-    event_type_id: number | null;
-    religion_id: number | null;
     currency_code: string;
     price: string;
     trial_days: number;
@@ -98,10 +97,8 @@ export interface TaxonomyOption {
 export interface MenuOption extends TaxonomyOption {
     slug: string;
     menu_group: 'core' | 'additional' | 'custom';
-    /** The menu's own scope; NULL = suits every value. Undefined on an older backend. */
+    /** The menu's category; NULL = suits every category. Menus carry no type / religion. */
     event_category_id?: number | null;
-    event_type_id?: number | null;
-    religion_id?: number | null;
 }
 
 /**

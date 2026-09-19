@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api, type ListResult } from '@/lib/api-client';
 
 /**
- * The three-level event taxonomy plus the menu catalogue, straight from the
+ * The three-level event taxonomy, straight from the
  * backend. Built on the same pattern as `use-event-categories.ts` — see
  * INTEGRATION.md.
  *
@@ -23,14 +23,6 @@ export interface TaxonomyRow {
     color: string | null;
     sort_order: number;
     is_active: number;
-}
-
-export interface EventMenuRow extends TaxonomyRow {
-    slug: string;
-    menu_group: 'core' | 'additional' | 'custom';
-    menu_type: string[];
-    display_website: number;
-    display_mobile: number;
 }
 
 /** Only active rows — a client must not be offered a disabled category. */
@@ -65,31 +57,6 @@ export function useReligionOptions(categoryId: number | null, typeId: number | n
             }),
         // Religions are scoped to the PAIR, so both are required.
         enabled: !!categoryId && !!typeId,
-        staleTime: 5 * 60 * 1000,
-    });
-}
-
-/**
- * Menus available for the chosen taxonomy. The backend treats a NULL scope
- * column on a menu as "applies to all", so passing the ids narrows without
- * excluding the general-purpose menus.
- */
-export function useEventMenuOptions(params: {
-    categoryId: number | null;
-    typeId: number | null;
-    religionId: number | null;
-}) {
-    const { categoryId, typeId, religionId } = params;
-    return useQuery({
-        queryKey: ['event-menus', 'options', categoryId, typeId, religionId],
-        queryFn: () =>
-            api.getList<EventMenuRow>('/event-menus', {
-                ...ACTIVE,
-                event_category_id: categoryId,
-                event_type_id: typeId,
-                religion_id: religionId,
-            }),
-        enabled: !!categoryId,
         staleTime: 5 * 60 * 1000,
     });
 }

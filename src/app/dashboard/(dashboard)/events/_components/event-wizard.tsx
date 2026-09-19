@@ -358,17 +358,14 @@ export function EventWizard({
 
     /**
      * The menus on offer for THIS event: what the plan grants, narrowed to the
-     * category / type / religion picked in step 1 — the same rule as templates.
-     *
-     * Menu Management requires a religion on every menu, so each menu exists
-     * once per religion (Gallery for Nikah, Gallery for Thirumanam, …). The
-     * plan grants all of them; without this narrowing a Nikah event would list
-     * every religion's copy. A NULL scope column on a menu still means "any".
-     * The server applies the same check on save.
+     * category picked in step 1. Menus carry a category only — no event type or
+     * religion — so each menu is listed once whatever type / religion is picked.
+     * A NULL category on a menu means "any". The server applies the same check
+     * on save.
      */
     const menuRows = useMemo(
-        () => (opts?.menus ?? []).filter((m) => suitsScope(m, { categoryId, typeId, religionId })),
-        [opts?.menus, categoryId, typeId, religionId]
+        () => (opts?.menus ?? []).filter((m) => suitsScope(m, { categoryId })),
+        [opts?.menus, categoryId]
     );
 
     /** Core / Additional / Custom sections, in that fixed order, empty groups dropped. */
