@@ -57,8 +57,6 @@ export interface ClientEvent {
     subscription_plan_id: number | null;
 
     event_category_id: number | null;
-    event_type_id: number | null;
-    religion_id: number | null;
 
     name: string;
     /** The two host lines the invitation prints either side of an ampersand. */
@@ -117,16 +115,12 @@ export interface ClientEvent {
     /** Joins — present on list and detail alike. */
     plan?: Pick<ClientPlan, 'id' | 'name'> & { plan_code?: string };
     category?: TaxonomyRef | null;
-    eventType?: TaxonomyRef | null;
-    religion?: TaxonomyRef | null;
     /** Detail only: menu_ids resolved to rows. */
     menus?: EventMenuRef[];
 }
 
 export interface EventPayload {
     event_category_id: number;
-    event_type_id: number;
-    religion_id?: number | null;
     name: string;
     tagline?: string | null;
     description?: string | null;
@@ -414,8 +408,6 @@ export interface DecodedQr {
         website_client_id: number | null;
         subscription_plan_id: number | null;
         event_category_id: number | null;
-        event_type_id: number | null;
-        religion_id: number | null;
         name: string | null;
         start_date: string | null;
         end_date: string | null;

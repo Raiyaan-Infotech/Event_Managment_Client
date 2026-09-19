@@ -29,7 +29,6 @@ export interface EventNotificationSummaryRow {
     name: string;
     status: EventStatus;
     category: TaxonomyRef | null;
-    eventType: TaxonomyRef | null;
     templates_count: number;
     active_count: number;
     inactive_count: number;
@@ -54,7 +53,6 @@ export interface ApplicableTemplate {
     image_url: string | null;
     notificationCategory: { id: number; name: string; icon: string | null; color: string | null } | null;
     category: TaxonomyRef | null;
-    eventType: TaxonomyRef | null;
     enabled: boolean;
     is_set: boolean;
 }

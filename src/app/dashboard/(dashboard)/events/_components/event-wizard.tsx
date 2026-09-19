@@ -122,8 +122,6 @@ const TIME_ZONES = [
 
 interface FormState {
     category_id: string;
-    type_id: string;
-    religion_id: string;
     name: string;
     host_one: string;
     host_two: string;
@@ -149,7 +147,7 @@ interface FormState {
 }
 
 const EMPTY: FormState = {
-    category_id: "", type_id: "", religion_id: "",
+    category_id: "",
     name: "", host_one: "", host_two: "", tagline: "", description: "",
     start_date: "", end_date: "", start_time: "", end_time: "",
     timezone: TIME_ZONES[0],
@@ -275,8 +273,6 @@ export function EventWizard({
 
         setForm({
             category_id: row.event_category_id ? String(row.event_category_id) : "",
-            type_id: row.event_type_id ? String(row.event_type_id) : "",
-            religion_id: row.religion_id ? String(row.religion_id) : "",
             name: row.name ?? "",
             host_one: row.host_one ?? "",
             host_two: row.host_two ?? "",
@@ -331,36 +327,15 @@ export function EventWizard({
     };
 
     const categoryId = form.category_id ? Number(form.category_id) : null;
-    const typeId = form.type_id ? Number(form.type_id) : null;
-    const religionId = form.religion_id ? Number(form.religion_id) : null;
 
     // One request. Everything here is already narrowed to the client's plan by
     // the backend, so the wizard cannot offer an option they have not paid for.
     const options = useEventOptions();
     const opts = options.data;
 
-    // Changing a parent invalidates its children — keeping them would submit a
-    // combination the backend rejects (a type that isn't in the chosen category).
-    // `skipCascade` covers the prefill: setting category and type together on
-    // load would otherwise trip these and blank the type and religion that were
-    // just restored, leaving an edit form that had silently lost two fields.
-    const skipCascade = useRef(isEdit);
-    useEffect(() => {
-        if (skipCascade.current) return;
-        setField("type_id", ""); setField("religion_id", "");
-        /* eslint-disable-next-line react-hooks/exhaustive-deps */
-    }, [form.category_id]);
-    useEffect(() => {
-        if (skipCascade.current) { skipCascade.current = false; return; }
-        setField("religion_id", "");
-        /* eslint-disable-next-line react-hooks/exhaustive-deps */
-    }, [form.type_id]);
-
     /**
      * The menus on offer for THIS event: what the plan grants, narrowed to the
-     * category picked in step 1. Menus carry a category only — no event type or
-     * religion — so each menu is listed once whatever type / religion is picked.
-     * A NULL category on a menu means "any". The server applies the same check
+     * category picked in step 1. A NULL category on a menu means "any". The server applies the same check
      * on save.
      */
     const menuRows = useMemo(
@@ -393,37 +368,18 @@ export function EventWizard({
     // Already plan-scoped by the backend; `?? []` only guards the pre-load render.
     const categoryRows = opts?.categories ?? [];
 
-    // A plan with no scope ("all") returns every type and religion, so the
-    // cascade still has to narrow by what was picked one level up. A plan that
-    // IS scoped has already been narrowed and these filters are no-ops.
-    const typeRows = useMemo(
-        () => (opts?.types ?? []).filter(
-            (t) => !categoryId || !t.event_category_id || t.event_category_id === categoryId
-        ),
-        [opts, categoryId]
-    );
-    const religionRows = useMemo(
-        () => (opts?.religions ?? []).filter(
-            (r) =>
-                (!categoryId || !r.event_category_id || r.event_category_id === categoryId) &&
-                (!typeId || !r.event_type_id || r.event_type_id === typeId)
-        ),
-        [opts, categoryId, typeId]
-    );
-
     const selectedCategory = categoryRows.find((c) => String(c.id) === form.category_id);
-    const selectedType = typeRows.find((t) => String(t.id) === form.type_id);
     /**
      * The admin-authored templates on offer for THIS event.
      *
      * The backend already narrowed them to the client's plan; this narrows
-     * again by the category/type picked in step 1, which is why it is done here
+     * again by the category picked in step 1, which is why it is done here
      * rather than server-side — changing the category must not cost a round
      * trip in the middle of the wizard.
      */
     const dbTemplates = useMemo(
-        () => templatesForEvent(opts?.templates, { categoryId, typeId, religionId }),
-        [opts?.templates, categoryId, typeId, religionId]
+        () => templatesForEvent(opts?.templates, { categoryId }),
+        [opts?.templates, categoryId]
     );
 
     /**
@@ -593,7 +549,6 @@ export function EventWizard({
         const next: Record<string, boolean> = {};
         if (target > 1) {
             if (!form.category_id) next.category_id = true;
-            if (!form.type_id) next.type_id = true;
         }
         if (target > 2) {
             if (!form.name.trim()) next.name = true;
@@ -641,9 +596,6 @@ export function EventWizard({
             if (saving) return;
             const payload = {
                 event_category_id: Number(form.category_id),
-                event_type_id: Number(form.type_id),
-                // '' is the "not applicable" option, which the server maps to NULL.
-                religion_id: form.religion_id ? Number(form.religion_id) : null,
                 name: form.name.trim(),
                 host_one: form.host_one.trim() || null,
                 host_two: form.host_two.trim() || null,
@@ -842,11 +794,6 @@ export function EventWizard({
                                     </div>
                                 )}
 
-                                {/* One row on desktop — the three are a single
-                                    cascading choice, and stacking them made a
-                                    short step look longer than it is. They still
-                                    stack on narrow screens, where three selects
-                                    side by side would be unusable. */}
                                 <div className="grid gap-5 md:grid-cols-3">
                                     <Field label="Event Category" required error={errors.category_id}>
                                         <TaxonomySelect
@@ -858,34 +805,7 @@ export function EventWizard({
                                             invalid={errors.category_id}
                                         />
                                     </Field>
-
-                                    <Field label="Event Type" required error={errors.type_id}>
-                                        <TaxonomySelect
-                                            value={form.type_id}
-                                            onChange={(v) => setField("type_id", v)}
-                                            loading={options.isLoading}
-                                            rows={typeRows}
-                                            disabled={!categoryId}
-                                            placeholder={categoryId ? "Select type" : "Category first"}
-                                            invalid={errors.type_id}
-                                        />
-                                    </Field>
-
-                                    <Field label="Religion (Optional)">
-                                        <TaxonomySelect
-                                            value={form.religion_id}
-                                            onChange={(v) => setField("religion_id", v)}
-                                            loading={options.isLoading}
-                                            rows={religionRows}
-                                            disabled={!typeId}
-                                            placeholder={typeId ? "Select religion" : "Type first"}
-                                        />
-                                    </Field>
                                 </div>
-
-                                <p className="text-[11.5px] text-muted-foreground">
-                                    Religion is optional. You can skip if not applicable.
-                                </p>
                             </div>
                         )}
 
@@ -1164,7 +1084,7 @@ export function EventWizard({
                                     </p>
 
                                 {/* ONLY the admin catalogue, narrowed to this client's
-                                    plan and to the category/type/religion picked in
+                                    plan and to the category picked in
                                     step 1. There is deliberately no built-in fallback:
                                     offering designs the plan does not grant is exactly
                                     the mis-sell the plan gating exists to prevent, and
@@ -1269,7 +1189,7 @@ export function EventWizard({
                                         </p>
                                         <p className="mx-auto mt-1 max-w-sm text-[12.5px] text-muted-foreground">
                                             {opts?.templates && opts.templates.length > 0
-                                                ? "None of your plan’s templates match the category, type or religion selected in Event Basics. Go back and change your selection, or contact us for more designs."
+                                                ? "None of your plan’s templates match the category selected in Event Basics. Go back and change your selection, or contact us for more designs."
                                                 : "Your subscription plan doesn’t include any invitation templates yet. Please contact us to have them added to your plan."}
                                         </p>
                                         <p className="mt-3 text-[11.5px] text-muted-foreground/80">
@@ -1575,7 +1495,6 @@ export function EventWizard({
                                                     : "—"
                                             }
                                         />
-                                        <SummaryRow label="Event Type" value={created?.eventType?.name ?? selectedType?.name ?? "—"} />
                                         <SummaryRow label="Category" value={created?.category?.name ?? selectedCategory?.name ?? "—"} />
                                         <SummaryRow label="Menus Included" value={String(created?.menu_ids?.length ?? 0)} />
                                         <SummaryRow

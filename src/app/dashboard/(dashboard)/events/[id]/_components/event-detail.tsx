@@ -260,8 +260,8 @@ export function EventDetail({ eventId }: { eventId: number }) {
                             />
                             <FactBox
                                 icon={faHeart}
-                                title={event.eventType?.name ?? "—"}
-                                sub="Event Type"
+                                title={event.category?.name ?? "—"}
+                                sub="Event Category"
                                 tint="#F59E0B"
                             />
                         </div>
@@ -290,8 +290,6 @@ export function EventDetail({ eventId }: { eventId: number }) {
                     <div className="flex min-w-0 flex-col gap-5">
                         <Panel title="Basic Information">
                             <Row label="Event Category" value={event.category?.name ?? "—"} />
-                            <Row label="Event Type" value={event.eventType?.name ?? "—"} />
-                            <Row label="Religion" value={event.religion?.name ?? "—"} />
                             <Row label="Tagline" value={event.tagline || "—"} />
                             <Row label="Short Description" value={event.description || "—"} />
                         </Panel>
@@ -421,8 +419,6 @@ export function EventDetail({ eventId }: { eventId: number }) {
                         <Row label="Event Name" value={event.name} />
                         <Row label="Event Code" value={code} />
                         <Row label="Category" value={event.category?.name ?? "—"} />
-                        <Row label="Type" value={event.eventType?.name ?? "—"} />
-                        <Row label="Religion" value={event.religion?.name ?? "—"} />
                         <Row label="Privacy" value={event.privacy} />
                         <Row label="Status" value={status.label} />
                     </Panel>

@@ -20,7 +20,7 @@ import { useClientProfile, useLogout } from '@/hooks/use-client-portal';
  *
  * ── IT BLOCKS, RATHER THAN DEGRADING ─────────────────────────────────────────
  * Nothing in this portal works without a plan: the plan decides which event
- * categories, types, religions and menus exist for this client, so with none
+ * categories and menus exist for this client, so with none
  * there is nothing to list and nothing that can be created. The backend already
  * enforces that on WRITE — `validateEventPayload` in `clientEvent.service.js`
  * throws before touching the database when `options.plan` is missing — so this
@@ -68,7 +68,7 @@ export function ClientPlanGate({ children }: { children: React.ReactNode }) {
     const detail = missing
         ? deleted
             ? 'The subscription plan on your account has been removed. A plan is required to use the portal, so nothing can be created until a new one is assigned.'
-            : 'A subscription plan has not been assigned to your account yet. The plan decides which event types and menus you can use, so the portal cannot be used without one.'
+            : 'A subscription plan has not been assigned to your account yet. The plan decides which event categories and menus you can use, so the portal cannot be used without one.'
         : `Your plan${plan?.name ? ` (${plan.name})` : ''} has been switched off. It needs to be reactivated, or a different one assigned, before you can continue.`;
 
     return (

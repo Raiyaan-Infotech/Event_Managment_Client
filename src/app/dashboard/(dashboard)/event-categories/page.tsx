@@ -159,7 +159,7 @@ export default function EventCategoriesPage() {
                 <div className="min-w-0">
                     <h1 className="text-xl font-black tracking-tight text-foreground">Event Categories</h1>
                     <p className="text-[13px] text-muted-foreground mt-1">
-                        The top level of the event taxonomy. Types and religions sit underneath.
+                        Every event belongs to one of these categories.
                     </p>
                 </div>
                 <Button
@@ -462,8 +462,7 @@ export default function EventCategoriesPage() {
                     <DialogHeader>
                         <DialogTitle>Delete category?</DialogTitle>
                         <DialogDescription>
-                            &ldquo;{pendingDelete?.name}&rdquo; will be removed. Event types and religions
-                            underneath it are deleted with it. This cannot be undone from here.
+                            &ldquo;{pendingDelete?.name}&rdquo; will be removed. This cannot be undone from here.
                         </DialogDescription>
                     </DialogHeader>
                     <DialogFooter>

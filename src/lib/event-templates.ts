@@ -113,26 +113,14 @@ export function resolveArtwork(
  * The templates that suit the event being created.
  *
  * The backend narrowed by PLAN; this narrows by what the client actually picked
- * in step 1, because a plan covering all of Wedding should still not offer a
- * Haldi-only template for a Reception. A NULL column on the template means "any"
- * — a general template must stay on offer whatever is selected.
+ * in step 1. A NULL category on the template means "any" — a general template
+ * must stay on offer whatever is selected.
  */
-export type Scope = { categoryId?: number | null; typeId?: number | null; religionId?: number | null };
+export type Scope = { categoryId?: number | null };
 
-/** NULL on the row means "suits every value of it" — the shared scoping rule. */
-export const suitsScope = (
-    row: { event_category_id?: number | null; event_type_id?: number | null; religion_id?: number | null },
-    scope: Scope
-): boolean => {
-    const suits = (want: number | null | undefined, has: number | null | undefined) =>
-        !has || !want || Number(has) === Number(want);
-
-    return (
-        suits(scope.categoryId, row.event_category_id) &&
-        suits(scope.typeId, row.event_type_id) &&
-        suits(scope.religionId, row.religion_id)
-    );
-};
+/** A NULL category on the row means "suits every category" — the shared scoping rule. */
+export const suitsScope = (row: { event_category_id?: number | null }, scope: Scope): boolean =>
+    !row.event_category_id || !scope.categoryId || Number(row.event_category_id) === Number(scope.categoryId);
 
 export function templatesForEvent(
     templates: TemplateOption[] | undefined,

@@ -443,11 +443,6 @@ export default function DashboardPage() {
                                                 {event.category.name}
                                             </Badge>
                                         )}
-                                        {event.eventType?.name && (
-                                            <Badge variant="secondary" className="max-w-[100px] truncate rounded text-[11px]">
-                                                {event.eventType.name}
-                                            </Badge>
-                                        )}
                                     </div>
                                     <Button
                                         asChild

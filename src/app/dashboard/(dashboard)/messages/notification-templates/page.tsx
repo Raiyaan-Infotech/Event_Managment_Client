@@ -50,7 +50,6 @@ const ALL = 'all';
 export default function NotificationTemplatesByEventPage() {
     const [search, setSearch] = useState('');
     const [categoryId, setCategoryId] = useState(ALL);
-    const [typeId, setTypeId] = useState(ALL);
     const [status, setStatus] = useState(ALL);
 
     const { data, isLoading, isError, error, refetch } = useEventNotificationSummary();
@@ -71,22 +70,15 @@ export default function NotificationTemplatesByEventPage() {
         return Array.from(map, ([id, name]) => ({ id, name }));
     }, [rows]);
 
-    const types = useMemo(() => {
-        const map = new Map<number, string>();
-        rows.forEach((r) => { if (r.eventType) map.set(r.eventType.id, r.eventType.name); });
-        return Array.from(map, ([id, name]) => ({ id, name }));
-    }, [rows]);
-
     const filtered = useMemo(() => {
         const q = search.trim().toLowerCase();
         return rows.filter((row) => {
             if (q && !row.name.toLowerCase().includes(q)) return false;
             if (categoryId !== ALL && String(row.category?.id) !== categoryId) return false;
-            if (typeId !== ALL && String(row.eventType?.id) !== typeId) return false;
             if (status !== ALL && row.status !== status) return false;
             return true;
         });
-    }, [rows, search, categoryId, typeId, status]);
+    }, [rows, search, categoryId, status]);
 
     const tiles = [
         { label: 'Total Events', value: totals?.total_events ?? 0, icon: CalendarDays, tint: 'text-primary', bg: 'bg-primary/10' },
@@ -158,7 +150,7 @@ export default function NotificationTemplatesByEventPage() {
                         />
                     </div>
 
-                    <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-3">
+                    <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2">
                         <Select value={categoryId} onValueChange={setCategoryId}>
                             <SelectTrigger className="h-10 w-full rounded-md text-[13px]">
                                 <SelectValue placeholder="All Categories" />
@@ -167,18 +159,6 @@ export default function NotificationTemplatesByEventPage() {
                                 <SelectItem value={ALL}>All Categories</SelectItem>
                                 {categories.map((c) => (
                                     <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-
-                        <Select value={typeId} onValueChange={setTypeId}>
-                            <SelectTrigger className="h-10 w-full rounded-md text-[13px]">
-                                <SelectValue placeholder="All Types" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value={ALL}>All Types</SelectItem>
-                                {types.map((t) => (
-                                    <SelectItem key={t.id} value={String(t.id)}>{t.name}</SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
@@ -243,7 +223,6 @@ export default function NotificationTemplatesByEventPage() {
                                     <tr className="border-b border-border text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                                         <th className="px-4 py-3">Event Name</th>
                                         <th className="px-4 py-3">Category</th>
-                                        <th className="px-4 py-3">Type</th>
                                         <th className="px-4 py-3 text-center">Templates</th>
                                         <th className="px-4 py-3 text-center">Active</th>
                                         <th className="px-4 py-3 text-center">Inactive</th>
@@ -258,7 +237,6 @@ export default function NotificationTemplatesByEventPage() {
                                                 <span className="break-words font-semibold text-foreground">{row.name}</span>
                                             </td>
                                             <td className="px-4 py-3 text-muted-foreground">{row.category?.name ?? '—'}</td>
-                                            <td className="px-4 py-3 text-muted-foreground">{row.eventType?.name ?? '—'}</td>
                                             <td className="px-4 py-3 text-center tabular-nums">{row.templates_count}</td>
                                             <td className="px-4 py-3 text-center tabular-nums text-success">{row.active_count}</td>
                                             <td className="px-4 py-3 text-center tabular-nums text-destructive">{row.inactive_count}</td>

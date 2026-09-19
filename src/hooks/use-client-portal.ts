@@ -9,7 +9,7 @@ import { WEBSITE_URL } from '@/lib/site';
  * The signed-in client and what their plan allows.
  *
  * ── WHY NOT CALL THE TAXONOMY DIRECTLY ───────────────────────────────────────
- * `/event-categories`, `/event-types`, `/religions` and `/event-menus` are the
+ * `/event-categories` and `/event-menus` are the
  * ADMIN catalogue. They are admin-permission gated, and more importantly they
  * are the *whole* catalogue — showing them to a client offers options their
  * subscription plan does not include.
@@ -85,19 +85,13 @@ export interface TaxonomyOption {
     icon: string | null;
     color: string | null;
     sort_order: number;
-    /**
-     * Present on types and religions. The backend narrows by PLAN scope, but a
-     * plan with no scope ("all") returns every row — so the form still has to
-     * filter by what the user picked one level up.
-     */
     event_category_id?: number | null;
-    event_type_id?: number | null;
 }
 
 export interface MenuOption extends TaxonomyOption {
     slug: string;
     menu_group: 'core' | 'additional' | 'custom';
-    /** The menu's category; NULL = suits every category. Menus carry no type / religion. */
+    /** The menu's category; NULL = suits every category. */
     event_category_id?: number | null;
 }
 
@@ -155,10 +149,8 @@ export interface TemplateOption {
     /** Which invitation parts show, and in what order. */
     components: Record<string, number>;
     component_order: string[];
-    /** NULL on any of these means the template suits every value of it. */
+    /** NULL means the template suits every category. */
     event_category_id: number | null;
-    event_type_id: number | null;
-    religion_id: number | null;
     is_featured: number;
     sort_order: number;
 }
@@ -168,8 +160,6 @@ export interface EventOptions {
     /** Why the lists are empty — null when they are not. Show it verbatim. */
     reason: string | null;
     categories: TaxonomyOption[];
-    types: TaxonomyOption[];
-    religions: TaxonomyOption[];
     menus: MenuOption[];
     /**
      * Slugs of the client-portal SIDEBAR sections the plan grants on the website
