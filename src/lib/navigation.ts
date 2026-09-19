@@ -57,7 +57,8 @@ import {
  * menu on the website (`/client/event-options` → `menus` slugs + `portal_sections`).
  * `PlanSectionGate` applies the same rule to the page itself, so a typed URL
  * cannot reach a section the sidebar hides. Entries without `section` —
- * Dashboard, My Events, Templates, Notifications, Billing, Settings — always show.
+ * Dashboard, My Events, Templates, Notifications, Analytics, Billing, Settings —
+ * always show.
  *
  * The slugs are `event_menus` rows in the admin's Menu Management: `rsvp` is the
  * existing event menu; the rest are 'portal' group rows created by
@@ -110,7 +111,8 @@ export const navMain = [
       supplied mockups show it as its own destination.
     */
     { title: "Notification Templates", url: "/dashboard/messages/notification-templates", icon: faSliders, section: "notification-templates", items: [] },
-    { title: "Analytics", url: "/dashboard/analytics", icon: faChartColumn, section: "analytics", items: [] },
+    // Always shown — Analytics is not a plan menu.
+    { title: "Analytics", url: "/dashboard/analytics", icon: faChartColumn, items: [] },
     // "Integrations" was removed: it linked to /dashboard/integrations, which
     // has no page and fell through to the "coming soon" catch-all.
     { title: "Billing", url: "/dashboard/billing", icon: faCreditCard, items: [] },
