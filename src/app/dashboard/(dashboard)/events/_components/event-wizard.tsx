@@ -1119,11 +1119,6 @@ export function EventWizard({
 
                                 {/* ── Panel 2: Mobile App Features ───────────── */}
                                 <div className="flex min-w-0 flex-col gap-3">
-                                    <PanelHeading label="Mobile App Features" />
-                                    <p className="text-[12px] text-muted-foreground">
-                                        Included with your plan and shown in the event&apos;s mobile app. Switch off any this event should not have.
-                                    </p>
-
                                     {options.isLoading ? (
                                         <div className="mt-3 flex flex-col gap-3">
                                             {Array.from({ length: 6 }).map((_, i) => (
