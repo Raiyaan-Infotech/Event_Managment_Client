@@ -112,6 +112,7 @@ const MENU_GROUP_LABELS: Record<MenuOption["menu_group"], string> = {
     core: "Core Menus",
     additional: "Additional Menus",
     custom: "Custom Menus",
+    app: "Mobile App Features",
 };
 
 const ALL_STYLES = "all";
@@ -207,6 +208,8 @@ export function EventWizard({
     const [form, setForm] = useState<FormState>(EMPTY);
     const [errors, setErrors] = useState<Record<string, boolean>>({});
     const [menus, setMenus] = useState<Record<number, boolean>>({});
+    /** App features switched OFF for this event (true = off). Absent = on. */
+    const [appOff, setAppOff] = useState<Record<number, boolean>>({});
     /** Step 4's own narrowing, on top of the plan + event-category scoping
      * `dbTemplates` already does — see the Design Style filter below. */
     const [styleFilter, setStyleFilter] = useState<string>(ALL_STYLES);
@@ -308,6 +311,10 @@ export function EventWizard({
         for (const id of row.menu_ids ?? []) picked[id] = true;
         setMenus(picked);
 
+        const off: Record<number, boolean> = {};
+        for (const id of row.disabled_app_menu_ids ?? []) off[id] = true;
+        setAppOff(off);
+
         // Restore an override only if the row HAS one. A null stays null, so
         // an event that was following its template carries on following it.
         if (row.components) {
@@ -370,6 +377,13 @@ export function EventWizard({
             return changed ? next : prev;
         });
     }, [menuRows, isEdit]);
+
+    /**
+     * The plan's mobile app features. Every event gets them unless switched off
+     * here — so, unlike `menuRows`, a new event starts with all of them ON and
+     * nothing is filtered by category (the app does not filter them either).
+     */
+    const appFeatures = opts?.app_features ?? [];
 
     // Already plan-scoped by the backend; `?? []` only guards the pre-load render.
     const categoryRows = opts?.categories ?? [];
@@ -649,6 +663,9 @@ export function EventWizard({
                 // actually returned — a stale key from a previous plan would be
                 // rejected by the server rather than silently dropped.
                 menu_ids: menuRows.filter((m) => menus[m.id] ?? true).map((m) => m.id),
+                // The OFF list: an app feature the plan grants shows on every
+                // event unless it is named here.
+                disabled_app_menu_ids: appFeatures.filter((m) => appOff[m.id]).map((m) => m.id),
                 theme_id: form.theme_id,
                 primary_color: form.primary_color,
                 // "" → null, so removing the photo in edit mode clears it.
@@ -1092,6 +1109,33 @@ export function EventWizard({
                                                 </ul>
                                             </div>
                                         ))}
+                                    </div>
+                                )}
+
+                                {/* The plan's mobile app features. Chosen by the plan;
+                                    this only switches one off for THIS event. */}
+                                {!options.isLoading && appFeatures.length > 0 && (
+                                    <div className="mt-6">
+                                        <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                                            Mobile App Features
+                                        </p>
+                                        <p className="mb-1 mt-0.5 text-[11.5px] text-muted-foreground">
+                                            Included with your plan and shown in the event&apos;s mobile app. Switch off any this event should not have.
+                                        </p>
+                                        <ul className="flex flex-col divide-y divide-border">
+                                            {appFeatures.map((m) => (
+                                                <li key={m.id} className="flex items-center justify-between gap-4 py-3">
+                                                    <span className="min-w-0 text-[13.5px] font-medium text-foreground break-words">
+                                                        {m.name}
+                                                    </span>
+                                                    <Switch
+                                                        checked={!appOff[m.id]}
+                                                        onCheckedChange={(v) => setAppOff((p) => ({ ...p, [m.id]: !v }))}
+                                                        aria-label={m.name}
+                                                    />
+                                                </li>
+                                            ))}
+                                        </ul>
                                     </div>
                                 )}
                             </div>

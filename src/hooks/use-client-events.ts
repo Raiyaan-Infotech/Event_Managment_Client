@@ -81,6 +81,8 @@ export interface ClientEvent {
     derived_status: DerivedStatus;
 
     menu_ids: number[];
+    /** The plan's app features switched OFF for this event; [] = all on. */
+    disabled_app_menu_ids?: number[];
     theme_id: string | null;
     primary_color: string | null;
     /**
@@ -132,6 +134,7 @@ export interface EventPayload {
     privacy?: string;
     status?: string;
     menu_ids?: number[];
+    disabled_app_menu_ids?: number[];
     theme_id?: string | null;
     primary_color?: string | null;
     cover_image?: string | null;
