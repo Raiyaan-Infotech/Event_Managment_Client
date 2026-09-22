@@ -686,11 +686,11 @@ function UsageCard({ usage }: { usage: BillingUsage }) {
                         metric={usage.messages}
                     />
                     <UsageRow
-                        icon={HardDrive} label="Storage Used" unit="GB"
+                        icon={HardDrive} label="Storage Used" unit={usage.storage.unit ?? 'GB'}
                         tint="bg-blue-500/15 text-blue-600 dark:text-blue-400"
                         metric={{
                             used: usage.storage.used_gb,
-                            limit: usage.storage.limit_gb,
+                            limit: usage.storage.limit ?? usage.storage.limit_gb,
                             available: usage.storage.available,
                             reason: usage.storage.reason,
                         }}

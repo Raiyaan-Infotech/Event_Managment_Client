@@ -101,8 +101,19 @@ export interface BillingUsage {
     events: UsageMetric;
     guests: UsageMetric & { per_event_limit: number | null };
     messages: UsageMetric;
-    /** The ceiling is known; nothing measures the numerator. */
-    storage: { used_gb: number | null; limit_gb: number | null; available: boolean; reason?: string };
+    /**
+     * The ceiling is known; nothing measures the numerator. `limit` + `unit` is
+     * the plan's setting as the admin entered it ("500 MB"); `limit_gb` is the
+     * same ceiling in GB.
+     */
+    storage: {
+        used_gb: number | null;
+        limit_gb: number | null;
+        limit: number | null;
+        unit: 'MB' | 'GB' | null;
+        available: boolean;
+        reason?: string;
+    };
     rsvps: { limit: number | null };
 }
 

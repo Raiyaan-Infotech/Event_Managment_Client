@@ -473,7 +473,7 @@ function BillingScreen() {
                                         </div>
                                         <div className="xl:pl-6">
                                             <UsageTile
-                                                icon={HardDrive} label="Storage Used" unit="GB"
+                                                icon={HardDrive} label="Storage Used" unit={data!.usage.storage.unit ?? 'GB'}
                                                 tint="bg-blue-500/15 text-blue-600 dark:text-blue-400"
                                                 metric={data!.usage.storage as never}
                                             />
