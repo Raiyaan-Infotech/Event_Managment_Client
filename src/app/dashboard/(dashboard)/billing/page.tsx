@@ -102,12 +102,14 @@ function NotAvailable({ title, reason, icon: Icon }: {
  *   available, no limit  a figure and "No limit set" — the plan sets none
  *   not available        an em dash and the reason. NEVER a zero.
  */
-function UsageTile({ icon: Icon, label, metric, unit, tint }: {
+function UsageTile({ icon: Icon, label, metric, unit, tint, perEventLimit }: {
     icon: React.ElementType;
     label: string;
     metric: UsageMetric & { used_gb?: number | null; limit_gb?: number | null };
     unit?: string;
     tint: string;
+    /** Guests: the plan caps guests PER EVENT, not as a running total — see the note below. */
+    perEventLimit?: number | null;
 }) {
     const used = metric.used ?? metric.used_gb ?? null;
     const limit = metric.limit ?? metric.limit_gb ?? null;
@@ -145,7 +147,13 @@ function UsageTile({ icon: Icon, label, metric, unit, tint }: {
                 </div>
             ) : (
                 <span className="text-[11px] break-words text-muted-foreground">
-                    {metric.available ? 'No limit set on your plan' : metric.reason ?? 'Not available yet'}
+                    {!metric.available
+                        ? metric.reason ?? 'Not available yet'
+                        // A per-event ceiling has no total to be a ratio of, but it is
+                        // still a real limit — saying "No limit set" here would be wrong.
+                        : perEventLimit
+                            ? `Up to ${perEventLimit.toLocaleString('en-IN')} per event`
+                            : 'No limit set on your plan'}
                 </span>
             )}
         </div>
@@ -463,6 +471,7 @@ function BillingScreen() {
                                             <UsageTile
                                                 icon={Users} label="Guests" tint="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
                                                 metric={data!.usage.guests}
+                                                perEventLimit={data!.usage.guests.per_event_limit}
                                             />
                                         </div>
                                         <div className="xl:px-6">

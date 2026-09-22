@@ -679,6 +679,7 @@ function UsageCard({ usage }: { usage: BillingUsage }) {
                         icon={Users} label="Guests"
                         tint="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
                         metric={usage.guests}
+                        perEventLimit={usage.guests.per_event_limit}
                     />
                     <UsageRow
                         icon={Mail} label="Messages Sent"
@@ -716,12 +717,14 @@ function UsageCard({ usage }: { usage: BillingUsage }) {
  * mean opposite things — storage is the case that matters, since its ceiling is
  * known and nothing measures the numerator.
  */
-function UsageRow({ icon: Icon, label, metric, unit, tint }: {
+function UsageRow({ icon: Icon, label, metric, unit, tint, perEventLimit }: {
     icon: React.ElementType;
     label: string;
     metric: UsageMetric;
     unit?: string;
     tint: string;
+    /** Guests: the plan caps guests PER EVENT, not as a running total. */
+    perEventLimit?: number | null;
 }) {
     const used = metric.used;
     const limit = metric.limit;
@@ -755,7 +758,11 @@ function UsageRow({ icon: Icon, label, metric, unit, tint }: {
                     </div>
                 ) : (
                     <span className="max-w-[190px] text-end text-[10.5px] break-words text-muted-foreground">
-                        {metric.available ? 'No limit set' : metric.reason ?? 'Not measured yet'}
+                        {!metric.available
+                            ? metric.reason ?? 'Not measured yet'
+                            : perEventLimit
+                                ? `Up to ${perEventLimit.toLocaleString('en-IN')} per event`
+                                : 'No limit set'}
                     </span>
                 )}
             </div>

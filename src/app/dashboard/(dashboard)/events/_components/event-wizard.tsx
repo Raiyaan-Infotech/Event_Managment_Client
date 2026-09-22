@@ -1075,9 +1075,9 @@ export function EventWizard({
                         )}
                         {/* ── Step 3 — real event_menus ──────────────────────── */}
                         {step === 3 && (
-                            <div className="max-w-xl">
+                            <div className="max-w-4xl">
                                 {options.isLoading ? (
-                                    <div className="flex flex-col gap-3">
+                                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                                         {Array.from({ length: 8 }).map((_, i) => (
                                             <Skeleton key={i} className="h-11 w-full rounded-md" />
                                         ))}
@@ -1087,15 +1087,15 @@ export function EventWizard({
                                         No menus are configured for this event type yet.
                                     </p>
                                 ) : (
-                                    <div className="flex flex-col gap-6">
+                                    <div className="flex flex-col gap-8">
                                         {menuGroups.map(({ group, rows }) => (
                                             <div key={group}>
-                                                <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                                                <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                                                     {MENU_GROUP_LABELS[group]}
                                                 </p>
-                                                <ul className="flex flex-col divide-y divide-border">
+                                                <ul className="grid grid-cols-1 gap-x-8 sm:grid-cols-2">
                                                     {rows.map((m) => (
-                                                        <li key={m.id} className="flex items-center justify-between gap-4 py-3">
+                                                        <li key={m.id} className="flex items-center justify-between gap-4 border-b border-border py-3">
                                                             <span className="min-w-0 text-[13.5px] font-medium text-foreground break-words">
                                                                 {m.name}
                                                             </span>
@@ -1115,16 +1115,16 @@ export function EventWizard({
                                 {/* The plan's mobile app features. Chosen by the plan;
                                     this only switches one off for THIS event. */}
                                 {!options.isLoading && appFeatures.length > 0 && (
-                                    <div className="mt-6">
+                                    <div className="mt-8">
                                         <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                                             Mobile App Features
                                         </p>
-                                        <p className="mb-1 mt-0.5 text-[11.5px] text-muted-foreground">
+                                        <p className="mb-3 mt-0.5 text-[11.5px] text-muted-foreground">
                                             Included with your plan and shown in the event&apos;s mobile app. Switch off any this event should not have.
                                         </p>
-                                        <ul className="flex flex-col divide-y divide-border">
+                                        <ul className="grid grid-cols-1 gap-x-8 sm:grid-cols-2">
                                             {appFeatures.map((m) => (
-                                                <li key={m.id} className="flex items-center justify-between gap-4 py-3">
+                                                <li key={m.id} className="flex items-center justify-between gap-4 border-b border-border py-3">
                                                     <span className="min-w-0 text-[13.5px] font-medium text-foreground break-words">
                                                         {m.name}
                                                     </span>

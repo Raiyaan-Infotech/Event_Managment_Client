@@ -15,6 +15,7 @@ import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ProfileAvatar } from '@/components/common/profile-avatar';
 import { useClientProfile } from '@/hooks/use-client-portal';
+import { useBillingOverview } from '@/hooks/use-billing';
 import { useDateFormatter } from '@/hooks/use-client-settings';
 import { useDashboardStats } from '@/hooks/use-client-events';
 import { useGuestStats } from '@/hooks/use-guests';
@@ -212,6 +213,11 @@ function PlanAndUsage() {
     const { data: client } = useClientProfile();
     const events = useDashboardStats();
     const guests = useGuestStats();
+    // Plan limits (wizard step 4 on the admin side) — same source Billing reads,
+    // so the two screens cannot disagree about what this plan actually allows.
+    const billing = useBillingOverview();
+    const eventLimit = billing.data?.usage.events.limit ?? null;
+    const guestPerEventLimit = billing.data?.usage.guests.per_event_limit ?? null;
 
     return (
         <Card className="py-0">
@@ -240,12 +246,16 @@ function PlanAndUsage() {
                             icon={<CalendarDays className="size-4" />}
                             label="Events Created"
                             value={events.data?.total_events}
+                            limit={eventLimit}
                             tint="bg-primary"
                         />
                         <Usage
                             icon={<Users className="size-4" />}
                             label="Guests Added"
                             value={guests.data?.total_guests}
+                            // Not a denominator for this total — the plan caps guests
+                            // PER EVENT, not across the account. Shown as a note instead.
+                            note={guestPerEventLimit ? `Up to ${guestPerEventLimit.toLocaleString('en-IN')} per event` : undefined}
                             tint="bg-emerald-500"
                         />
                         {/* ⚠ NO SOURCE. The messaging module is paused by
@@ -261,10 +271,6 @@ function PlanAndUsage() {
                     </div>
                 </div>
 
-                <p className="mt-5 text-xs text-muted-foreground">
-                    Usage limits are not shown because a plan does not carry any — it has a price,
-                    a billing cycle and trial days, but no ceiling on events, guests or messages.
-                </p>
             </CardContent>
         </Card>
     );
@@ -273,16 +279,21 @@ function PlanAndUsage() {
 /**
  * One usage figure.
  *
- * The design pairs each with "/ Unlimited" and a progress bar. Neither is
- * rendered: there is no limit field anywhere, so the denominator would be
- * invented and the bar would be a fraction of a number that does not exist. The
- * count alone is true; a bar implies a ceiling.
+ * `limit`, when known, draws a real ratio bar (Events: max_events). `note`
+ * is for a limit that exists but has no single total to be a ratio of — Guests
+ * is capped PER EVENT, so "X used / Y limit" would compare two different
+ * things. Neither given: the old "no limit exists" bar, unlabelled.
  */
 function Usage({
-    icon, label, value, tint, unavailable,
+    icon, label, value, limit, note, tint, unavailable,
 }: {
-    icon: React.ReactNode; label: string; value?: number; tint: string; unavailable?: boolean;
+    icon: React.ReactNode; label: string; value?: number; limit?: number | null; note?: string;
+    tint: string; unavailable?: boolean;
 }) {
+    const known = !unavailable && value !== undefined;
+    const pct = known && limit ? Math.min(100, Math.round((value / limit) * 100)) : null;
+    const over = known && limit != null && value > limit;
+
     return (
         <div className="min-w-0">
             <span className="grid size-9 place-items-center rounded-lg bg-muted text-muted-foreground">
@@ -294,14 +305,20 @@ function Usage({
                 reports a hydration error. */}
             <div className="mt-2 text-xl font-bold">
                 {unavailable ? '—' : value ?? <Skeleton className="h-6 w-10" />}
+                {known && limit != null ? (
+                    <span className="ms-1 text-xs font-normal text-muted-foreground">/ {limit.toLocaleString('en-IN')}</span>
+                ) : null}
             </div>
             <p className="text-xs text-muted-foreground">{label}</p>
             {unavailable ? (
                 <p className="mt-1 text-[11px] text-muted-foreground">Messaging is paused</p>
+            ) : note ? (
+                <p className="mt-1 text-[11px] text-muted-foreground">{note}</p>
             ) : (
-                // A full bar, purely as the design's visual rhythm — it encodes
-                // no ratio, because there is no limit to be a ratio of.
-                <Progress value={100} className={`mt-2 h-1 [&>div]:${tint}`} />
+                <Progress
+                    value={pct ?? 100}
+                    className={`mt-2 h-1 ${over ? '[&>div]:bg-rose-500' : `[&>div]:${tint}`}`}
+                />
             )}
         </div>
     );
