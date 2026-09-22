@@ -53,6 +53,7 @@ import { InvitationCard, type InvitationData } from "@/components/common/invitat
 import { TemplateArtwork } from "@/components/common/template-artwork";
 import { DownloadFormatButton, type DownloadKind } from "@/components/common/invitation-download";
 import { SignInPrompt } from '@/components/common/sign-in-prompt';
+import { ImageCropDialog } from '@/components/common/image-crop-dialog';
 
 /**
  * The six-step event wizard, used by BOTH routes.
@@ -112,6 +113,8 @@ const MENU_GROUP_LABELS: Record<MenuOption["menu_group"], string> = {
     additional: "Additional Menus",
     custom: "Custom Menus",
 };
+
+const ALL_STYLES = "all";
 
 const TIME_ZONES = [
     "(GMT +05:30) India Standard Time",
@@ -204,6 +207,9 @@ export function EventWizard({
     const [form, setForm] = useState<FormState>(EMPTY);
     const [errors, setErrors] = useState<Record<string, boolean>>({});
     const [menus, setMenus] = useState<Record<number, boolean>>({});
+    /** Step 4's own narrowing, on top of the plan + event-category scoping
+     * `dbTemplates` already does — see the Design Style filter below. */
+    const [styleFilter, setStyleFilter] = useState<string>(ALL_STYLES);
 
     /**
      * The client's own component overrides for THIS event.
@@ -383,6 +389,30 @@ export function EventWizard({
     );
 
     /**
+     * The design styles actually on offer at this scope — never a hardcoded
+     * list, so a style with nothing in it (for this plan + event category)
+     * does not show up as a filter option with an empty result behind it.
+     */
+    const styleOptions = useMemo(
+        () => Array.from(new Set(dbTemplates.map((t) => t.style).filter(Boolean))).sort(),
+        [dbTemplates]
+    );
+    const styleFilteredTemplates = useMemo(
+        () => (styleFilter === ALL_STYLES ? dbTemplates : dbTemplates.filter((t) => t.style === styleFilter)),
+        [dbTemplates, styleFilter]
+    );
+
+    // The style filter only makes sense within the current category's
+    // catalogue — switching categories (or a plan change) can leave it
+    // pointing at a style no longer on offer, which would silently hide
+    // everything instead of showing the reset list.
+    useEffect(() => {
+        if (styleFilter !== ALL_STYLES && !styleOptions.includes(styleFilter)) {
+            setStyleFilter(ALL_STYLES);
+        }
+    }, [styleOptions, styleFilter]);
+
+    /**
      * Step 5's preview artwork.
      *
      * `resolveArtwork` still falls back to the built-in catalogue, and must:
@@ -556,6 +586,7 @@ export function EventWizard({
             if (!form.end_date) next.end_date = true;
             if (!form.start_time) next.start_time = true;
             if (!form.end_time) next.end_time = true;
+            if (!form.cover_image) next.cover_image = true;
         }
         if (Object.keys(next).length) {
             setErrors(next);
@@ -841,7 +872,7 @@ export function EventWizard({
                                         <Input
                                             value={form.name}
                                             onChange={(e) => setField("name", e.target.value.slice(0, 100))}
-                                            placeholder="e.g. Priya & Arjun Wedding"
+                                            placeholder="Please enter the event name"
                                             className={cn("h-11 rounded-md", errors.name && "border-destructive")}
                                         />
                                         <Counter value={form.name.length} max={100} />
@@ -851,7 +882,7 @@ export function EventWizard({
                                         <Input
                                             value={form.tagline}
                                             onChange={(e) => setField("tagline", e.target.value.slice(0, 100))}
-                                            placeholder="Together with their families"
+                                            placeholder="Please enter a tagline"
                                             className="h-11 rounded-md"
                                         />
                                         <Counter value={form.tagline.length} max={100} />
@@ -866,7 +897,7 @@ export function EventWizard({
                                             <Input
                                                 value={form.host_one}
                                                 onChange={(e) => setField("host_one", e.target.value.slice(0, 120))}
-                                                placeholder="e.g. Priya"
+                                                placeholder="Please enter the first host's name"
                                                 className="h-11 rounded-md"
                                             />
                                         </Field>
@@ -874,7 +905,7 @@ export function EventWizard({
                                             <Input
                                                 value={form.host_two}
                                                 onChange={(e) => setField("host_two", e.target.value.slice(0, 120))}
-                                                placeholder="e.g. Arjun"
+                                                placeholder="Please enter the second host's name"
                                                 className="h-11 rounded-md"
                                             />
                                         </Field>
@@ -884,7 +915,7 @@ export function EventWizard({
                                         <Textarea
                                             value={form.description}
                                             onChange={(e) => setField("description", e.target.value.slice(0, 300))}
-                                            placeholder="We are delighted to invite you to celebrate our special day."
+                                            placeholder="Please enter a short description"
                                             className="min-h-[90px] rounded-md"
                                         />
                                         <Counter value={form.description.length} max={300} />
@@ -893,6 +924,7 @@ export function EventWizard({
                                     <CoverImageField
                                         value={form.cover_image}
                                         onChange={(url) => setField("cover_image", url)}
+                                        error={errors.cover_image}
                                     />
 
                                     <SectionRule label="Date & Time" />
@@ -938,7 +970,7 @@ export function EventWizard({
                                         <Input
                                             value={form.venue_name}
                                             onChange={(e) => setField("venue_name", e.target.value.slice(0, 255))}
-                                            placeholder="e.g. The Grand Palace"
+                                            placeholder="Please enter the venue name"
                                             className="h-11 rounded-md"
                                         />
                                     </Field>
@@ -947,7 +979,7 @@ export function EventWizard({
                                         <Textarea
                                             value={form.venue_address}
                                             onChange={(e) => setField("venue_address", e.target.value.slice(0, 500))}
-                                            placeholder="Street, area, city and postcode"
+                                            placeholder="Please enter the venue address"
                                             className="min-h-[90px] rounded-md"
                                         />
                                         <Counter value={form.venue_address.length} max={500} />
@@ -961,7 +993,7 @@ export function EventWizard({
                                         <Input
                                             value={form.organizer}
                                             onChange={(e) => setField("organizer", e.target.value.slice(0, 200))}
-                                            placeholder="e.g. Hosted by the Verma family"
+                                            placeholder="Please enter who is hosting this event"
                                             className="h-11 rounded-md"
                                         />
                                     </Field>
@@ -971,7 +1003,7 @@ export function EventWizard({
                                             <Input
                                                 value={form.contact_phone}
                                                 onChange={(e) => setField("contact_phone", e.target.value.slice(0, 30))}
-                                                placeholder="+91 98765 43210"
+                                                placeholder="Please enter a contact number"
                                                 inputMode="tel"
                                                 className={cn("h-11 rounded-md", errors.contact_phone && "border-destructive")}
                                             />
@@ -980,7 +1012,7 @@ export function EventWizard({
                                             <Input
                                                 value={form.contact_email}
                                                 onChange={(e) => setField("contact_email", e.target.value.slice(0, 150))}
-                                                placeholder="hello@example.com"
+                                                placeholder="Please enter a contact email address"
                                                 inputMode="email"
                                                 className={cn("h-11 rounded-md", errors.contact_email && "border-destructive")}
                                             />
@@ -991,7 +1023,7 @@ export function EventWizard({
                                         <Input
                                             value={form.footer_note}
                                             onChange={(e) => setField("footer_note", e.target.value.slice(0, 300))}
-                                            placeholder="e.g. Thank you for being part of our story."
+                                            placeholder="Please enter a footer note"
                                             className="h-11 rounded-md"
                                         />
                                         <Counter value={form.footer_note.length} max={300} />
@@ -1083,9 +1115,28 @@ export function EventWizard({
                                         Pick the invitation design. Your plan decides what is on offer.
                                     </p>
 
+                                {/* Only shown once there is more than one style to
+                                    choose between — a filter with a single option
+                                    (or none) narrows nothing and just adds a click. */}
+                                {styleOptions.length > 1 && (
+                                    <div className="max-w-[220px]">
+                                        <Label className="text-[11px] font-medium text-muted-foreground">Design Style</Label>
+                                        <Select value={styleFilter} onValueChange={setStyleFilter}>
+                                            <SelectTrigger className="h-9 rounded-md text-[12.5px]"><SelectValue /></SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value={ALL_STYLES}>All Styles</SelectItem>
+                                                {styleOptions.map((s) => (
+                                                    <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                )}
+
                                 {/* ONLY the admin catalogue, narrowed to this client's
-                                    plan and to the category picked in
-                                    step 1. There is deliberately no built-in fallback:
+                                    plan, to the category picked in
+                                    step 1, and to the style filter above. There is
+                                    deliberately no built-in fallback:
                                     offering designs the plan does not grant is exactly
                                     the mis-sell the plan gating exists to prevent, and
                                     a hardcoded grid made an empty catalogue look full. */}
@@ -1097,7 +1148,7 @@ export function EventWizard({
                                     </div>
                                 ) : dbTemplates.length > 0 ? (
                                     <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5">
-                                        {dbTemplates.map((t) => {
+                                        {styleFilteredTemplates.map((t) => {
                                             const active = form.theme_id === t.code;
                                             return (
                                                 <button
@@ -1731,21 +1782,32 @@ function Field({
 
 /**
  * The event's own photo — shown on the mobile app's event card and at the top
- * of the event screen. Optional; without one the app draws the template artwork.
+ * of the event screen. Mandatory: every event needs a cover.
  *
- * Uploads the moment a file is picked (a new event has no id yet), and the URL
- * is saved with the rest of the event on step 5 — same shape as the splash
- * screen's uploader.
+ * Cropped to 16:9 BEFORE upload — same crop-then-upload pattern as
+ * `ProfileAvatar` — so a raw multi-MB camera photo never reaches the server;
+ * `ImageCropDialog` downscales to `outputSize`'s longest edge and re-encodes
+ * as JPEG @0.9, which is what keeps the stored file small. The URL is saved
+ * with the rest of the event on step 5.
  */
-function CoverImageField({ value, onChange }: { value: string; onChange: (url: string) => void }) {
+function CoverImageField({
+    value, onChange, error,
+}: {
+    value: string; onChange: (url: string) => void; error?: boolean;
+}) {
     const upload = useUploadEventCover();
     const inputRef = useRef<HTMLInputElement>(null);
+    const [picked, setPicked] = useState<File | null>(null);
 
     return (
         <div className="flex flex-col gap-2">
-            <Label className="text-[12.5px] font-medium">Event Image (Optional)</Label>
+            <Label className="text-[12.5px] font-medium">
+                Event Image <span className="text-destructive">*</span>
+            </Label>
             {value ? (
-                <div className="relative overflow-hidden rounded-lg border">
+                // Capped width so a wide 16:9 photo does not dominate the full-width
+                // step — the raw <img> used to be shown at the card's full width.
+                <div className="relative max-w-sm overflow-hidden rounded-lg border">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={value} alt="Event image" className="aspect-[16/9] w-full object-cover" />
                     <div className="absolute right-2 top-2 flex gap-1.5">
@@ -1771,7 +1833,10 @@ function CoverImageField({ value, onChange }: { value: string; onChange: (url: s
                     type="button"
                     disabled={upload.isPending}
                     onClick={() => inputRef.current?.click()}
-                    className="flex flex-col items-center gap-1.5 rounded-lg border border-dashed p-6 text-center transition-colors hover:bg-muted/40 disabled:opacity-60"
+                    className={cn(
+                        "flex max-w-sm flex-col items-center gap-1.5 rounded-lg border border-dashed p-6 text-center transition-colors hover:bg-muted/40 disabled:opacity-60",
+                        error && "border-destructive"
+                    )}
                 >
                     {upload.isPending
                         ? <Loader2 className="size-5 animate-spin text-muted-foreground" />
@@ -1780,10 +1845,11 @@ function CoverImageField({ value, onChange }: { value: string; onChange: (url: s
                         {upload.isPending ? "Uploading…" : "Click to upload an image"}
                     </span>
                     <span className="text-[11px] text-muted-foreground">
-                        JPG, PNG or WEBP, max 5MB. Shown on the event card and event page in the app.
+                        JPG, PNG or WEBP. Cropped to 16:9 before upload. Shown on the event card and event page in the app.
                     </span>
                 </button>
             )}
+            {error && <p className="text-[11.5px] text-destructive">This field is required.</p>}
             <input
                 ref={inputRef}
                 type="file"
@@ -1791,15 +1857,29 @@ function CoverImageField({ value, onChange }: { value: string; onChange: (url: s
                 className="hidden"
                 onChange={(e) => {
                     const file = e.target.files?.[0];
+                    // Reset FIRST, so re-picking the same file after cancelling a
+                    // crop still fires `change`.
                     e.target.value = "";
                     if (!file) return;
-                    // Checked here too, so a big file fails instantly instead of
-                    // after the upload — the server enforces the same 5MB.
-                    if (file.size > 5 * 1024 * 1024) {
-                        toast.error("That image is larger than 5MB.");
+                    // Checked here too, so an absurdly large file fails instantly
+                    // instead of after the crop step.
+                    if (file.size > 25 * 1024 * 1024) {
+                        toast.error("That image is larger than 25MB.");
                         return;
                     }
-                    upload.mutate(file, { onSuccess: onChange });
+                    setPicked(file);
+                }}
+            />
+            <ImageCropDialog
+                file={picked}
+                open={picked !== null}
+                onOpenChange={(o) => { if (!o) setPicked(null); }}
+                aspect={16 / 9}
+                outputSize={1280}
+                title="Crop event image"
+                onCropped={(cropped) => {
+                    setPicked(null);
+                    upload.mutate(cropped, { onSuccess: onChange });
                 }}
             />
         </div>

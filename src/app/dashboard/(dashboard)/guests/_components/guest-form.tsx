@@ -80,6 +80,7 @@ interface FormState {
     event_id: string;
     group_id: string;
     title: string;
+    date_of_birth: string;
     first_name: string;
     last_name: string;
     email: string;
@@ -105,7 +106,7 @@ interface FormState {
 }
 
 const EMPTY: FormState = {
-    event_id: "", group_id: "", title: "", first_name: "", last_name: "", email: "",
+    event_id: "", group_id: "", title: "", date_of_birth: "", first_name: "", last_name: "", email: "",
     dial_code: "+91", mobile: "", whatsapp: "", company: "", table_number: "", party_size: "1",
     rsvp_status: "not_responded", response_type: "none",
     address_line1: "", address_line2: "", city: "", state: "", postal_code: "", country: "India",
@@ -150,6 +151,8 @@ export function GuestForm({ guestId }: { guestId?: number }) {
             event_id: String(g.event_id ?? ""),
             group_id: g.group_id ? String(g.group_id) : "",
             title: g.title ?? "",
+            // DATEONLY arrives as YYYY-MM-DD, which is what <input type="date"> takes.
+            date_of_birth: g.date_of_birth ?? "",
             first_name: g.first_name ?? g.name ?? "",
             last_name: g.last_name ?? "",
             email: g.email ?? "",
@@ -175,7 +178,7 @@ export function GuestForm({ guestId }: { guestId?: number }) {
         });
         // Open the extra section when it actually holds something, so an edit
         // does not hide half the record behind a collapsed header.
-        if (g.address_line1 || g.city || g.dietary_preference || g.special_requirements || g.notes) {
+        if (g.address_line1 || g.city || g.dietary_preference || g.special_requirements || g.notes || g.date_of_birth) {
             setDetailsOpen(true);
         }
     }, [isEdit, prefilled, existing.data]);
@@ -248,6 +251,7 @@ export function GuestForm({ guestId }: { guestId?: number }) {
             event_id: Number(form.event_id),
             group_id: form.group_id ? Number(form.group_id) : null,
             title: form.title || null,
+            date_of_birth: form.date_of_birth || null,
             first_name: form.first_name.trim(),
             last_name: form.last_name.trim() || null,
             email: form.email.trim(),
@@ -420,7 +424,7 @@ export function GuestForm({ guestId }: { guestId?: number }) {
                                                 Add More Details (Optional)
                                             </span>
                                             <span className="block text-[11.5px] text-muted-foreground">
-                                                Add address, title, notes or any other information about this guest.
+                                                Add address, title, date of birth, notes or any other information about this guest.
                                             </span>
                                         </span>
                                         <FontAwesomeIcon
@@ -483,6 +487,14 @@ export function GuestForm({ guestId }: { guestId?: number }) {
                                                     {TITLES.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
                                                 </SelectContent>
                                             </Select>
+                                        </Field>
+
+                                        <Field label="Date of Birth (Optional)">
+                                            {/* max = today: the server refuses a future date too. */}
+                                            <Input type="date" value={form.date_of_birth}
+                                                max={new Date().toISOString().slice(0, 10)}
+                                                onChange={(e) => setField("date_of_birth", e.target.value)}
+                                                className="h-11 rounded-md" />
                                         </Field>
 
                                         <Field label="Table Number (Optional)">

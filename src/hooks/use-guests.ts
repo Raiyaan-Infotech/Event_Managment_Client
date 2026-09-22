@@ -47,6 +47,8 @@ export interface Guest {
     group_id: number | null;
 
     title: string | null;
+    /** YYYY-MM-DD, or null when not given. */
+    date_of_birth: string | null;
     first_name: string | null;
     last_name: string | null;
     name: string;
@@ -111,6 +113,7 @@ export interface GuestPayload {
     event_id: number;
     group_id?: number | null;
     title?: string | null;
+    date_of_birth?: string | null;
     first_name: string;
     last_name?: string | null;
     email: string;
