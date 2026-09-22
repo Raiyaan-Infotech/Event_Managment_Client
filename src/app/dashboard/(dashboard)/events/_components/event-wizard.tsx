@@ -1075,56 +1075,69 @@ export function EventWizard({
                         )}
                         {/* ── Step 3 — real event_menus ──────────────────────── */}
                         {step === 3 && (
-                            <div className="max-w-4xl">
-                                {options.isLoading ? (
-                                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                                        {Array.from({ length: 8 }).map((_, i) => (
-                                            <Skeleton key={i} className="h-11 w-full rounded-md" />
-                                        ))}
-                                    </div>
-                                ) : menuRows.length === 0 ? (
-                                    <p className="py-10 text-center text-[13px] text-muted-foreground">
-                                        No menus are configured for this event type yet.
-                                    </p>
-                                ) : (
-                                    <div className="flex flex-col gap-8">
-                                        {menuGroups.map(({ group, rows }) => (
-                                            <div key={group}>
-                                                <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                                                    {MENU_GROUP_LABELS[group]}
-                                                </p>
-                                                <ul className="grid grid-cols-1 gap-x-8 sm:grid-cols-2">
-                                                    {rows.map((m) => (
-                                                        <li key={m.id} className="flex items-center justify-between gap-4 border-b border-border py-3">
-                                                            <span className="min-w-0 text-[13.5px] font-medium text-foreground break-words">
-                                                                {m.name}
-                                                            </span>
-                                                            <Switch
-                                                                checked={menus[m.id] ?? true}
-                                                                onCheckedChange={(v) => setMenus((p) => ({ ...p, [m.id]: v }))}
-                                                                aria-label={m.name}
-                                                            />
-                                                        </li>
-                                                    ))}
-                                                </ul>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
+                            <div className="grid gap-x-10 gap-y-8 lg:grid-cols-2">
+                                {/* ── Panel 1: Event Menus ───────────────────── */}
+                                <div className="flex min-w-0 flex-col gap-6">
+                                    <PanelHeading label="Event Menus" />
 
-                                {/* The plan's mobile app features. Chosen by the plan;
-                                    this only switches one off for THIS event. */}
-                                {!options.isLoading && appFeatures.length > 0 && (
-                                    <div className="mt-8">
-                                        <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                                            Mobile App Features
+                                    {options.isLoading ? (
+                                        <div className="flex flex-col gap-3">
+                                            {Array.from({ length: 6 }).map((_, i) => (
+                                                <Skeleton key={i} className="h-11 w-full rounded-md" />
+                                            ))}
+                                        </div>
+                                    ) : menuRows.length === 0 ? (
+                                        <p className="py-10 text-center text-[13px] text-muted-foreground">
+                                            No menus are configured for this event type yet.
                                         </p>
-                                        <p className="mb-3 mt-0.5 text-[11.5px] text-muted-foreground">
-                                            Included with your plan and shown in the event&apos;s mobile app. Switch off any this event should not have.
+                                    ) : (
+                                        <div className="flex flex-col gap-6">
+                                            {menuGroups.map(({ group, rows }) => (
+                                                <div key={group}>
+                                                    <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                                                        {MENU_GROUP_LABELS[group]}
+                                                    </p>
+                                                    <ul className="flex flex-col divide-y divide-border">
+                                                        {rows.map((m) => (
+                                                            <li key={m.id} className="flex items-center justify-between gap-4 py-3">
+                                                                <span className="min-w-0 text-[13.5px] font-medium text-foreground break-words">
+                                                                    {m.name}
+                                                                </span>
+                                                                <Switch
+                                                                    checked={menus[m.id] ?? true}
+                                                                    onCheckedChange={(v) => setMenus((p) => ({ ...p, [m.id]: v }))}
+                                                                    aria-label={m.name}
+                                                                />
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* ── Panel 2: Mobile App Features ───────────── */}
+                                <div className="flex min-w-0 flex-col gap-3">
+                                    <PanelHeading label="Mobile App Features" />
+                                    <p className="text-[12px] text-muted-foreground">
+                                        Included with your plan and shown in the event&apos;s mobile app. Switch off any this event should not have.
+                                    </p>
+
+                                    {options.isLoading ? (
+                                        <div className="mt-3 flex flex-col gap-3">
+                                            {Array.from({ length: 6 }).map((_, i) => (
+                                                <Skeleton key={i} className="h-11 w-full rounded-md" />
+                                            ))}
+                                        </div>
+                                    ) : appFeatures.length === 0 ? (
+                                        <p className="py-10 text-center text-[13px] text-muted-foreground">
+                                            No mobile app features are configured for your plan.
                                         </p>
-                                        <ul className="grid grid-cols-1 gap-x-8 sm:grid-cols-2">
+                                    ) : (
+                                        <ul className="mt-2 flex flex-col divide-y divide-border">
                                             {appFeatures.map((m) => (
-                                                <li key={m.id} className="flex items-center justify-between gap-4 border-b border-border py-3">
+                                                <li key={m.id} className="flex items-center justify-between gap-4 py-3">
                                                     <span className="min-w-0 text-[13.5px] font-medium text-foreground break-words">
                                                         {m.name}
                                                     </span>
@@ -1136,8 +1149,8 @@ export function EventWizard({
                                                 </li>
                                             ))}
                                         </ul>
-                                    </div>
-                                )}
+                                    )}
+                                </div>
                             </div>
                         )}
 
