@@ -1092,9 +1092,6 @@ export function EventWizard({
                                         <div className="flex flex-col gap-6">
                                             {menuGroups.map(({ group, rows }) => (
                                                 <div key={group}>
-                                                    <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                                                        {MENU_GROUP_LABELS[group]}
-                                                    </p>
                                                     <ul className="flex flex-col divide-y divide-border">
                                                         {rows.map((m) => (
                                                             <li key={m.id} className="flex items-center justify-between gap-4 py-3">
@@ -1694,7 +1691,7 @@ export function EventWizard({
                                     </div>
 
                                     {/* ── Right Column: Live Event Invitation Card ── */}
-                                    <div className="flex min-w-0 flex-col items-center gap-3">
+                                    <div className="flex min-w-0 flex-col gap-3 rounded-lg border border-border bg-muted/30 p-5">
                                         <div className="w-full text-left">
                                             <PanelHeading label="Event Invitation" />
                                             <p className="mt-1 text-[12px] text-muted-foreground">
@@ -1702,7 +1699,7 @@ export function EventWizard({
                                             </p>
                                         </div>
 
-                                        <div ref={exportCardRef} className="flex w-full justify-center pt-2">
+                                        <div ref={exportCardRef} className="flex w-full justify-center rounded-md border border-border/50 bg-background p-4">
                                             {artwork.kind === "template" ? (
                                                 <InvitationCard
                                                     template={artwork.template}
