@@ -1078,8 +1078,6 @@ export function EventWizard({
                             <div className="grid gap-x-10 gap-y-8 lg:grid-cols-2">
                                 {/* ── Panel 1: Event Menus ───────────────────── */}
                                 <div className="flex min-w-0 flex-col gap-6">
-                                    <PanelHeading label="Event Menus" />
-
                                     {options.isLoading ? (
                                         <div className="flex flex-col gap-3">
                                             {Array.from({ length: 6 }).map((_, i) => (
@@ -1564,196 +1562,197 @@ export function EventWizard({
 
                         {/* ── Step 6 ─────────────────────────────────────────── */}
                         {step === 6 && (
-                            <div className="mx-auto flex max-w-md flex-col items-center gap-4 text-center">
-                                <span className="grid h-16 w-16 place-items-center rounded-full bg-success/15">
-                                    <FontAwesomeIcon icon={faCheck} className="!size-[26px] text-success" />
-                                </span>
-                                <div>
-                                    <p className="text-[18px] font-bold text-success">
-                                        {isEdit ? "Changes saved" : "Congratulations!"}
-                                    </p>
-                                    <p className="mt-1 text-[13px] text-muted-foreground">
-                                        {isEdit
-                                            // Worth saying plainly: the token is a snapshot, so
-                                            // editing reissues it and any code already printed
-                                            // stops matching what is stored.
-                                            ? "Your event has been updated. Its QR code was reissued, so please use the new one."
-                                            : "Your event is ready. You can now share it with your guests."}
-                                    </p>
+                            <div className="flex flex-col gap-6">
+                                {/* ── Celebration Header ─────────────────────── */}
+                                <div className="mx-auto flex max-w-lg flex-col items-center gap-3 text-center">
+                                    <span className="grid h-16 w-16 place-items-center rounded-full bg-success/15">
+                                        <FontAwesomeIcon icon={faCheck} className="!size-[26px] text-success" />
+                                    </span>
+                                    <div>
+                                        <p className="text-[20px] font-bold text-success">
+                                            {isEdit ? "Changes saved" : "Congratulations!"}
+                                        </p>
+                                        <p className="mt-1 text-[13px] text-muted-foreground">
+                                            {isEdit
+                                                ? "Your event has been updated. Its QR code was reissued, so please use the new one."
+                                                : "Your event is ready. You can now share it with your guests."}
+                                        </p>
+                                    </div>
                                 </div>
 
-                                {/* Read from the SAVED row, not from the form. What
-                                    the server stored is what matters here, and the two
-                                    can differ - times come back normalised, and an
-                                    optional field left blank comes back null. */}
-                                <div className="w-full rounded-md border border-border p-4 text-left">
-                                    <p className="mb-3 text-[13px] font-bold text-foreground">Event Quick Summary</p>
-                                    <dl className="flex flex-col gap-2">
-                                        <SummaryRow label="Event Name" value={created?.name ?? form.name ?? "—"} />
-                                        <SummaryRow
-                                            label="Date & Time"
-                                            value={
-                                                created?.start_date
-                                                    ? `${created.start_date} | ${(created.start_time ?? "").slice(0, 5)} – ${(created.end_time ?? "").slice(0, 5)}`
-                                                    : "—"
-                                            }
-                                        />
-                                        <SummaryRow label="Category" value={created?.category?.name ?? selectedCategory?.name ?? "—"} />
-                                        <SummaryRow label="Menus Included" value={String(created?.menu_ids?.length ?? 0)} />
-                                        <SummaryRow
-                                            label="Status"
-                                            value={
-                                                <Badge
-                                                    variant="ghost"
-                                                    className="rounded bg-success/15 px-2 py-0.5 text-[11px] font-semibold capitalize text-success"
-                                                >
-                                                    {created?.status ?? form.status}
-                                                </Badge>
-                                            }
-                                        />
-                                    </dl>
-                                </div>
+                                <div className="grid gap-8 lg:grid-cols-2">
+                                    {/* ── Left Column: Summary & Actions ────── */}
+                                    <div className="flex min-w-0 flex-col gap-4">
+                                        {/* Event Quick Summary */}
+                                        <div className="w-full rounded-md border border-border p-4 text-left">
+                                            <p className="mb-3 text-[13px] font-bold text-foreground">Event Quick Summary</p>
+                                            <dl className="flex flex-col gap-2">
+                                                <SummaryRow label="Event Name" value={created?.name ?? form.name ?? "—"} />
+                                                <SummaryRow
+                                                    label="Date & Time"
+                                                    value={
+                                                        created?.start_date
+                                                            ? `${created.start_date} | ${(created.start_time ?? "").slice(0, 5)} – ${(created.end_time ?? "").slice(0, 5)}`
+                                                            : "—"
+                                                    }
+                                                />
+                                                <SummaryRow label="Category" value={created?.category?.name ?? selectedCategory?.name ?? "—"} />
+                                                <SummaryRow label="Menus Included" value={String(created?.menu_ids?.length ?? 0)} />
+                                                <SummaryRow
+                                                    label="Status"
+                                                    value={
+                                                        <Badge
+                                                            variant="ghost"
+                                                            className="rounded bg-success/15 px-2 py-0.5 text-[11px] font-semibold capitalize text-success"
+                                                        >
+                                                            {created?.status ?? form.status}
+                                                        </Badge>
+                                                    }
+                                                />
+                                            </dl>
+                                        </div>
 
-                                {/* The event's QR code. The image encodes the encrypted
-                                    token verbatim - a normal scanner reads an opaque
-                                    EVQ1 string, and nothing about the event leaks to
-                                    whoever scanned it. */}
-                                <div ref={qrWrapRef} id="event-qr" className="w-full rounded-md border border-border p-4">
-                                    <p className="mb-1 text-left text-[13px] font-bold text-foreground">Event QR Code</p>
-                                    <p className="mb-4 text-left text-[11.5px] text-muted-foreground">
-                                        Print this on your invitation. The code carries your event details in
-                                        encrypted form &mdash; only this app can read it back.
-                                    </p>
-                                    {/* The card's own Download button is off here:
-                                        the dedicated one below downloads the same
-                                        code and asks for a format first, and two
-                                        controls doing one job differently reads as
-                                        a bug. Copy code has no twin and stays. */}
-                                    <EventQr
-                                        token={created?.qr_token}
-                                        eventName={created?.name}
-                                        size={190}
-                                        showDownload={false}
-                                    />
-                                </div>
-
-                                {/*
-                                  The two downloads, stacked so they read as one
-                                  set rather than a primary action with an
-                                  afterthought beside it. Each asks PNG or SVG
-                                  before it writes anything — the formats are not
-                                  interchangeable, and choosing on someone's
-                                  behalf gets it wrong for whoever is sending the
-                                  file to a printer.
-
-                                  The QR is a real option here in a way it was not
-                                  on step 5: the event now exists, so a token has
-                                  been issued.
-                                */}
-                                <div className="flex w-full flex-col gap-2">
-                                    <DownloadFormatButton
-                                        target="invitation"
-                                        label="Download Invitation"
-                                        busy={downloading}
-                                        onPick={downloadInvitation}
-                                        variant="default"
-                                    />
-                                    {!!created?.qr_token && (
-                                        <DownloadFormatButton
-                                            target="qr"
-                                            label="Download QR Code"
-                                            icon={faQrcode}
-                                            busy={downloading}
-                                            onPick={downloadInvitation}
-                                        />
-                                    )}
-                                </div>
-
-                                {/* Off-canvas capture target — positioned away
-                                    rather than hidden, because a `display:none`
-                                    element has no layout box and html-to-image
-                                    measures it as 0x0 and writes a blank file. */}
-                                {artwork.kind === "template" && (
-                                    <div
-                                        aria-hidden
-                                        className="pointer-events-none fixed left-[-10000px] top-0"
-                                    >
-                                        <div ref={exportCardRef}>
-                                            <InvitationCard
-                                                template={artwork.template}
-                                                componentsOverride={
-                                                    compOverride
-                                                        ? Object.fromEntries(
-                                                            COMPONENT_KEYS.map((k) => [k, compOverride[k] ? 1 : 0])
-                                                        )
-                                                        : null
-                                                }
-                                                orderOverride={orderOverride}
-                                                data={invitationData}
+                                        {/* Event QR Code */}
+                                        <div ref={qrWrapRef} id="event-qr" className="w-full rounded-md border border-border p-4">
+                                            <p className="mb-1 text-left text-[13px] font-bold text-foreground">Event QR Code</p>
+                                            <p className="mb-4 text-left text-[11.5px] text-muted-foreground">
+                                                Print this on your invitation. The code carries your event details in
+                                                encrypted form &mdash; only this app can read it back.
+                                            </p>
+                                            <EventQr
+                                                token={created?.qr_token}
+                                                eventName={created?.name}
+                                                size={190}
+                                                showDownload={false}
                                             />
                                         </div>
+
+                                        {/* Download buttons */}
+                                        <div className="flex w-full flex-col gap-2">
+                                            <DownloadFormatButton
+                                                target="invitation"
+                                                label="Download Invitation"
+                                                busy={downloading}
+                                                onPick={downloadInvitation}
+                                                variant="default"
+                                            />
+                                            {!!created?.qr_token && (
+                                                <DownloadFormatButton
+                                                    target="qr"
+                                                    label="Download QR Code"
+                                                    icon={faQrcode}
+                                                    busy={downloading}
+                                                    onPick={downloadInvitation}
+                                                />
+                                            )}
+                                        </div>
+
+                                        {/* Share Tiles */}
+                                        <div className="w-full">
+                                            <p className="mb-3 text-left text-[13px] font-bold text-foreground">Share your event</p>
+                                            <div className="grid grid-cols-4 gap-3">
+                                                <ShareTile
+                                                    icon={faWhatsappBrand}
+                                                    label="WhatsApp"
+                                                    className="bg-success/15 text-success"
+                                                    soon
+                                                />
+                                                <ShareTile
+                                                    icon={faEnvelope}
+                                                    label="Email"
+                                                    className="bg-primary/10 text-primary"
+                                                    soon
+                                                />
+                                                <ShareTile
+                                                    icon={faLink}
+                                                    label="Copy Link"
+                                                    className="bg-accent/15 text-accent"
+                                                    onClick={() => {
+                                                        if (!created) return;
+                                                        navigator.clipboard
+                                                            .writeText(`${window.location.origin}/dashboard/events/${created.id}`)
+                                                            .then(() => toast.success("Event link copied"))
+                                                            .catch(() => toast.error("Your browser blocked clipboard access."));
+                                                    }}
+                                                />
+                                                <ShareTile
+                                                    icon={faQrcode}
+                                                    label="QR Code"
+                                                    className="bg-warning/15 text-warning"
+                                                    onClick={() => {
+                                                        document
+                                                            .getElementById("event-qr")
+                                                            ?.scrollIntoView({ behavior: "smooth", block: "center" });
+                                                    }}
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <Button asChild className="mt-2 h-11 w-full rounded-md text-[13px] font-semibold">
+                                            <Link href="/dashboard">Go to My Events</Link>
+                                        </Button>
                                     </div>
-                                )}
 
-                                {/*
-                                  Share. Copy Link is real; the other three are not
-                                  yet, and are shown disabled rather than as buttons
-                                  that do nothing when clicked.
+                                    {/* ── Right Column: Live Event Invitation Card ── */}
+                                    <div className="flex min-w-0 flex-col items-center gap-3">
+                                        <div className="w-full text-left">
+                                            <PanelHeading label="Event Invitation" />
+                                            <p className="mt-1 text-[12px] text-muted-foreground">
+                                                Your finalized invitation with embedded live event QR code.
+                                            </p>
+                                        </div>
 
-                                  WhatsApp and Email need a PUBLIC invitation page to
-                                  send a guest to, and there is no such route — the
-                                  only event URL today is inside this portal and
-                                  requires the client's own login, so sending it to a
-                                  guest would hand them a sign-in screen.
-                                */}
-                                <div className="w-full">
-                                    <p className="mb-3 text-left text-[13px] font-bold text-foreground">Share your event</p>
-                                    <div className="grid grid-cols-4 gap-3">
-                                        <ShareTile
-                                            icon={faWhatsappBrand}
-                                            label="WhatsApp"
-                                            className="bg-success/15 text-success"
-                                            soon
-                                        />
-                                        <ShareTile
-                                            icon={faEnvelope}
-                                            label="Email"
-                                            className="bg-primary/10 text-primary"
-                                            soon
-                                        />
-                                        <ShareTile
-                                            icon={faLink}
-                                            label="Copy Link"
-                                            className="bg-accent/15 text-accent"
-                                            onClick={() => {
-                                                if (!created) return;
-                                                navigator.clipboard
-                                                    .writeText(`${window.location.origin}/dashboard/events/${created.id}`)
-                                                    .then(() => toast.success("Event link copied"))
-                                                    // Clipboard access is denied outside a secure
-                                                    // context; a silent no-op would read as a bug.
-                                                    .catch(() => toast.error("Your browser blocked clipboard access."));
-                                            }}
-                                        />
-                                        <ShareTile
-                                            icon={faQrcode}
-                                            label="QR Code"
-                                            className="bg-warning/15 text-warning"
-                                            onClick={() => {
-                                                document
-                                                    .getElementById("event-qr")
-                                                    ?.scrollIntoView({ behavior: "smooth", block: "center" });
-                                            }}
-                                        />
+                                        <div ref={exportCardRef} className="flex w-full justify-center pt-2">
+                                            {artwork.kind === "template" ? (
+                                                <InvitationCard
+                                                    template={artwork.template}
+                                                    componentsOverride={
+                                                        compOverride
+                                                            ? Object.fromEntries(
+                                                                COMPONENT_KEYS.map((k) => [k, compOverride[k] ? 1 : 0])
+                                                            )
+                                                            : null
+                                                    }
+                                                    orderOverride={orderOverride}
+                                                    data={invitationData}
+                                                />
+                                            ) : (
+                                                <div
+                                                    className={cn(
+                                                        "w-full max-w-[280px] overflow-hidden rounded-md border border-border p-6 text-center shadow-sm bg-gradient-to-br",
+                                                        selectedTheme?.swatch
+                                                    )}
+                                                >
+                                                    <p className="text-[10.5px] font-semibold uppercase tracking-[0.18em] text-foreground/70">
+                                                        You&rsquo;re invited to
+                                                    </p>
+                                                    <p
+                                                        className="mt-2 text-[22px] font-bold leading-tight break-words"
+                                                        style={{ color: form.primary_color }}
+                                                    >
+                                                        {form.name || "Your Event Name"}
+                                                    </p>
+                                                    {form.tagline && (
+                                                        <p className="mt-1.5 text-[12px] text-foreground/70 break-words">{form.tagline}</p>
+                                                    )}
+                                                    <div className="my-4 flex items-center justify-center gap-3 border-y border-foreground/10 py-3">
+                                                        <span className="text-[26px] font-bold tabular-nums text-foreground">
+                                                            {form.start_date ? form.start_date.slice(8, 10) : "--"}
+                                                        </span>
+                                                        <span className="text-left text-[11px] font-semibold uppercase leading-tight text-foreground/70">
+                                                            {form.start_date ? form.start_date.slice(5, 7) : "--"}
+                                                            <br />
+                                                            {form.start_date ? form.start_date.slice(0, 4) : "----"}
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-[11.5px] text-foreground/70">
+                                                        {form.start_time || "--:--"} &ndash; {form.end_time || "--:--"}
+                                                    </p>
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
-
-                                {/* /dashboard is the events grid. /dashboard/events has
-                                    no page of its own and falls through to the
-                                    "coming soon" catch-all. */}
-                                <Button asChild className="mt-2 h-11 w-full rounded-md text-[13px] font-semibold">
-                                    <Link href="/dashboard">Go to My Events</Link>
-                                </Button>
                             </div>
                         )}
                     </div>
