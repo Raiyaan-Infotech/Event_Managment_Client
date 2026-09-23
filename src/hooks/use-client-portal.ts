@@ -164,6 +164,12 @@ export interface TemplateOption {
 
 export interface EventOptions {
     plan: ClientPlan | null;
+    /**
+     * Events already created on this account against `plan.max_events` —
+     * DELETED ones included, because a deleted event still spends its slot.
+     * Undefined on an older backend.
+     */
+    events_used?: number;
     /** Why the lists are empty — null when they are not. Show it verbatim. */
     reason: string | null;
     categories: TaxonomyOption[];

@@ -6,7 +6,6 @@ import { faCalendarXmark } from "@fortawesome/free-solid-svg-icons";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useEventOptions } from "@/hooks/use-client-portal";
-import { useClientEvents } from "@/hooks/use-client-events";
 import { EventWizard } from "./event-wizard";
 
 /**
@@ -16,24 +15,23 @@ import { EventWizard } from "./event-wizard";
  * answer only arrives after five steps of typing — the limit is knowable before
  * the first field, so it is said before the first field.
  *
- * Both numbers come from calls the wizard makes anyway: the limit rides on the
- * plan in `/client/event-options`, and the count is the events list's own total.
- * Deliberately NOT the billing endpoint — a screen that refuses to open must not
- * depend on a second service answering.
+ * Both numbers come from `/client/event-options`, the call the wizard makes
+ * anyway, and `events_used` is counted server-side exactly as the create counts
+ * it — DELETED events included. The events list is deliberately not used for
+ * the count: it shows live events only, so it would read 4 of 5 while the create
+ * was refused.
  *
- * Fail-open: while either number is loading or absent (an older backend does not
- * send the limits) the wizard opens. A reporting gap should not stop somebody
- * creating an event they are entitled to — the backend still has the last word.
+ * Fail-open: while the numbers are loading or absent (an older backend sends
+ * neither) the wizard opens. A reporting gap should not stop somebody creating
+ * an event they are entitled to — the backend still has the last word.
  */
 export function EventLimitGate({ initialThemeId }: { initialThemeId?: string }) {
     const options = useEventOptions();
-    // limit: 1 — this asks for the TOTAL in the pagination envelope, not the rows.
-    const events = useClientEvents({ limit: 1 });
 
     const limit = options.data?.plan?.max_events ?? null;
-    const used = events.data?.pagination?.totalItems ?? null;
+    const used = options.data?.events_used ?? null;
     const limitReached =
-        !options.isLoading && !events.isLoading && limit !== null && used !== null && used >= limit;
+        !options.isLoading && limit !== null && used !== null && used >= limit;
 
     if (!limitReached) return <EventWizard initialThemeId={initialThemeId} />;
 
