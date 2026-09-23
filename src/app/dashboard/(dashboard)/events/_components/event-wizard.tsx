@@ -55,6 +55,8 @@ import { DownloadFormatButton, type DownloadKind } from "@/components/common/inv
 import { SignInPrompt } from '@/components/common/sign-in-prompt';
 import { ImageCropDialog } from '@/components/common/image-crop-dialog';
 import { isLockedMenu } from '@/lib/locked-menus';
+import { formatDate } from '@/lib/format';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 
 /**
  * The six-step event wizard, used by BOTH routes.
@@ -208,6 +210,13 @@ export function EventWizard({
     const [step, setStep] = useState(1);
     const [form, setForm] = useState<FormState>(EMPTY);
     const [errors, setErrors] = useState<Record<string, boolean>>({});
+    /** One dialog, driven by whatever needs confirming: a date, or the save. */
+    const [confirm, setConfirm] = useState<{
+        title: string;
+        body: string;
+        action: string;
+        onConfirm: () => void;
+    } | null>(null);
     const [menus, setMenus] = useState<Record<number, boolean>>({});
     /** App features switched OFF for this event (true = off). Absent = on. */
     const [appOff, setAppOff] = useState<Record<number, boolean>>({});
@@ -635,11 +644,34 @@ export function EventWizard({
         return true;
     };
 
-    const goNext = () => {
-        if (!validate(step + 1)) return;
+    /**
+     * A date is confirmed as it is picked, because on a new event it is the one
+     * field that cannot be corrected later. Only a complete date asks — a native
+     * date input reports every partial keystroke, and prompting on "0002-01-01"
+     * on the way to typing a year would be unusable.
+     */
+    const confirmDate = (field: "start_date" | "end_date", value: string) => {
+        const complete = /^\d{4}-\d{2}-\d{2}$/.test(value) && Number(value.slice(0, 4)) > 1900;
+        if (!complete || value === form[field]) {
+            setField(field, value);
+            return;
+        }
+        const label = field === "start_date" ? "start" : "end";
+        setConfirm({
+            title: `Use this ${label} date?`,
+            body: `${formatDate(value)} will be set as the event ${label} date. It cannot be changed once the event is created.`,
+            action: "Yes, use this date",
+            onConfirm: () => {
+                setField(field, value);
+                setConfirm(null);
+            },
+        });
+    };
 
-        if (step === 5) {
-            if (saving) return;
+    /** Step 5's actual save, run only once the review screen is confirmed. */
+    const submitEvent = () => {
+        if (saving) return;
+        {
             const payload = {
                 event_category_id: Number(form.category_id),
                 name: form.name.trim(),
@@ -686,7 +718,30 @@ export function EventWizard({
 
             if (isEdit && eventId) updateEvent.mutate({ id: eventId, data: payload });
             else createEvent.mutate(payload);
-            return; // onDone advances to step 6
+            // onDone advances to step 6
+        }
+    };
+
+    const goNext = () => {
+        if (!validate(step + 1)) return;
+
+        // The review screen is the last chance to change anything — and on a new
+        // event the date cannot be changed at all afterwards — so it asks before
+        // it saves rather than acting on a single click.
+        if (step === 5) {
+            if (saving) return;
+            setConfirm({
+                title: isEdit ? "Save these changes?" : "Create this event?",
+                body: isEdit
+                    ? "Your changes will be saved and shown to your guests."
+                    : `${form.name || "This event"} will be created for ${form.start_date || "the selected date"}. The event date cannot be changed afterwards.`,
+                action: isEdit ? "Save Changes" : "Create Event",
+                onConfirm: () => {
+                    setConfirm(null);
+                    submitEvent();
+                },
+            });
+            return;
         }
 
         setStep((s) => Math.min(STEPS.length, s + 1));
@@ -952,13 +1007,16 @@ export function EventWizard({
                                     <SectionRule label="Date & Time" />
 
                                     <div className="grid gap-5 sm:grid-cols-2">
-                                        <Field label="Start Date" required error={errors.start_date}>
+                                        <Field label="Start Date" required error={errors.start_date}
+                                            hint={isEdit ? "The event date cannot be changed after it is created." : undefined}>
                                             <IconInput icon={faCalendarDays} type="date" value={form.start_date}
-                                                onChange={(v) => setField("start_date", v)} invalid={errors.start_date} />
+                                                disabled={isEdit}
+                                                onChange={(v) => confirmDate("start_date", v)} invalid={errors.start_date} />
                                         </Field>
                                         <Field label="End Date" required error={errors.end_date}>
                                             <IconInput icon={faCalendarDays} type="date" value={form.end_date}
-                                                onChange={(v) => setField("end_date", v)} invalid={errors.end_date} />
+                                                disabled={isEdit}
+                                                onChange={(v) => confirmDate("end_date", v)} invalid={errors.end_date} />
                                         </Field>
                                         <Field label="Start Time" required error={errors.start_time}>
                                             <IconInput icon={faClock} type="time" value={form.start_time}
@@ -1818,6 +1876,30 @@ export function EventWizard({
                     .
                 </p>
             </div>
+
+            <Dialog open={!!confirm} onOpenChange={(open) => !open && setConfirm(null)}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="text-[15px]">{confirm?.title}</DialogTitle>
+                        <DialogDescription className="text-[13px]">{confirm?.body}</DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter className="gap-2 sm:gap-2">
+                        <Button
+                            variant="outline"
+                            className="h-10 rounded-md text-[13px]"
+                            onClick={() => setConfirm(null)}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            className="h-10 rounded-md text-[13px] font-semibold"
+                            onClick={() => confirm?.onConfirm()}
+                        >
+                            {confirm?.action}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
@@ -1836,9 +1918,9 @@ const SUBTITLES = [
 /* ── small building blocks ──────────────────────────────────────────────── */
 
 function Field({
-    label, required, error, children,
+    label, required, error, hint, children,
 }: {
-    label: string; required?: boolean; error?: boolean; children: React.ReactNode;
+    label: string; required?: boolean; error?: boolean; hint?: string; children: React.ReactNode;
 }) {
     return (
         <div className="flex flex-col gap-2">
@@ -1846,6 +1928,7 @@ function Field({
                 {label} {required && <span className="text-destructive">*</span>}
             </Label>
             {children}
+            {hint && !error && <p className="text-[11.5px] text-muted-foreground">{hint}</p>}
             {error && <p className="text-[11.5px] text-destructive">This field is required.</p>}
         </div>
     );
@@ -2000,10 +2083,10 @@ function Counter({ value, max }: { value: number; max: number }) {
 }
 
 function IconInput({
-    icon, type, value, onChange, invalid,
+    icon, type, value, onChange, invalid, disabled,
 }: {
     icon: typeof faCalendarDays; type: string; value: string;
-    onChange: (v: string) => void; invalid?: boolean;
+    onChange: (v: string) => void; invalid?: boolean; disabled?: boolean;
 }) {
     return (
         <div className="relative">
@@ -2014,6 +2097,7 @@ function IconInput({
             <Input
                 type={type}
                 value={value}
+                disabled={disabled}
                 onChange={(e) => onChange(e.target.value)}
                 className={cn("h-11 rounded-md pl-10", invalid && "border-destructive")}
             />
