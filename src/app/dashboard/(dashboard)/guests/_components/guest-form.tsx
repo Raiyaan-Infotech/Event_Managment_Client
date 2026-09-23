@@ -32,10 +32,9 @@ import { resolveArtwork } from "@/lib/event-templates";
 import { useClientEvents } from "@/hooks/use-client-events";
 import { useEventOptions } from "@/hooks/use-client-portal";
 import {
-    useAllGuestGroups, useCreateGuest, useUpdateGuest, useGuest, useGuestStats,
+    useAllGuestGroups, useCreateGuest, useUpdateGuest, useGuest, useGuestCapacity,
     type GuestPayload, type RsvpStatus, type ResponseType,
 } from "@/hooks/use-guests";
-import { useBillingOverview } from "@/hooks/use-billing";
 
 /**
  * Add / Edit Guest — the same form for both.
@@ -137,15 +136,17 @@ export function GuestForm({ guestId }: { guestId?: number }) {
       picked — said here, under the picker, rather than after the whole form is
       filled in. Counted in ROWS, matching clientGuest.createGuest, which counts
       invitations rather than heads: a party of four is one row against the cap.
-      Editing an existing guest adds nothing, so it is never blocked.
+      Editing an existing guest adds nothing, so it is never blocked. Read from
+      /client/guests/capacity — the server's own count and limit — so the form
+      blocks at exactly the number the save is refused at. When EVERY event is
+      full, GuestLimitGate stops this form opening at all.
     */
-    const billing = useBillingOverview();
-    const pickedEventId = Number(form.event_id) || null;
-    const eventGuestStats = useGuestStats(pickedEventId);
-    const guestLimit = billing.data?.usage.guests.per_event_limit ?? null;
-    const guestsUsed = eventGuestStats.data?.total_rows ?? null;
-    const guestLimitReached =
-        !isEdit && guestLimit !== null && guestsUsed !== null && guestsUsed >= guestLimit;
+    const capacity = useGuestCapacity();
+    const guestLimit = capacity.data?.limit ?? null;
+    const fullEventIds = new Set(
+        (capacity.data?.events ?? []).filter((e) => e.full).map((e) => String(e.event_id)),
+    );
+    const guestLimitReached = !isEdit && fullEventIds.has(form.event_id);
 
     // Functional updater — a Select or a debounced field would otherwise write
     // back a stale snapshot of the whole form.
@@ -593,9 +594,16 @@ export function GuestForm({ guestId }: { guestId?: number }) {
                                             <SelectValue placeholder="Select an event" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            {eventRows.map((e) => (
-                                                <SelectItem key={e.id} value={String(e.id)}>{e.name}</SelectItem>
-                                            ))}
+                                            {eventRows.map((e) => {
+                                                // A full event can't take a NEW guest; an edit
+                                                // may keep the guest's own event selected.
+                                                const full = fullEventIds.has(String(e.id)) && !(isEdit && String(e.id) === form.event_id);
+                                                return (
+                                                    <SelectItem key={e.id} value={String(e.id)} disabled={full}>
+                                                        {e.name}{full ? ` — Full (${guestLimit}/${guestLimit})` : ""}
+                                                    </SelectItem>
+                                                );
+                                            })}
                                         </SelectContent>
                                     </Select>
 

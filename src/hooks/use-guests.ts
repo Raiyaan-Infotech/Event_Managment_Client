@@ -176,6 +176,24 @@ export function useGuestStats(eventId?: number | null) {
     });
 }
 
+export interface GuestCapacity {
+    /** Guests allowed per event on the host's current plan; null = unlimited. */
+    limit: number | null;
+    events: { event_id: number; name: string; used: number; full: boolean }[];
+}
+
+/**
+ * Per-event guest count against the plan limit, counted exactly as the server's
+ * create counts it. Under KEY, so adding or deleting a guest refreshes it.
+ */
+export function useGuestCapacity() {
+    return useQuery({
+        queryKey: [...KEY, 'capacity'],
+        queryFn: () => api.get<GuestCapacity>(`${ENDPOINT}/capacity`),
+        retry: false,
+    });
+}
+
 export function useGuest(id: number | null) {
     return useQuery({
         queryKey: [...KEY, 'detail', id],

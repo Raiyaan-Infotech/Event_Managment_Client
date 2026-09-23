@@ -10,6 +10,7 @@ import {
     faCircleXmark, faForward, faLightbulb, faHeadset, faCalendarDays,
     faUsers, faFileImport, faSpinner,
 } from "@fortawesome/free-solid-svg-icons";
+import { GuestLimitGate } from "../_components/guest-limit-gate";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -90,6 +91,14 @@ const FIELD_LABELS: Record<string, string> = {
 };
 
 export default function ImportGuestsPage() {
+    return (
+        <GuestLimitGate>
+            <ImportGuests />
+        </GuestLimitGate>
+    );
+}
+
+function ImportGuests() {
     const router = useRouter();
     const qc = useQueryClient();
     const inputRef = useRef<HTMLInputElement>(null);
