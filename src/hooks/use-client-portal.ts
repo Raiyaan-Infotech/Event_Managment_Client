@@ -33,6 +33,13 @@ export interface ClientPlan {
     price: string;
     trial_days: number;
     is_active: number;
+    /** Plan limits. NULL = unlimited. Undefined on an older backend. */
+    max_events?: number | null;
+    max_guests_per_event?: number | null;
+    max_photos?: number | null;
+    max_videos?: number | null;
+    storage_limit?: number | null;
+    storage_unit?: "MB" | "GB" | null;
 }
 
 export interface ClientProfile {
