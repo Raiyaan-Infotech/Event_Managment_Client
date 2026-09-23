@@ -54,6 +54,7 @@ import { TemplateArtwork } from "@/components/common/template-artwork";
 import { DownloadFormatButton, type DownloadKind } from "@/components/common/invitation-download";
 import { SignInPrompt } from '@/components/common/sign-in-prompt';
 import { ImageCropDialog } from '@/components/common/image-crop-dialog';
+import { isLockedMenu } from '@/lib/locked-menus';
 
 /**
  * The six-step event wizard, used by BOTH routes.
@@ -662,10 +663,14 @@ export function EventWizard({
                 // Only the menus still toggled on, and only ones the plan
                 // actually returned — a stale key from a previous plan would be
                 // rejected by the server rather than silently dropped.
-                menu_ids: menuRows.filter((m) => menus[m.id] ?? true).map((m) => m.id),
+                menu_ids: menuRows
+                    .filter((m) => isLockedMenu(m.slug) || (menus[m.id] ?? true))
+                    .map((m) => m.id),
                 // The OFF list: an app feature the plan grants shows on every
-                // event unless it is named here.
-                disabled_app_menu_ids: appFeatures.filter((m) => appOff[m.id]).map((m) => m.id),
+                // event unless it is named here. A locked feature never is.
+                disabled_app_menu_ids: appFeatures
+                    .filter((m) => appOff[m.id] && !isLockedMenu(m.slug))
+                    .map((m) => m.id),
                 theme_id: form.theme_id,
                 primary_color: form.primary_color,
                 // "" → null, so removing the photo in edit mode clears it.
@@ -1093,18 +1098,27 @@ export function EventWizard({
                                             {menuGroups.map(({ group, rows }) => (
                                                 <div key={group}>
                                                     <ul className="flex flex-col divide-y divide-border">
-                                                        {rows.map((m) => (
+                                                        {rows.map((m) => {
+                                                            const locked = isLockedMenu(m.slug);
+                                                            return (
                                                             <li key={m.id} className="flex items-center justify-between gap-4 py-3">
                                                                 <span className="min-w-0 text-[13.5px] font-medium text-foreground break-words">
                                                                     {m.name}
+                                                                    {locked && (
+                                                                        <span className="block text-[11.5px] font-normal text-muted-foreground">
+                                                                            Always included
+                                                                        </span>
+                                                                    )}
                                                                 </span>
                                                                 <Switch
-                                                                    checked={menus[m.id] ?? true}
+                                                                    checked={locked || (menus[m.id] ?? true)}
+                                                                    disabled={locked}
                                                                     onCheckedChange={(v) => setMenus((p) => ({ ...p, [m.id]: v }))}
                                                                     aria-label={m.name}
                                                                 />
                                                             </li>
-                                                        ))}
+                                                            );
+                                                        })}
                                                     </ul>
                                                 </div>
                                             ))}
@@ -1126,18 +1140,27 @@ export function EventWizard({
                                         </p>
                                     ) : (
                                         <ul className="mt-2 flex flex-col divide-y divide-border">
-                                            {appFeatures.map((m) => (
+                                            {appFeatures.map((m) => {
+                                                const locked = isLockedMenu(m.slug);
+                                                return (
                                                 <li key={m.id} className="flex items-center justify-between gap-4 py-3">
                                                     <span className="min-w-0 text-[13.5px] font-medium text-foreground break-words">
                                                         {m.name}
+                                                        {locked && (
+                                                            <span className="block text-[11.5px] font-normal text-muted-foreground">
+                                                                Always included
+                                                            </span>
+                                                        )}
                                                     </span>
                                                     <Switch
-                                                        checked={!appOff[m.id]}
+                                                        checked={locked || !appOff[m.id]}
+                                                        disabled={locked}
                                                         onCheckedChange={(v) => setAppOff((p) => ({ ...p, [m.id]: !v }))}
                                                         aria-label={m.name}
                                                     />
                                                 </li>
-                                            ))}
+                                                );
+                                            })}
                                         </ul>
                                     )}
                                 </div>

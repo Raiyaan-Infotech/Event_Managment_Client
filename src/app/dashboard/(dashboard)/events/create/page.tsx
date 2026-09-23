@@ -1,4 +1,4 @@
-import { EventWizard } from "../_components/event-wizard";
+import { EventLimitGate } from "../_components/event-limit-gate";
 
 /**
  * Create New Event.
@@ -19,5 +19,5 @@ export default async function CreateEventPage({
     searchParams: Promise<{ theme?: string }>;
 }) {
     const { theme } = await searchParams;
-    return <EventWizard initialThemeId={theme} />;
+    return <EventLimitGate initialThemeId={theme} />;
 }
