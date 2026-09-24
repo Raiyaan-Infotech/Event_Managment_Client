@@ -54,7 +54,8 @@ export interface Guest {
     last_name: string | null;
     name: string;
     full_name: string;
-    email: string;
+    /** Optional — the mobile number is the key a contact is known by. */
+    email: string | null;
     dial_code: string | null;
     mobile: string | null;
     whatsapp: string | null;
@@ -118,9 +119,10 @@ export interface GuestPayload {
     date_of_birth?: string | null;
     first_name: string;
     last_name?: string | null;
-    email: string;
+    email?: string | null;
     dial_code?: string | null;
-    mobile?: string | null;
+    /** Required: an invitation is shared to a phone number. */
+    mobile: string;
     whatsapp?: string | null;
     company?: string | null;
     table_number?: string | null;

@@ -207,7 +207,10 @@ export function GuestForm({ guestId }: { guestId?: number }) {
     const validate = () => {
         const next: Record<string, boolean> = {};
         if (!form.first_name.trim()) next.first_name = true;
-        if (!form.email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(form.email.trim())) next.email = true;
+        // Mobile is mandatory, email optional: an invitation is shared to a
+        // phone number, so that is the field a contact cannot be without.
+        if (!form.mobile.trim()) next.mobile = true;
+        if (form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(form.email.trim())) next.email = true;
 
         if (Object.keys(next).length) {
             setErrors(next);
@@ -226,9 +229,9 @@ export function GuestForm({ guestId }: { guestId?: number }) {
             date_of_birth: form.date_of_birth || null,
             first_name: form.first_name.trim(),
             last_name: form.last_name.trim() || null,
-            email: form.email.trim(),
+            email: form.email.trim() || null,
             dial_code: form.dial_code,
-            mobile: form.mobile.trim() || null,
+            mobile: form.mobile.trim(),
             whatsapp: form.whatsapp.trim() || null,
             company: form.company.trim() || null,
             table_number: form.table_number.trim() || null,
@@ -307,7 +310,7 @@ export function GuestForm({ guestId }: { guestId?: number }) {
                                     />
                                 </Field>
 
-                                <Field label="Email Address" required error={errors.email}>
+                                <Field label="Email Address" error={errors.email}>
                                     <div className="relative">
                                         <FontAwesomeIcon
                                             icon={faEnvelope}
@@ -323,7 +326,7 @@ export function GuestForm({ guestId }: { guestId?: number }) {
                                     </div>
                                 </Field>
 
-                                <Field label="Phone Number">
+                                <Field label="Phone Number" required error={errors.mobile}>
                                     <div className="flex gap-2">
                                         <Select value={form.dial_code} onValueChange={(v) => setField("dial_code", v)}>
                                             <SelectTrigger className="h-11 w-[104px] shrink-0 rounded-md text-[13px]">
@@ -341,7 +344,7 @@ export function GuestForm({ guestId }: { guestId?: number }) {
                                             // it here beats a round trip to say so.
                                             onChange={(e) => setField("mobile", e.target.value.replace(/[^\d\s-]/g, "").slice(0, 20))}
                                             placeholder="Enter phone number"
-                                            className="h-11 min-w-0 flex-1 rounded-md"
+                                            className={cn("h-11 min-w-0 flex-1 rounded-md", errors.mobile && "border-destructive")}
                                             inputMode="numeric"
                                         />
                                     </div>
