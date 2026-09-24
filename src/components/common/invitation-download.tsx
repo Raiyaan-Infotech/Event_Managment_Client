@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faDownload, faImage, faFileImage, faQrcode } from '@fortawesome/free-solid-svg-icons';
+import { faDownload, faImage, faFileImage, faQrcode, faSpinner } from '@fortawesome/free-solid-svg-icons';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import {
@@ -29,6 +29,33 @@ import type { ClientEvent } from '@/hooks/use-client-events';
  * asks for.
  */
 export type DownloadKind = ExportFormat | 'qr' | 'qr-svg';
+
+/**
+ * Full-screen "preparing" state while a download is being built.
+ *
+ * Building a PNG means fetching every frame/decoration through the server and
+ * rasterising the card at print resolution — several seconds on a real
+ * connection. The buttons only changed their label, which nobody watches once a
+ * dialog has closed, so it read as nothing happening. This blocks the page
+ * (a second click would start a second export) and says what is going on.
+ */
+export function DownloadingOverlay({ busy }: { busy: DownloadKind | null }) {
+    if (!busy) return null;
+    const what = busy === 'qr' || busy === 'qr-svg' ? 'QR code' : 'invitation';
+    return (
+        <div
+            role="status"
+            aria-live="polite"
+            className="fixed inset-0 z-[100] grid place-items-center bg-background/70 backdrop-blur-[2px]"
+        >
+            <div className="flex flex-col items-center gap-3 rounded-lg border border-border bg-card px-8 py-6 shadow-lg">
+                <FontAwesomeIcon icon={faSpinner} spin className="!size-[26px] text-primary" />
+                <p className="text-[13px] font-semibold text-foreground">Preparing your {what}…</p>
+                <p className="text-[11.5px] text-muted-foreground">Your download will start automatically.</p>
+            </div>
+        </div>
+    );
+}
 
 /** Which artefact a button downloads. The format is chosen in the dialog. */
 export type DownloadTarget = 'invitation' | 'qr';
@@ -259,6 +286,7 @@ export function InvitationDownload({
 
     return (
         <>
+            <DownloadingOverlay busy={busy} />
             <DownloadMenu
                 busy={busy}
                 onPick={handle}

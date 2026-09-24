@@ -51,7 +51,7 @@ import { downloadNodeAsImage, downloadQrAsPng, downloadQrAsSvg, fileSlug } from 
 import { EventQr } from "@/components/common/event-qr";
 import { InvitationCard, type InvitationData } from "@/components/common/invitation-card";
 import { TemplateArtwork } from "@/components/common/template-artwork";
-import { DownloadFormatButton, type DownloadKind } from "@/components/common/invitation-download";
+import { DownloadFormatButton, DownloadingOverlay, type DownloadKind } from "@/components/common/invitation-download";
 import { SignInPrompt } from '@/components/common/sign-in-prompt';
 import { ImageCropDialog } from '@/components/common/image-crop-dialog';
 import { isLockedMenu } from '@/lib/locked-menus';
@@ -1706,6 +1706,7 @@ export function EventWizard({
                                         </div>
 
                                         {/* Download buttons */}
+                                        <DownloadingOverlay busy={downloading} />
                                         <div className="flex w-full flex-col gap-2">
                                             <DownloadFormatButton
                                                 target="invitation"

@@ -154,8 +154,10 @@ export async function downloadNodeAsImage(
         const dataUrl =
             format === 'svg'
                 ? await toSvg(node, { cacheBust: true })
-                // 3x, so the card is usable in print rather than only on screen.
-                : await toPng(node, { pixelRatio: options.pixelRatio ?? 3, cacheBust: true });
+                // 5x: the invitation's QR is drawn small (a ~300-character token in
+                // a 56px box), and at 3x each module was ~2px — legible on screen,
+                // unreliable to scan once printed. 5x roughly doubles that.
+                : await toPng(node, { pixelRatio: options.pixelRatio ?? 5, cacheBust: true });
 
         triggerDownload(dataUrl, `${name}.${format}`);
     });

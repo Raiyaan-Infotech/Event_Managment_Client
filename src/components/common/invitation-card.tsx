@@ -485,7 +485,13 @@ export function InvitationCard({
                     <QRCodeSVG
                         value={data.qrToken || PREVIEW_QR_VALUE}
                         size={56}
-                        level="M"
+                        // Lowest error correction: the token is ~300 characters, which
+                        // at level M needs an 85-module grid drawn in a 56px box —
+                        // under a pixel per module on screen and too fine to scan off
+                        // a print. Level L needs a smaller grid, so each module is
+                        // bigger. The code is a clean vector, not a scuffed sticker,
+                        // so the extra error correction bought little.
+                        level="L"
                         // The quiet zone belongs INSIDE the code, not as CSS
                         // padding around it: measured in modules it scales with
                         // the code, so it stays correct at any printed size.
