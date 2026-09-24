@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
-    faUser, faCalendarDays, faLocationDot, faPeopleGroup, faCircleCheck,
+    faUser, faPeopleGroup, faCircleCheck,
     faPhone, faBuilding, faEnvelope, faPlus, faChevronDown, faLightbulb,
     faArrowRight, faMapLocationDot, faClipboardList, faUserPlus,
 } from "@fortawesome/free-solid-svg-icons";
@@ -25,12 +25,6 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { EventThumbnail } from "@/components/common/event-thumbnail";
-import { TemplateArtwork } from "@/components/common/template-artwork";
-import type { InvitationData } from "@/components/common/invitation-card";
-import { resolveArtwork } from "@/lib/event-templates";
-import { useClientEvents } from "@/hooks/use-client-events";
-import { useEventOptions } from "@/hooks/use-client-portal";
 import {
     useAllGuestGroups, useCreateGuest, useUpdateGuest, useGuest, useGuestCapacity,
     type GuestPayload, type RsvpStatus, type ResponseType,
@@ -77,7 +71,6 @@ const STATUS_FOR_RESPONSE: Record<Exclude<ResponseType, "none">, RsvpStatus> = {
 };
 
 interface FormState {
-    event_id: string;
     group_id: string;
     title: string;
     date_of_birth: string;
@@ -106,7 +99,7 @@ interface FormState {
 }
 
 const EMPTY: FormState = {
-    event_id: "", group_id: "", title: "", date_of_birth: "", first_name: "", last_name: "", email: "",
+    group_id: "", title: "", date_of_birth: "", first_name: "", last_name: "", email: "",
     dial_code: "+91", mobile: "", whatsapp: "", company: "", table_number: "", party_size: "1",
     rsvp_status: "not_responded", response_type: "none",
     address_line1: "", address_line2: "", city: "", state: "", postal_code: "", country: "India",
@@ -122,8 +115,6 @@ export function GuestForm({ guestId }: { guestId?: number }) {
     const [detailsOpen, setDetailsOpen] = useState(false);
     const [sendInvite, setSendInvite] = useState(false);
 
-    const events = useClientEvents({ limit: 100 });
-    const eventOptions = useEventOptions();
     const groups = useAllGuestGroups();
     const existing = useGuest(guestId ?? null);
 
@@ -132,21 +123,16 @@ export function GuestForm({ guestId }: { guestId?: number }) {
     const saving = create.isPending || update.isPending;
 
     /*
-      The plan caps guests PER EVENT, so the answer only exists once an event is
-      picked — said here, under the picker, rather than after the whole form is
-      filled in. Counted in ROWS, matching clientGuest.createGuest, which counts
-      invitations rather than heads: a party of four is one row against the cap.
-      Editing an existing guest adds nothing, so it is never blocked. Read from
-      /client/guests/capacity — the server's own count and limit — so the form
-      blocks at exactly the number the save is refused at. When EVERY event is
-      full, GuestLimitGate stops this form opening at all.
+      The plan caps guests IN TOTAL for the account — not per event — so the
+      answer does not depend on which event is picked. Read from
+      /client/guests/capacity, the server's own count, so the form blocks at
+      exactly the number the save is refused at. Editing an existing guest adds
+      nothing, so it is never blocked. When the account is full, GuestLimitGate
+      stops this form opening at all.
     */
     const capacity = useGuestCapacity();
     const guestLimit = capacity.data?.limit ?? null;
-    const fullEventIds = new Set(
-        (capacity.data?.events ?? []).filter((e) => e.full).map((e) => String(e.event_id)),
-    );
-    const guestLimitReached = !isEdit && fullEventIds.has(form.event_id);
+    const guestLimitReached = !isEdit && !!capacity.data?.full;
 
     // Functional updater — a Select or a debounced field would otherwise write
     // back a stale snapshot of the whole form.
@@ -165,7 +151,6 @@ export function GuestForm({ guestId }: { guestId?: number }) {
         const g = existing.data;
         setPrefilled(true);
         setForm({
-            event_id: String(g.event_id ?? ""),
             group_id: g.group_id ? String(g.group_id) : "",
             title: g.title ?? "",
             // DATEONLY arrives as YYYY-MM-DD, which is what <input type="date"> takes.
@@ -200,35 +185,7 @@ export function GuestForm({ guestId }: { guestId?: number }) {
         }
     }, [isEdit, prefilled, existing.data]);
 
-    const eventRows = events.data?.data ?? [];
-    const selectedEvent = eventRows.find((e) => String(e.id) === form.event_id);
     const selectedGroup = (groups.data ?? []).find((g) => String(g.id) === form.group_id);
-
-    // The real invitation — same resolution rule as the wizard's own preview
-    // (§ event-templates.ts): an admin template if the theme_id matches one,
-    // the older gradient-only card otherwise.
-    const selectedArtwork = selectedEvent
-        ? resolveArtwork(selectedEvent.theme_id, eventOptions.data?.templates)
-        : null;
-    const selectedInvitation: InvitationData | null = selectedEvent
-        ? {
-            name: selectedEvent.name,
-            hostOne: selectedEvent.host_one,
-            hostTwo: selectedEvent.host_two,
-            tagline: selectedEvent.tagline,
-            description: selectedEvent.description,
-            startDate: selectedEvent.start_date,
-            startTime: selectedEvent.start_time,
-            endTime: selectedEvent.end_time,
-            venueName: selectedEvent.venue_name,
-            venueAddress: selectedEvent.venue_address,
-            organizer: selectedEvent.organizer,
-            contact: selectedEvent.contact_phone,
-            footerNote: selectedEvent.footer_note,
-            primaryColor: selectedEvent.primary_color,
-            qrToken: selectedEvent.qr_token,
-        }
-        : null;
 
     /** Picking a response moves the status with it, and vice versa. */
     const pickResponse = (value: ResponseType) => {
@@ -251,7 +208,6 @@ export function GuestForm({ guestId }: { guestId?: number }) {
         const next: Record<string, boolean> = {};
         if (!form.first_name.trim()) next.first_name = true;
         if (!form.email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(form.email.trim())) next.email = true;
-        if (!form.event_id) next.event_id = true;
 
         if (Object.keys(next).length) {
             setErrors(next);
@@ -265,7 +221,6 @@ export function GuestForm({ guestId }: { guestId?: number }) {
         if (saving || !validate()) return;
 
         const payload: GuestPayload = {
-            event_id: Number(form.event_id),
             group_id: form.group_id ? Number(form.group_id) : null,
             title: form.title || null,
             date_of_birth: form.date_of_birth || null,
@@ -323,7 +278,7 @@ export function GuestForm({ guestId }: { guestId?: number }) {
                     {isEdit ? "Edit Guest" : "Add Guest"}
                 </h1>
                 <p className="mt-1 text-[13.5px] text-muted-foreground">
-                    {isEdit ? "Update this guest’s details." : "Add a new guest to your event."}
+                    {isEdit ? "Update this guest’s details." : "Add a new guest to your guest list."}
                 </p>
             </div>
 
@@ -582,78 +537,18 @@ export function GuestForm({ guestId }: { guestId?: number }) {
                         </CardContent>
                     </Card>
 
-                    {/* ── Event & RSVP ────────────────────────────────────── */}
+                    {/* ── RSVP ─────────────────────────────────────────────── */}
                     <Card className="border border-border py-0 shadow-none">
                         <CardContent className="p-5">
-                            <SectionHeader icon={faCalendarDays} title="Event & RSVP Settings" />
+                            <SectionHeader icon={faCircleCheck} title="RSVP Settings" />
 
                             <div className="grid gap-4 sm:grid-cols-2">
-                                <Field label="Select Event" required error={errors.event_id}>
-                                    <Select value={form.event_id} onValueChange={(v) => setField("event_id", v)}>
-                                        <SelectTrigger className={cn("h-11 w-full rounded-md text-[13px]", errors.event_id && "border-destructive")}>
-                                            <SelectValue placeholder="Select an event" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {eventRows.map((e) => {
-                                                // A full event can't take a NEW guest; an edit
-                                                // may keep the guest's own event selected.
-                                                const full = fullEventIds.has(String(e.id)) && !(isEdit && String(e.id) === form.event_id);
-                                                return (
-                                                    <SelectItem key={e.id} value={String(e.id)} disabled={full}>
-                                                        {e.name}{full ? ` — Full (${guestLimit}/${guestLimit})` : ""}
-                                                    </SelectItem>
-                                                );
-                                            })}
-                                        </SelectContent>
-                                    </Select>
-
-                                    {guestLimitReached && (
-                                        <p className="mt-2 rounded-md bg-destructive/10 p-2.5 text-[12.5px] text-destructive">
-                                            This event has reached its guest limit of {guestLimit}. Upgrade your plan to add more guests.
-                                        </p>
-                                    )}
-
-                                    {selectedEvent && (
-                                        <div className="mt-3 flex items-center gap-3 rounded-md bg-muted/40 p-3">
-                                            <div className="relative h-[178px] w-[100px] shrink-0 overflow-hidden rounded-lg border border-border">
-                                                {/*
-                                                  The real invitation — same rule the wizard's own
-                                                  preview uses: an admin template renders properly
-                                                  (frame, decorations, the client's own text) via
-                                                  `TemplateArtwork`; a legacy theme has no template
-                                                  row to draw from, so it keeps the plain gradient card.
-                                                */}
-                                                {selectedArtwork?.kind === "template" && selectedInvitation ? (
-                                                    <TemplateArtwork
-                                                        template={selectedArtwork.template}
-                                                        data={selectedInvitation}
-                                                        cardClassName="rounded-lg shadow-none"
-                                                    />
-                                                ) : (
-                                                    <EventThumbnail
-                                                        themeId={selectedEvent.theme_id}
-                                                        name={selectedEvent.name}
-                                                        primaryColor={selectedEvent.primary_color}
-                                                        className="absolute inset-0 h-full w-full rounded-lg border-0"
-                                                    />
-                                                )}
-                                            </div>
-                                            <div className="min-w-0 text-[12.5px] text-muted-foreground">
-                                                <p className="flex items-center gap-1.5">
-                                                    <FontAwesomeIcon icon={faCalendarDays} className="!size-[11px]" />
-                                                    <span className="break-words">
-                                                        {selectedEvent.start_date ?? "Date not set"}
-                                                        {selectedEvent.start_time ? `, ${selectedEvent.start_time.slice(0, 5)}` : ""}
-                                                    </span>
-                                                </p>
-                                                <p className="mt-1 flex items-center gap-1.5">
-                                                    <FontAwesomeIcon icon={faLocationDot} className="!size-[11px]" />
-                                                    <span className="break-words">{selectedEvent.venue_name || "Venue not set"}</span>
-                                                </p>
-                                            </div>
-                                        </div>
-                                    )}
-                                </Field>
+                                {guestLimitReached && (
+                                    <p className="rounded-md bg-destructive/10 p-2.5 text-[12.5px] text-destructive sm:col-span-2">
+                                        Your plan allows {guestLimit} guests in total and you have reached that limit.
+                                        Remove a guest or upgrade your plan to add more.
+                                    </p>
+                                )}
 
                                 <div className="flex flex-col gap-4">
                                     <Field label="Initial RSVP Status">
@@ -742,15 +637,6 @@ export function GuestForm({ guestId }: { guestId?: number }) {
                             </div>
 
                             <dl className="flex flex-col gap-2.5">
-                                <SummaryRow icon={faCalendarDays} label="Event" value={selectedEvent?.name ?? "Not selected"} />
-                                <SummaryRow
-                                    icon={faCalendarDays}
-                                    label="Date & Time"
-                                    value={selectedEvent?.start_date
-                                        ? `${selectedEvent.start_date}${selectedEvent.start_time ? `, ${selectedEvent.start_time.slice(0, 5)}` : ""}`
-                                        : "—"}
-                                />
-                                <SummaryRow icon={faLocationDot} label="Venue" value={selectedEvent?.venue_name || "—"} />
                                 <SummaryRow icon={faPeopleGroup} label="Group" value={selectedGroup?.name ?? "Not selected"} />
                                 <div className="flex items-start gap-2.5">
                                     <FontAwesomeIcon icon={faCircleCheck} className="mt-0.5 !size-[11px] shrink-0 text-muted-foreground" />

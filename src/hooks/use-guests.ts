@@ -43,7 +43,8 @@ export interface GuestGroup {
 
 export interface Guest {
     id: number;
-    event_id: number;
+    /** NULL = a general guest, not tied to an event. */
+    event_id: number | null;
     group_id: number | null;
 
     title: string | null;
@@ -110,7 +111,8 @@ export interface GuestListParams {
 }
 
 export interface GuestPayload {
-    event_id: number;
+    /** Optional (§570): a guest belongs to the client's list, not to one event. */
+    event_id?: number | null;
     group_id?: number | null;
     title?: string | null;
     date_of_birth?: string | null;
@@ -177,13 +179,18 @@ export function useGuestStats(eventId?: number | null) {
 }
 
 export interface GuestCapacity {
-    /** Guests allowed per event on the host's current plan; null = unlimited. */
+    /** Guests allowed IN TOTAL on the host's current plan; null = unlimited. */
     limit: number | null;
-    events: { event_id: number; name: string; used: number; full: boolean }[];
+    /** Guests currently on the account. Removing one gives its place back. */
+    used: number;
+    full: boolean;
+    remaining: number | null;
+    /** Per-event counts — information only; they decide nothing. */
+    events: { event_id: number; name: string; used: number }[];
 }
 
 /**
- * Per-event guest count against the plan limit, counted exactly as the server's
+ * Account-wide guest count against the plan limit, counted exactly as the server's
  * create counts it. Under KEY, so adding or deleting a guest refreshes it.
  */
 export function useGuestCapacity() {

@@ -217,7 +217,8 @@ function PlanAndUsage() {
     // so the two screens cannot disagree about what this plan actually allows.
     const billing = useBillingOverview();
     const eventLimit = billing.data?.usage.events.limit ?? null;
-    const guestPerEventLimit = billing.data?.usage.guests.per_event_limit ?? null;
+    const guestLimit = billing.data?.usage.guests.limit ?? null;
+    const guestsUsed = billing.data?.usage.guests.used ?? null;
 
     return (
         <Card className="py-0">
@@ -252,10 +253,10 @@ function PlanAndUsage() {
                         <Usage
                             icon={<Users className="size-4" />}
                             label="Guests Added"
-                            value={guests.data?.total_guests}
-                            // Not a denominator for this total — the plan caps guests
-                            // PER EVENT, not across the account. Shown as a note instead.
-                            note={guestPerEventLimit ? `Up to ${guestPerEventLimit.toLocaleString('en-IN')} per event` : undefined}
+                            // One total for the account, counted in guests on the
+                            // list — the same number Add Guest refuses at.
+                            value={guestsUsed ?? guests.data?.total_guests}
+                            limit={guestLimit}
                             tint="bg-emerald-500"
                         />
                         {/* ⚠ NO SOURCE. The messaging module is paused by
