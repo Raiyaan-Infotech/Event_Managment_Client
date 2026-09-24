@@ -27,7 +27,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
     useAllGuestGroups, useCreateGuest, useUpdateGuest, useGuest, useGuestCapacity,
-    type GuestPayload, type RsvpStatus, type ResponseType,
+    type GuestPayload,
 } from "@/hooks/use-guests";
 
 /**
@@ -49,27 +49,6 @@ const DIAL_CODES = ["+91", "+1", "+44", "+61", "+971", "+65"];
 
 const TITLES = ["Mr.", "Mrs.", "Ms.", "Dr.", "Prof."];
 
-const STATUS_OPTIONS: { value: RsvpStatus; label: string }[] = [
-    { value: "not_responded", label: "Not Responded" },
-    { value: "invited", label: "Invited" },
-    { value: "pending", label: "Pending" },
-    { value: "accepted", label: "Accepted" },
-    { value: "declined", label: "Declined" },
-];
-
-const RESPONSE_OPTIONS: { value: ResponseType; label: string }[] = [
-    { value: "yes", label: "Yes" },
-    { value: "no", label: "No" },
-    { value: "maybe", label: "Maybe" },
-];
-
-/** Status implied by a response. The single mapping, mirrored from the server. */
-const STATUS_FOR_RESPONSE: Record<Exclude<ResponseType, "none">, RsvpStatus> = {
-    yes: "accepted",
-    no: "declined",
-    maybe: "pending",
-};
-
 interface FormState {
     group_id: string;
     title: string;
@@ -81,10 +60,6 @@ interface FormState {
     mobile: string;
     whatsapp: string;
     company: string;
-    table_number: string;
-    party_size: string;
-    rsvp_status: RsvpStatus;
-    response_type: ResponseType;
     address_line1: string;
     address_line2: string;
     city: string;
@@ -93,17 +68,14 @@ interface FormState {
     country: string;
     dietary_preference: string;
     special_requirements: string;
-    plus_one: boolean;
-    plus_one_count: string;
     notes: string;
 }
 
 const EMPTY: FormState = {
     group_id: "", title: "", date_of_birth: "", first_name: "", last_name: "", email: "",
-    dial_code: "+91", mobile: "", whatsapp: "", company: "", table_number: "", party_size: "1",
-    rsvp_status: "not_responded", response_type: "none",
+    dial_code: "+91", mobile: "", whatsapp: "", company: "",
     address_line1: "", address_line2: "", city: "", state: "", postal_code: "", country: "India",
-    dietary_preference: "", special_requirements: "", plus_one: false, plus_one_count: "0", notes: "",
+    dietary_preference: "", special_requirements: "", notes: "",
 };
 
 export function GuestForm({ guestId }: { guestId?: number }) {
@@ -113,7 +85,6 @@ export function GuestForm({ guestId }: { guestId?: number }) {
     const [form, setForm] = useState<FormState>(EMPTY);
     const [errors, setErrors] = useState<Record<string, boolean>>({});
     const [detailsOpen, setDetailsOpen] = useState(false);
-    const [sendInvite, setSendInvite] = useState(false);
 
     const groups = useAllGuestGroups();
     const existing = useGuest(guestId ?? null);
@@ -162,10 +133,6 @@ export function GuestForm({ guestId }: { guestId?: number }) {
             mobile: g.mobile ?? "",
             whatsapp: g.whatsapp ?? "",
             company: g.company ?? "",
-            table_number: g.table_number ?? "",
-            party_size: String(g.party_size ?? 1),
-            rsvp_status: g.rsvp_status,
-            response_type: g.response_type,
             address_line1: g.address_line1 ?? "",
             address_line2: g.address_line2 ?? "",
             city: g.city ?? "",
@@ -174,8 +141,6 @@ export function GuestForm({ guestId }: { guestId?: number }) {
             country: g.country ?? "India",
             dietary_preference: g.dietary_preference ?? "",
             special_requirements: g.special_requirements ?? "",
-            plus_one: !!g.plus_one,
-            plus_one_count: String(g.plus_one_count ?? 0),
             notes: g.notes ?? "",
         });
         // Open the extra section when it actually holds something, so an edit
@@ -186,23 +151,6 @@ export function GuestForm({ guestId }: { guestId?: number }) {
     }, [isEdit, prefilled, existing.data]);
 
     const selectedGroup = (groups.data ?? []).find((g) => String(g.id) === form.group_id);
-
-    /** Picking a response moves the status with it, and vice versa. */
-    const pickResponse = (value: ResponseType) => {
-        setForm((prev) => ({
-            ...prev,
-            response_type: value,
-            rsvp_status: value === "none" ? prev.rsvp_status : STATUS_FOR_RESPONSE[value],
-        }));
-    };
-
-    const pickStatus = (value: RsvpStatus) => {
-        setForm((prev) => {
-            const implied: ResponseType =
-                value === "accepted" ? "yes" : value === "declined" ? "no" : value === "pending" ? "maybe" : "none";
-            return { ...prev, rsvp_status: value, response_type: implied };
-        });
-    };
 
     const validate = () => {
         const next: Record<string, boolean> = {};
@@ -234,10 +182,6 @@ export function GuestForm({ guestId }: { guestId?: number }) {
             mobile: form.mobile.trim(),
             whatsapp: form.whatsapp.trim() || null,
             company: form.company.trim() || null,
-            table_number: form.table_number.trim() || null,
-            party_size: Number(form.party_size) || 1,
-            rsvp_status: form.rsvp_status,
-            response_type: form.response_type,
             address_line1: form.address_line1.trim() || null,
             address_line2: form.address_line2.trim() || null,
             city: form.city.trim() || null,
@@ -246,17 +190,8 @@ export function GuestForm({ guestId }: { guestId?: number }) {
             country: form.country.trim() || null,
             dietary_preference: form.dietary_preference.trim() || null,
             special_requirements: form.special_requirements.trim() || null,
-            plus_one: form.plus_one ? 1 : 0,
-            plus_one_count: form.plus_one ? Number(form.plus_one_count) || 0 : 0,
             notes: form.notes.trim() || null,
         };
-
-        if (sendInvite && payload.rsvp_status === "not_responded") {
-            // "Send Invitation" with no delivery wired would be a lie, so it
-            // records the INTENT — the guest is marked Invited, which is what
-            // the RSVP counts and the response-rate denominator read.
-            payload.rsvp_status = "invited";
-        }
 
         if (isEdit && guestId) update.mutate({ id: guestId, data: payload });
         else create.mutate(payload);
@@ -472,27 +407,10 @@ export function GuestForm({ guestId }: { guestId?: number }) {
                                                 className="h-11 rounded-md" />
                                         </Field>
 
-                                        <Field label="Table Number (Optional)">
-                                            <Input value={form.table_number}
-                                                onChange={(e) => setField("table_number", e.target.value.slice(0, 30))}
-                                                placeholder="e.g. Table 12" className="h-11 rounded-md" />
-                                        </Field>
-
                                         <Field label="Dietary Preferences (Optional)">
                                             <Input value={form.dietary_preference}
                                                 onChange={(e) => setField("dietary_preference", e.target.value.slice(0, 255))}
                                                 placeholder="E.g., Vegetarian, Vegan, Gluten-free..." className="h-11 rounded-md" />
-                                        </Field>
-
-                                        <Field label="Party Size">
-                                            <Input
-                                                value={form.party_size}
-                                                onChange={(e) => setField("party_size", e.target.value.replace(/\D/g, "").slice(0, 2))}
-                                                placeholder="1" className="h-11 rounded-md" inputMode="numeric"
-                                            />
-                                            <p className="mt-1.5 text-[11px] text-muted-foreground">
-                                                How many people this invitation covers.
-                                            </p>
                                         </Field>
 
                                         <Field label="Notes (Optional)">
@@ -511,111 +429,22 @@ export function GuestForm({ guestId }: { guestId?: number }) {
                                         </Field>
                                     </div>
 
-                                    <div className="mt-4 flex items-center justify-between gap-3 rounded-md border border-border px-4 py-3">
-                                        <div className="min-w-0">
-                                            <Label className="text-[12.5px] font-medium">Plus One</Label>
-                                            <p className="text-[11.5px] text-muted-foreground">
-                                                Allow this guest to bring a plus one.
-                                            </p>
-                                        </div>
-                                        <div className="flex shrink-0 items-center gap-3">
-                                            {form.plus_one && (
-                                                <Input
-                                                    value={form.plus_one_count}
-                                                    onChange={(e) => setField("plus_one_count", e.target.value.replace(/\D/g, "").slice(0, 2))}
-                                                    className="h-9 w-[64px] rounded-md text-center"
-                                                    inputMode="numeric"
-                                                    aria-label="Plus one count"
-                                                />
-                                            )}
-                                            <Switch
-                                                checked={form.plus_one}
-                                                onCheckedChange={(v) => setField("plus_one", v)}
-                                                aria-label="Allow a plus one"
-                                            />
-                                        </div>
-                                    </div>
                                 </CollapsibleContent>
                             </Collapsible>
                         </CardContent>
                     </Card>
 
-                    {/* ── RSVP ─────────────────────────────────────────────── */}
-                    <Card className="border border-border py-0 shadow-none">
-                        <CardContent className="p-5">
-                            <SectionHeader icon={faCircleCheck} title="RSVP Settings" />
-
-                            <div className="grid gap-4 sm:grid-cols-2">
-                                {guestLimitReached && (
-                                    <p className="rounded-md bg-destructive/10 p-2.5 text-[12.5px] text-destructive sm:col-span-2">
-                                        Your plan allows {guestLimit} guests in total and you have reached that limit.
-                                        Remove a guest or upgrade your plan to add more.
-                                    </p>
-                                )}
-
-                                <div className="flex flex-col gap-4">
-                                    <Field label="Initial RSVP Status">
-                                        <Select value={form.rsvp_status} onValueChange={(v) => pickStatus(v as RsvpStatus)}>
-                                            <SelectTrigger className="h-11 w-full rounded-md text-[13px]">
-                                                <FontAwesomeIcon icon={faCircleCheck} className="mr-2 !size-[12px] text-success" />
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {STATUS_OPTIONS.map((o) => (
-                                                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    </Field>
-
-                                    <div className="flex flex-col gap-2">
-                                        <Label className="text-[12.5px] font-medium">Response Type</Label>
-                                        {/* Radios, not a select: three options that must be
-                                            comparable at a glance, exactly as the design has. */}
-                                        <div className="flex flex-wrap items-center gap-4">
-                                            {RESPONSE_OPTIONS.map((o) => (
-                                                <label key={o.value} className="flex cursor-pointer items-center gap-2">
-                                                    <input
-                                                        type="radio"
-                                                        name="response_type"
-                                                        checked={form.response_type === o.value}
-                                                        onChange={() => pickResponse(o.value)}
-                                                        className="h-4 w-4 accent-[var(--color-primary)]"
-                                                    />
-                                                    <span className="text-[12.5px] text-foreground">{o.label}</span>
-                                                </label>
-                                            ))}
-                                            <button
-                                                type="button"
-                                                onClick={() => pickResponse("none")}
-                                                className="text-[11.5px] text-muted-foreground hover:underline"
-                                            >
-                                                Clear
-                                            </button>
-                                        </div>
-                                        <p className="text-[11px] text-muted-foreground">
-                                            Status and response move together — set either one.
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <Separator className="my-5" />
-
-                            <div className="flex items-center justify-between gap-3">
-                                <div className="min-w-0">
-                                    <Label className="text-[12.5px] font-medium">Send Invitation</Label>
-                                    <p className="text-[11.5px] text-muted-foreground break-words">
-                                        {/* Honest: no provider is wired, so this records the
-                                            intent rather than claiming a delivery. */}
-                                        Mark this guest as invited. Message delivery is not connected yet,
-                                        so nothing is sent.
-                                    </p>
-                                </div>
-                                <Switch checked={sendInvite} onCheckedChange={setSendInvite} aria-label="Mark as invited" />
-                            </div>
-                        </CardContent>
-                    </Card>
+                    {/*
+                      No RSVP here: a guest is a phone-book CONTACT (§581). RSVP,
+                      party size and table belong to a participant of one event,
+                      and are set on the RSVP screen once they join.
+                    */}
+                    {guestLimitReached && (
+                        <p className="rounded-md bg-destructive/10 p-2.5 text-[12.5px] text-destructive">
+                            Your plan allows {guestLimit} guests in total and you have reached that limit.
+                            Remove a guest or upgrade your plan to add more.
+                        </p>
+                    )}
 
                     <div className="flex flex-wrap items-center justify-between gap-3">
                         <Button asChild variant="outline" className="h-11 rounded-md px-5 text-[13px] font-medium">
@@ -641,17 +470,6 @@ export function GuestForm({ guestId }: { guestId?: number }) {
 
                             <dl className="flex flex-col gap-2.5">
                                 <SummaryRow icon={faPeopleGroup} label="Group" value={selectedGroup?.name ?? "Not selected"} />
-                                <div className="flex items-start gap-2.5">
-                                    <FontAwesomeIcon icon={faCircleCheck} className="mt-0.5 !size-[11px] shrink-0 text-muted-foreground" />
-                                    <div className="min-w-0 flex-1">
-                                        <dt className="text-[11px] text-muted-foreground">Status</dt>
-                                        <dd className="mt-0.5">
-                                            <Badge variant="ghost" className="rounded bg-success/15 px-2 py-0.5 text-[10.5px] font-semibold text-success">
-                                                {STATUS_OPTIONS.find((o) => o.value === form.rsvp_status)?.label}
-                                            </Badge>
-                                        </dd>
-                                    </div>
-                                </div>
                             </dl>
                         </CardContent>
                     </Card>

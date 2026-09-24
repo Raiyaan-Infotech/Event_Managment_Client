@@ -25,8 +25,14 @@ export type RsvpStatus = 'not_responded' | 'invited' | 'pending' | 'accepted' | 
 export type ResponseType = 'none' | 'yes' | 'no' | 'maybe';
 export type InviteSource = 'whatsapp' | 'email' | 'sms' | 'manual' | 'import';
 
-/** The list tabs. `imported` filters on source, not status. */
-export type GuestTab = 'all' | 'accepted' | 'pending' | 'declined' | 'not_responded' | 'imported';
+/**
+ * The Guests (phone book) tabs. RSVP tabs live on the RSVP screen now — a
+ * contact has no RSVP; a participant of one event does (§581).
+ */
+export type GuestTab = 'all' | 'imported' | 'joined' | 'not_joined';
+
+/** The participant list's tabs — the stored RSVP statuses. */
+export type ParticipantTab = 'all' | 'accepted' | 'pending' | 'declined' | 'not_responded' | 'joined';
 
 export interface GuestGroup {
     id: number;
@@ -41,10 +47,13 @@ export interface GuestGroup {
     created_at: string;
 }
 
+/**
+ * A guest in the client's phone book (§581). No event, no RSVP — the
+ * invitation is SHARED with them, and only scanning the QR makes them a
+ * participant of an event.
+ */
 export interface Guest {
     id: number;
-    /** NULL = a general guest, not tied to an event. */
-    event_id: number | null;
     group_id: number | null;
 
     title: string | null;
@@ -54,22 +63,18 @@ export interface Guest {
     last_name: string | null;
     name: string;
     full_name: string;
-    /** Optional — the mobile number is the key a contact is known by. */
+    /** Optional — the mobile number is the key a guest is known by. */
     email: string | null;
     dial_code: string | null;
     mobile: string | null;
     whatsapp: string | null;
     company: string | null;
-    table_number: string | null;
-    /** One row can cover a family; this is heads, not rows. */
-    party_size: number;
 
-    rsvp_status: RsvpStatus;
-    response_type: ResponseType;
-    invite_source: InviteSource;
+    source: 'manual' | 'import';
     is_imported: boolean;
-    invited_at: string | null;
-    responded_at: string | null;
+    /** Events this person joined by scanning the QR with this mobile. */
+    events_joined: number;
+    has_joined: boolean;
 
     address_line1: string | null;
     address_line2: string | null;
@@ -79,19 +84,51 @@ export interface Guest {
     country: string | null;
     dietary_preference: string | null;
     special_requirements: string | null;
-    plus_one: number;
-    plus_one_count: number;
     notes: string | null;
 
     created_at: string;
-    event?: { id: number; name: string; start_date: string | null; start_time: string | null; theme_id: string | null } | null;
     group?: { id: number; name: string; color: string | null } | null;
 }
 
+/**
+ * One person attending ONE event (`/client/participants`) — the same person
+ * fields as a guest, plus the answers about this event.
+ */
+export interface Participant extends Omit<Guest, 'source' | 'events_joined'> {
+    event_id: number;
+    /** The phone-book guest this participant is, when they are one. */
+    guest_id: number | null;
+    table_number: string | null;
+    /** One row can cover a family; this is heads, not rows. */
+    party_size: number;
+    rsvp_status: RsvpStatus;
+    response_type: ResponseType;
+    invite_source: InviteSource | 'qr';
+    invited_at: string | null;
+    responded_at: string | null;
+    plus_one: number;
+    plus_one_count: number;
+    event?: { id: number; name: string; start_date: string | null; start_time: string | null; theme_id: string | null } | null;
+    guest?: { id: number; name: string } | null;
+}
+
+/** The Guests (phone book) tiles. */
 export interface GuestStats {
+    grouped: number; grouped_pct: number;
+    ungrouped: number; ungrouped_pct: number;
+    imported: number;
+    /** Guests who have joined at least one event. */
+    joined: number; joined_pct: number;
+    /** Guests in the phone book. */
+    total_guests: number;
+    total_rows: number;
+}
+
+/** The RSVP tiles for participants — one event, or all of them. */
+export interface ParticipantStats {
     /** Heads (sum of party_size), which is what a caterer means by "guests". */
     total_guests: number;
-    /** Rows — the number of invitations. The percentages are of this. */
+    /** Rows — one per participant. The percentages are of this. */
     total_rows: number;
     accepted: number; accepted_pct: number;
     pending: number; pending_pct: number;
@@ -103,7 +140,6 @@ export interface GuestStats {
 
 export interface GuestListParams {
     status?: GuestTab;
-    event_id?: number | null;
     /** 0 means "ungrouped" and is a real filter, not a falsy blank. */
     group_id?: number | string | null;
     search?: string;
@@ -111,9 +147,17 @@ export interface GuestListParams {
     limit?: number;
 }
 
-export interface GuestPayload {
-    /** Optional (§570): a guest belongs to the client's list, not to one event. */
+export interface ParticipantListParams {
     event_id?: number | null;
+    status?: ParticipantTab;
+    group_id?: number | string | null;
+    search?: string;
+    page?: number;
+    limit?: number;
+}
+
+/** A phone-book guest — person fields only (§581). */
+export interface GuestPayload {
     group_id?: number | null;
     title?: string | null;
     date_of_birth?: string | null;
@@ -125,10 +169,6 @@ export interface GuestPayload {
     mobile: string;
     whatsapp?: string | null;
     company?: string | null;
-    table_number?: string | null;
-    party_size?: number;
-    rsvp_status?: RsvpStatus;
-    response_type?: ResponseType;
     address_line1?: string | null;
     address_line2?: string | null;
     city?: string | null;
@@ -137,8 +177,6 @@ export interface GuestPayload {
     country?: string | null;
     dietary_preference?: string | null;
     special_requirements?: string | null;
-    plus_one?: number;
-    plus_one_count?: number;
     notes?: string | null;
 }
 
@@ -158,7 +196,6 @@ export function useGuests(params: GuestListParams = {}) {
         queryFn: (): Promise<ListResult<Guest>> =>
             api.getList<Guest>(ENDPOINT, {
                 status: params.status && params.status !== 'all' ? params.status : undefined,
-                event_id: params.event_id || undefined,
                 // Sent as a string so `0` (ungrouped) survives the falsy check
                 // in buildUrl, which drops empty values.
                 group_id: params.group_id === null || params.group_id === undefined || params.group_id === ''
@@ -172,10 +209,47 @@ export function useGuests(params: GuestListParams = {}) {
     });
 }
 
-export function useGuestStats(eventId?: number | null) {
+export function useGuestStats() {
     return useQuery({
-        queryKey: [...KEY, 'stats', eventId ?? 'all'],
-        queryFn: () => api.get<GuestStats>(`${ENDPOINT}/stats`, { event_id: eventId || undefined }),
+        queryKey: [...KEY, 'stats'],
+        queryFn: () => api.get<GuestStats>(`${ENDPOINT}/stats`),
+        retry: false,
+    });
+}
+
+/* ── Participants (§581) ──────────────────────────────────────────────────── */
+
+const PARTICIPANT_KEY = ['client', 'participants'] as const;
+
+/**
+ * The people attending the host's events — `/client/participants`. Use this,
+ * not useGuests, wherever the screen is about an EVENT (its guest list, message
+ * recipients, push audience): the phone book has no event.
+ */
+export function useParticipants(params: ParticipantListParams = {}, enabled = true) {
+    return useQuery({
+        queryKey: [...PARTICIPANT_KEY, 'list', params],
+        queryFn: (): Promise<ListResult<Participant>> =>
+            api.getList<Participant>('/client/participants', {
+                event_id: params.event_id || undefined,
+                status: params.status && params.status !== 'all' ? params.status : undefined,
+                group_id: params.group_id === null || params.group_id === undefined || params.group_id === ''
+                    ? undefined
+                    : String(params.group_id),
+                search: params.search,
+                page: params.page ?? 1,
+                limit: params.limit ?? 20,
+            }),
+        enabled,
+        retry: false,
+    });
+}
+
+/** RSVP tiles for one event's participants (or all events when omitted). */
+export function useParticipantStats(eventId?: number | null) {
+    return useQuery({
+        queryKey: [...PARTICIPANT_KEY, 'stats', eventId ?? 'all'],
+        queryFn: () => api.get<ParticipantStats>('/client/participants/stats', { event_id: eventId || undefined }),
         retry: false,
     });
 }
@@ -183,12 +257,10 @@ export function useGuestStats(eventId?: number | null) {
 export interface GuestCapacity {
     /** Guests allowed IN TOTAL on the host's current plan; null = unlimited. */
     limit: number | null;
-    /** Guests currently on the account. Removing one gives its place back. */
+    /** Guests currently in the phone book. Removing one gives its place back. */
     used: number;
     full: boolean;
     remaining: number | null;
-    /** Per-event counts — information only; they decide nothing. */
-    events: { event_id: number; name: string; used: number }[];
 }
 
 /**
@@ -266,7 +338,8 @@ export function useDeleteGuest() {
 
 export interface BulkAction {
     guest_ids: number[];
-    action: 'delete' | 'group' | 'status';
+    /** RSVP status is per event — it is changed on the RSVP screen, not here. */
+    action: 'delete' | 'group';
     value?: string | number | null;
 }
 
@@ -411,7 +484,6 @@ export function useExportGuests() {
         mutationFn: (params: GuestListParams = {}) => {
             const query = new URLSearchParams();
             if (params.status && params.status !== 'all') query.set('status', params.status);
-            if (params.event_id) query.set('event_id', String(params.event_id));
             if (params.group_id !== undefined && params.group_id !== null && params.group_id !== '') {
                 query.set('group_id', String(params.group_id));
             }

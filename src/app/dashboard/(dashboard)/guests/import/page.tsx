@@ -7,7 +7,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
     faCloudArrowUp, faFileCsv, faCheck, faArrowRight, faArrowLeft,
     faDownload, faCircleInfo, faTriangleExclamation, faCircleCheck,
-    faCircleXmark, faForward, faLightbulb, faHeadset, faCalendarDays,
+    faCircleXmark, faForward, faLightbulb, faHeadset,
     faUsers, faFileImport, faSpinner,
 } from "@fortawesome/free-solid-svg-icons";
 import { GuestLimitGate } from "../_components/guest-limit-gate";
@@ -17,14 +17,10 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-import {
-    Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { api, ApiError } from "@/lib/api-client";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useClientEvents } from "@/hooks/use-client-events";
 import { useGuestStats, useDownloadSampleCsv } from "@/hooks/use-guests";
 
 /**
@@ -79,15 +75,12 @@ interface CommitResult {
 const FIELD_LABELS: Record<string, string> = {
     first_name: "First Name", last_name: "Last Name", email: "Email",
     mobile: "Phone Number", whatsapp: "WhatsApp Number",
-    event_name: "Event Name", event_id: "Event ID", group_name: "Guest Group",
-    rsvp_status: "RSVP Status", response_type: "Response Type",
-    plus_one: "Plus One Allowed", plus_one_count: "Plus One Count",
-    company: "Company / Organization", title: "Title / Salutation",
+    group_name: "Guest Group",
+        company: "Company / Organization", title: "Title / Salutation",
     address_line1: "Address Line 1", address_line2: "Address Line 2",
     city: "City", state: "State / Province", postal_code: "PIN / ZIP Code",
     country: "Country", dietary_preference: "Dietary Preference",
     special_requirements: "Special Requirements", notes: "Notes",
-    table_number: "Table Number",
 };
 
 export default function ImportGuestsPage() {
@@ -106,18 +99,16 @@ function ImportGuests() {
     const [step, setStep] = useState(1);
     const [file, setFile] = useState<File | null>(null);
     const [content, setContent] = useState("");
-    const [eventId, setEventId] = useState("");
     const [createGroups, setCreateGroups] = useState(true);
     const [dragging, setDragging] = useState(false);
     const [preview, setPreview] = useState<PreviewResult | null>(null);
     const [result, setResult] = useState<CommitResult | null>(null);
 
-    const events = useClientEvents({ limit: 100 });
-    const stats = useGuestStats(eventId ? Number(eventId) : null);
+    const stats = useGuestStats();
     const downloadSample = useDownloadSampleCsv();
 
     const analyse = useMutation({
-        mutationFn: (body: { content: string; event_id?: number }) =>
+        mutationFn: (body: { content: string }) =>
             api.post<PreviewResult>("/client/guests/import/preview", body),
         onSuccess: (data) => { setPreview(data); setStep(3); },
         onError: (e) => {
@@ -126,7 +117,7 @@ function ImportGuests() {
     });
 
     const commit = useMutation({
-        mutationFn: (body: { content: string; event_id?: number; create_groups: boolean }) =>
+        mutationFn: (body: { content: string; create_groups: boolean }) =>
             api.post<CommitResult>("/client/guests/import", body),
         onSuccess: (data) => {
             setResult(data);
@@ -181,7 +172,7 @@ function ImportGuests() {
             toast.error("Choose a CSV file first.");
             return;
         }
-        analyse.mutate({ content, event_id: eventId ? Number(eventId) : undefined });
+        analyse.mutate({ content });
         // analyse.onSuccess jumps to step 3; step 2 renders from the same result
         // so the mapping is visible on the way through.
         setStep(2);
@@ -192,7 +183,6 @@ function ImportGuests() {
         [preview]
     );
 
-    const selectedEvent = (events.data?.data ?? []).find((e) => String(e.id) === eventId);
 
     return (
         <div className="flex flex-col gap-5">
@@ -355,14 +345,13 @@ function ImportGuests() {
 
                                             <p className="mb-2 mt-4 text-[12.5px] font-semibold text-foreground">Recommended Columns</p>
                                             <div className="flex flex-wrap gap-2">
-                                                {["Event ID", "Event Name", "Last Name", "Phone", "Guest Group", "RSVP Status"].map((c) => (
+                                                {["Last Name", "WhatsApp Number", "Email", "Guest Group", "City"].map((c) => (
                                                     <Badge key={c} variant="secondary" className="rounded text-[10.5px]">{c}</Badge>
                                                 ))}
                                             </div>
-                                            {/* The whole point of the Event ID column. */}
                                             <p className="mt-2 text-[11px] text-muted-foreground">
-                                                <span className="font-semibold text-foreground">Event ID</span> wins over Event
-                                                Name when both are present — an exported file re-imports exactly.
+                                                <span className="font-semibold text-foreground">Phone Number</span> is
+                                                the key: a number already in your guest list is skipped. Email is optional.
                                             </p>
                                         </div>
                                     </div>
@@ -371,24 +360,7 @@ function ImportGuests() {
 
                             <Card className="border border-border py-0 shadow-none">
                                 <CardContent className="p-5">
-                                    <div className="grid gap-5 sm:grid-cols-2">
-                                        <div className="flex flex-col gap-2">
-                                            <Label className="text-[12.5px] font-medium">Default Event</Label>
-                                            <Select value={eventId} onValueChange={setEventId}>
-                                                <SelectTrigger className="h-11 rounded-md text-[13px]">
-                                                    <SelectValue placeholder="Select an event (optional)" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {(events.data?.data ?? []).map((e) => (
-                                                        <SelectItem key={e.id} value={String(e.id)}>{e.name}</SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                            <p className="text-[11px] text-muted-foreground">
-                                                Used for rows whose Event ID / Event Name is blank.
-                                            </p>
-                                        </div>
-
+                                    <div className="grid gap-5">
                                         <div className="flex items-start justify-between gap-3">
                                             <div className="min-w-0">
                                                 <Label className="text-[12.5px] font-medium">Create missing groups</Label>
@@ -659,7 +631,6 @@ function ImportGuests() {
                                 <Button
                                     onClick={() => commit.mutate({
                                         content,
-                                        event_id: eventId ? Number(eventId) : undefined,
                                         create_groups: createGroups,
                                     })}
                                     disabled={commit.isPending || preview.valid_count === 0}
@@ -691,10 +662,8 @@ function ImportGuests() {
                             </div>
 
                             <dl className="flex flex-col gap-2.5">
-                                <SummaryRow icon={faCalendarDays} label="Event"
-                                    value={selectedEvent?.name ?? "Any (from file)"} />
-                                <SummaryRow icon={faUsers} label="Guests in Event"
-                                    value={String(stats.data?.total_rows ?? 0)} />
+                                <SummaryRow icon={faUsers} label="Guests in your list"
+                                    value={String(stats.data?.total_guests ?? 0)} />
                                 <SummaryRow icon={faFileCsv} label="File"
                                     value={file?.name ?? "None chosen"} />
                                 <SummaryRow icon={faCircleCheck} label="Rows in file"

@@ -32,7 +32,7 @@ import {
     renderPreview,
     type MessageChannel, type ChannelState, type AudiencePreview,
 } from '@/hooks/use-messages';
-import { useGuests } from '@/hooks/use-guests';
+import { useParticipants } from '@/hooks/use-guests';
 import {
     RichTextEditor, htmlIsEmpty,
     type RichTextEditorRef,
@@ -1314,7 +1314,8 @@ function GuestPicker({ eventId, selected, onChange, error }: {
         return () => clearTimeout(t);
     }, [search]);
 
-    const { data } = useGuests({ event_id: eventId, search: debounced, limit: 25 });
+    // An event's participants — the phone book has no event (§581).
+    const { data } = useParticipants({ event_id: eventId, search: debounced, limit: 25 });
     const guests = data?.data ?? [];
 
     const toggle = (id: number) =>

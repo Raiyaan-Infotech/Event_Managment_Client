@@ -19,7 +19,7 @@ import {
     useComposer, usePreviewAudience, useSendMessage, useMyDevices,
     type PushOptions, type SendPayload, type SendResult, type AudiencePreview,
 } from '@/hooks/use-messages';
-import { useGuests } from '@/hooks/use-guests';
+import { useParticipants } from '@/hooks/use-guests';
 
 /**
  * The push notification composer — Content, Audience, Schedule, Preview.
@@ -464,11 +464,12 @@ function GuestPicker({
         return () => clearTimeout(t);
     }, [search]);
 
-    const { data, isLoading } = useGuests({
+    // An event's participants — the phone book has no event (§581).
+    const { data, isLoading } = useParticipants({
         event_id: eventId ?? undefined,
         search: debounced || undefined,
         limit: 25,
-    });
+    }, !!eventId);
     const guests = data?.data ?? [];
 
     if (!eventId) {

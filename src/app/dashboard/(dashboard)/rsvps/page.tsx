@@ -101,6 +101,14 @@ export default function RsvpsPage() {
 
     const fmt = useDateFormatter();
 
+    // `?event=` from the event page's "View all participants" link. Read once on
+    // mount from the URL rather than useSearchParams, which would need a
+    // Suspense boundary around the whole page.
+    useEffect(() => {
+        const fromUrl = new URLSearchParams(window.location.search).get('event');
+        if (fromUrl && /^\d+$/.test(fromUrl)) setEventId(fromUrl);
+    }, []);
+
     const [debounced, setDebounced] = useState('');
     useEffect(() => {
         const t = setTimeout(() => { setDebounced(search); setPage(1); }, 350);

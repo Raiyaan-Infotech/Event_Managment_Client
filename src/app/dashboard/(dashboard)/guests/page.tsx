@@ -51,7 +51,7 @@ import { cn } from "@/lib/utils";
 import {
     useGuests, useGuestStats, useAllGuestGroups, useDeleteGuest,
     useBulkGuests, useExportGuests,
-    type Guest, type GuestTab, type RsvpStatus, type ResponseType,
+    type Guest, type GuestTab,
 } from "@/hooks/use-guests";
 import { ApiError } from "@/lib/api-client";
 import { SignInPrompt } from '@/components/common/sign-in-prompt';
@@ -64,41 +64,19 @@ import { useDateFormatter } from '@/hooks/use-client-settings';
  * "coming soon" catch-all, which is why the sidebar entry appeared to do
  * nothing.
  *
- * ── STATUS vs RESPONSE ───────────────────────────────────────────────────────
- * Two columns because they are two fields. STATUS is where the invitation has
- * got to (`Invited` exists and has no tab); RESPONSE is what the guest said.
- * The server keeps them consistent — this file only renders them.
- *
- * ── HEADS vs ROWS ────────────────────────────────────────────────────────────
- * `total_guests` is the sum of `party_size`; `total_rows` is the number of
- * invitations. The Total Guests tile shows heads because that is what a caterer
- * means, and every percentage is of rows because that is what was invited.
+ * ── A GUEST IS NOT AN INVITATION (§581) ─────────────────────────────────────
+ * This is the client's PHONE BOOK: the people they know, in groups. An
+ * invitation is shared with them; sharing writes nothing. Somebody becomes a
+ * participant of an event only by scanning its QR — that side, with RSVPs,
+ * party size and tables, is the RSVP screen (`/client/participants`).
  */
 
 const TABS: { label: string; value: GuestTab }[] = [
     { label: "All Guests", value: "all" },
-    { label: "Accepted", value: "accepted" },
-    { label: "Pending", value: "pending" },
-    { label: "Declined", value: "declined" },
-    { label: "Not Responded", value: "not_responded" },
+    { label: "Joined an event", value: "joined" },
+    { label: "Not joined yet", value: "not_joined" },
     { label: "Imported", value: "imported" },
 ];
-
-const STATUS_META: Record<RsvpStatus, { label: string; className: string }> = {
-    accepted: { label: "Accepted", className: "bg-success/15 text-success" },
-    pending: { label: "Pending", className: "bg-warning/15 text-warning" },
-    declined: { label: "Declined", className: "bg-destructive/10 text-destructive" },
-    invited: { label: "Invited", className: "bg-info/15 text-info" },
-    not_responded: { label: "Not Responded", className: "bg-muted text-muted-foreground" },
-};
-
-/** The RESPONSE column: a tick, a squiggle, a cross, or an em dash. */
-const RESPONSE_META: Record<ResponseType, { label: string; icon: typeof faCheck | null; className: string }> = {
-    yes: { label: "Yes", icon: faCheck, className: "text-success" },
-    maybe: { label: "Maybe", icon: faMinus, className: "text-warning" },
-    no: { label: "No", icon: faXmark, className: "text-destructive" },
-    none: { label: "—", icon: null, className: "text-muted-foreground" },
-};
 
 const PAGE_SIZE = 8;
 
@@ -175,10 +153,10 @@ export default function GuestsPage() {
     const s = stats.data;
     const tiles = [
         { label: "Total Guests", value: s?.total_guests ?? 0, caption: "In your guest list", icon: faUsers, color: "#7C5AED", bg: "bg-[#7C5AED]/10" },
-        { label: "Accepted", value: s?.accepted ?? 0, caption: `${s?.accepted_pct ?? 0}%`, icon: faCircleCheck, color: "#22C55E", bg: "bg-[#22C55E]/10" },
-        { label: "Pending", value: s?.pending ?? 0, caption: `${s?.pending_pct ?? 0}%`, icon: faClock, color: "#F59E0B", bg: "bg-[#F59E0B]/10" },
-        { label: "Declined", value: s?.declined ?? 0, caption: `${s?.declined_pct ?? 0}%`, icon: faXmark, color: "#EC4899", bg: "bg-[#EC4899]/10" },
-        { label: "Not Responded", value: s?.not_responded ?? 0, caption: `${s?.not_responded_pct ?? 0}%`, icon: faUserClock, color: "#3B82F6", bg: "bg-[#3B82F6]/10" },
+        { label: "In a Group", value: s?.grouped ?? 0, caption: `${s?.grouped_pct ?? 0}%`, icon: faPeopleGroup, color: "#22C55E", bg: "bg-[#22C55E]/10" },
+        { label: "Ungrouped", value: s?.ungrouped ?? 0, caption: `${s?.ungrouped_pct ?? 0}%`, icon: faClock, color: "#F59E0B", bg: "bg-[#F59E0B]/10" },
+        { label: "Imported", value: s?.imported ?? 0, caption: "From a CSV file", icon: faFileImport, color: "#EC4899", bg: "bg-[#EC4899]/10" },
+        { label: "Joined an event", value: s?.joined ?? 0, caption: `${s?.joined_pct ?? 0}%`, icon: faUserClock, color: "#3B82F6", bg: "bg-[#3B82F6]/10" },
     ];
 
     const activeFilters = groupId !== "all" ? 1 : 0;
@@ -334,21 +312,6 @@ export default function GuestsPage() {
                             <Separator orientation="vertical" className="h-4" />
                             <Select
                                 onValueChange={(v) => bulk.mutate(
-                                    { guest_ids: selected, action: "status", value: v },
-                                    { onSuccess: () => setSelected([]) }
-                                )}
-                            >
-                                <SelectTrigger className="h-8 w-[150px] rounded-md text-[12px]">
-                                    <SelectValue placeholder="Set status" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {(Object.keys(STATUS_META) as RsvpStatus[]).map((k) => (
-                                        <SelectItem key={k} value={k}>{STATUS_META[k].label}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                            <Select
-                                onValueChange={(v) => bulk.mutate(
                                     { guest_ids: selected, action: "group", value: v === "none" ? null : v },
                                     { onSuccess: () => setSelected([]) }
                                 )}
@@ -437,16 +400,13 @@ export default function GuestsPage() {
                                             </th>
                                             <th className="py-3 text-left font-medium">Guest</th>
                                             <th className="py-3 text-left font-medium">Group</th>
-                                            <th className="py-3 text-left font-medium">Status</th>
-                                            <th className="py-3 text-left font-medium">Response</th>
+                                            <th className="py-3 text-left font-medium">Events joined</th>
                                             <th className="py-3 text-left font-medium">Added On</th>
                                             <th className="py-3 pr-4 text-right font-medium">Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {rows.map((guest) => {
-                                            const status = STATUS_META[guest.rsvp_status];
-                                            const response = RESPONSE_META[guest.response_type];
                                             return (
                                                 <tr key={guest.id} className="border-b border-border last:border-0 hover:bg-muted/30">
                                                     <td className="py-3 pl-4 align-top">
@@ -485,11 +445,6 @@ export default function GuestsPage() {
                                                                 <p className="text-[11px] text-muted-foreground break-all">
                                                                     {guest.email}
                                                                 </p>
-                                                                {guest.party_size > 1 && (
-                                                                    <p className="text-[10.5px] text-muted-foreground">
-                                                                        Party of {guest.party_size}
-                                                                    </p>
-                                                                )}
                                                             </div>
                                                         </div>
                                                     </td>
@@ -508,20 +463,8 @@ export default function GuestsPage() {
                                                         )}
                                                     </td>
 
-                                                    <td className="py-3 pr-3 align-top">
-                                                        <Badge
-                                                            variant="ghost"
-                                                            className={cn("rounded px-2 py-0.5 text-[10.5px] font-semibold", status.className)}
-                                                        >
-                                                            {status.label}
-                                                        </Badge>
-                                                    </td>
-
-                                                    <td className="py-3 pr-3 align-top">
-                                                        <span className={cn("inline-flex items-center gap-1.5 text-[12px] font-medium", response.className)}>
-                                                            {response.icon && <FontAwesomeIcon icon={response.icon} className="!size-[10px]" />}
-                                                            {response.label}
-                                                        </span>
+                                                    <td className="py-3 pr-3 align-top text-[12px] text-foreground">
+                                                        {guest.events_joined > 0 ? guest.events_joined : <span className="text-muted-foreground">—</span>}
                                                     </td>
 
                                                     <td className="py-3 pr-3 align-top text-[12px] text-muted-foreground">

@@ -29,7 +29,7 @@ import { EventQr } from "@/components/common/event-qr";
 import { InvitationDownload } from "@/components/common/invitation-download";
 import { downloadQrAsPng, fileSlug } from "@/lib/export-invitation";
 import { useClientEvent, useDeleteEvent, type DerivedStatus } from "@/hooks/use-client-events";
-import { useGuestStats, useGuests } from "@/hooks/use-guests";
+import { useParticipantStats, useParticipants } from "@/hooks/use-guests";
 import { ApiError } from "@/lib/api-client";
 import { SignInPrompt } from '@/components/common/sign-in-prompt';
 import { useDateFormatter } from '@/hooks/use-client-settings';
@@ -116,8 +116,9 @@ export function EventDetail({ eventId }: { eventId: number }) {
 
     const query = useClientEvent(eventId);
     const remove = useDeleteEvent();
-    const rsvp = useGuestStats(eventId);
-    const guests = useGuests({ event_id: eventId, limit: 8 });
+    // The people attending THIS event — participants, not the phone book (§581).
+    const rsvp = useParticipantStats(eventId);
+    const guests = useParticipants({ event_id: eventId, limit: 8 });
 
     if (query.isLoading) {
         return (
@@ -559,9 +560,9 @@ export function EventDetail({ eventId }: { eventId: number }) {
                                     ))}
                                 </ul>
                                 <Separator className="my-3" />
-                                <Link href={`/dashboard/guests?event=${event.id}`}
+                                <Link href={`/dashboard/rsvps?event=${event.id}`}
                                     className="inline-flex items-center gap-1.5 text-[11.5px] font-semibold text-primary hover:underline">
-                                    View all guests for this event
+                                    View all participants for this event
                                     <FontAwesomeIcon icon={faArrowRight} className="!size-[9px]" />
                                 </Link>
                             </>
