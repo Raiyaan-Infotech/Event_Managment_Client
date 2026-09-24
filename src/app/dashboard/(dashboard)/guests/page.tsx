@@ -48,7 +48,6 @@ import {
     Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { useClientEvents } from "@/hooks/use-client-events";
 import {
     useGuests, useGuestStats, useAllGuestGroups, useDeleteGuest,
     useBulkGuests, useExportGuests,
@@ -116,7 +115,6 @@ export default function GuestsPage() {
     // Dates follow the client's own Date Format / Time Zone preference.
     const fmt = useDateFormatter();
     const [tab, setTab] = useState<GuestTab>("all");
-    const [eventId, setEventId] = useState("all");
     const [groupId, setGroupId] = useState("all");
     const [search, setSearch] = useState("");
     const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -133,21 +131,19 @@ export default function GuestsPage() {
     // Any filter change resets the page AND the selection — keeping a selection
     // across a filter change means bulk-deleting rows that are no longer on
     // screen, which is the worst possible surprise.
-    useEffect(() => { setPage(1); setSelected([]); }, [tab, eventId, groupId, debouncedSearch]);
+    useEffect(() => { setPage(1); setSelected([]); }, [tab, groupId, debouncedSearch]);
 
     const params = useMemo(() => ({
         status: tab,
-        event_id: eventId === "all" ? null : Number(eventId),
         group_id: groupId === "all" ? null : groupId,
         search: debouncedSearch || undefined,
         page,
         limit: PAGE_SIZE,
-    }), [tab, eventId, groupId, debouncedSearch, page]);
+    }), [tab, groupId, debouncedSearch, page]);
 
     const guests = useGuests(params);
-    const stats = useGuestStats(eventId === "all" ? null : Number(eventId));
+    const stats = useGuestStats();
     const groups = useAllGuestGroups();
-    const events = useClientEvents({ limit: 100 });
 
     const remove = useDeleteGuest();
     const bulk = useBulkGuests();
@@ -178,14 +174,14 @@ export default function GuestsPage() {
 
     const s = stats.data;
     const tiles = [
-        { label: "Total Guests", value: s?.total_guests ?? 0, caption: "Across all events", icon: faUsers, color: "#7C5AED", bg: "bg-[#7C5AED]/10" },
+        { label: "Total Guests", value: s?.total_guests ?? 0, caption: "In your guest list", icon: faUsers, color: "#7C5AED", bg: "bg-[#7C5AED]/10" },
         { label: "Accepted", value: s?.accepted ?? 0, caption: `${s?.accepted_pct ?? 0}%`, icon: faCircleCheck, color: "#22C55E", bg: "bg-[#22C55E]/10" },
         { label: "Pending", value: s?.pending ?? 0, caption: `${s?.pending_pct ?? 0}%`, icon: faClock, color: "#F59E0B", bg: "bg-[#F59E0B]/10" },
         { label: "Declined", value: s?.declined ?? 0, caption: `${s?.declined_pct ?? 0}%`, icon: faXmark, color: "#EC4899", bg: "bg-[#EC4899]/10" },
         { label: "Not Responded", value: s?.not_responded ?? 0, caption: `${s?.not_responded_pct ?? 0}%`, icon: faUserClock, color: "#3B82F6", bg: "bg-[#3B82F6]/10" },
     ];
 
-    const activeFilters = (eventId !== "all" ? 1 : 0) + (groupId !== "all" ? 1 : 0);
+    const activeFilters = groupId !== "all" ? 1 : 0;
 
     return (
         <div className="flex flex-col gap-5">
@@ -193,7 +189,7 @@ export default function GuestsPage() {
             <div className="min-w-0">
                 <h1 className="text-[24px] font-bold leading-tight tracking-tight text-foreground">Guests</h1>
                 <p className="mt-1 text-[13.5px] text-muted-foreground">
-                    Manage all your event guests in one place.
+                    Your contacts, organised in groups. Share event invitations with them.
                 </p>
             </div>
 
@@ -238,18 +234,6 @@ export default function GuestsPage() {
 
             {/* ── Filter bar ──────────────────────────────────────────────── */}
             <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
-                <Select value={eventId} onValueChange={setEventId}>
-                    <SelectTrigger className="h-10 w-full rounded-md text-[13px] lg:w-[180px]">
-                        <SelectValue placeholder="All Events" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="all">All Events</SelectItem>
-                        {(events.data?.data ?? []).map((e) => (
-                            <SelectItem key={e.id} value={String(e.id)}>{e.name}</SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-
                 <Select value={groupId} onValueChange={setGroupId}>
                     <SelectTrigger className="h-10 w-full rounded-md text-[13px] lg:w-[180px]">
                         <SelectValue placeholder="All Groups" />
@@ -295,13 +279,13 @@ export default function GuestsPage() {
                             <p className="text-[11.5px] text-muted-foreground">
                                 {activeFilters === 0
                                     ? "Showing every guest on your account."
-                                    : "Event and group filters are applied above."}
+                                    : "The group filter is applied above."}
                             </p>
                             <Separator />
                             <Button
                                 variant="ghost" size="sm"
                                 disabled={activeFilters === 0 && !search}
-                                onClick={() => { setEventId("all"); setGroupId("all"); setSearch(""); }}
+                                onClick={() => { setGroupId("all"); setSearch(""); }}
                                 className="h-8 text-[12px]"
                             >
                                 Reset filters
@@ -452,7 +436,6 @@ export default function GuestsPage() {
                                                 />
                                             </th>
                                             <th className="py-3 text-left font-medium">Guest</th>
-                                            <th className="py-3 text-left font-medium">Event</th>
                                             <th className="py-3 text-left font-medium">Group</th>
                                             <th className="py-3 text-left font-medium">Status</th>
                                             <th className="py-3 text-left font-medium">Response</th>
@@ -509,17 +492,6 @@ export default function GuestsPage() {
                                                                 )}
                                                             </div>
                                                         </div>
-                                                    </td>
-
-                                                    <td className="py-3 pr-3 align-top">
-                                                        <p className="text-[12px] text-foreground break-words">
-                                                            {guest.event?.name ?? "—"}
-                                                        </p>
-                                                        {guest.event?.start_date && (
-                                                            <p className="text-[10.5px] text-muted-foreground">
-                                                                {fmt(guest.event.start_date)}
-                                                            </p>
-                                                        )}
                                                     </td>
 
                                                     <td className="py-3 pr-3 align-top">
@@ -774,7 +746,7 @@ export default function GuestsPage() {
                     <DialogHeader>
                         <DialogTitle>Remove guest?</DialogTitle>
                         <DialogDescription>
-                            {pendingDelete?.name} will be removed from {pendingDelete?.event?.name ?? "this event"}.
+                            {pendingDelete?.name} will be removed from your guest list.
                         </DialogDescription>
                     </DialogHeader>
                     <DialogFooter>
@@ -802,7 +774,7 @@ export default function GuestsPage() {
                     <DialogHeader>
                         <DialogTitle>Remove {selected.length} guests?</DialogTitle>
                         <DialogDescription>
-                            They will be removed from their events. This cannot be undone from here.
+                            They will be removed from your guest list. This cannot be undone from here.
                         </DialogDescription>
                     </DialogHeader>
                     <DialogFooter>
