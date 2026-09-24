@@ -250,13 +250,17 @@ export default function GroupDetailScreen({ groupId }: { groupId: number }) {
                                                         matching the RSVP list. The
                                                         row menu holds everything
                                                         about this one invitation. */}
-                                                    <Link
-                                                        href={`/dashboard/guests/${m.id}/profile`}
-                                                        title={`View ${m.guest.name}'s profile`}
-                                                        className="inline-block py-1.5 text-[12.5px] font-medium break-words hover:text-primary hover:underline"
-                                                    >
-                                                        {m.guest.name}
-                                                    </Link>
+                                                    {m.phone_book_guest_id ? (
+                                                        <Link
+                                                            href={`/dashboard/guests/${m.phone_book_guest_id}/profile`}
+                                                            title={`View ${m.guest.name}'s profile`}
+                                                            className="inline-block py-1.5 text-[12.5px] font-medium break-words hover:text-primary hover:underline"
+                                                        >
+                                                            {m.guest.name}
+                                                        </Link>
+                                                    ) : (
+                                                        <p className="py-1.5 text-[12.5px] font-medium break-words">{m.guest.name}</p>
+                                                    )}
                                                     {m.guest.mobile ? (
                                                         <p className="text-[11px] text-muted-foreground">
                                                             {m.guest.dial_code} {m.guest.mobile}
@@ -304,13 +308,16 @@ export default function GroupDetailScreen({ groupId }: { groupId: number }) {
                                                             <DropdownMenuItem onClick={() => setEditing(m)}>
                                                                 <Pencil className="size-3.5" /> Edit member
                                                             </DropdownMenuItem>
-                                                            {/* The PERSON, across every event — a full
-                                                                page, because it is one. */}
-                                                            <DropdownMenuItem asChild>
-                                                                <Link href={`/dashboard/guests/${m.id}/profile`}>
-                                                                    <UserRound className="size-3.5" /> Guest profile
-                                                                </Link>
-                                                            </DropdownMenuItem>
+                                                            {/* The PERSON in the phone book — a different
+                                                                id from this participant (§581). Absent
+                                                                for a stranger with no phone-book entry. */}
+                                                            {m.phone_book_guest_id ? (
+                                                                <DropdownMenuItem asChild>
+                                                                    <Link href={`/dashboard/guests/${m.phone_book_guest_id}/profile`}>
+                                                                        <UserRound className="size-3.5" /> Guest profile
+                                                                    </Link>
+                                                                </DropdownMenuItem>
+                                                            ) : null}
                                                             <DropdownMenuItem asChild>
                                                                 <Link href={`/dashboard/messages/send?event_id=${m.event?.id ?? ''}&guest_id=${m.id}&kind=reminder&from=rsvps`}>
                                                                     <Send className="size-3.5" /> Send message
@@ -599,11 +606,13 @@ function MemberDialog({ member, fmt, eventName, onClose, onEdit }: {
                 </div>
 
                 <DialogFooter className="flex-wrap gap-2 sm:justify-between">
-                    <Button asChild variant="ghost" size="sm">
-                        <Link href={`/dashboard/guests/${member.id}/profile`}>
-                            <UserRound className="size-3.5" /> Full guest profile
-                        </Link>
-                    </Button>
+                    {member.phone_book_guest_id ? (
+                        <Button asChild variant="ghost" size="sm">
+                            <Link href={`/dashboard/guests/${member.phone_book_guest_id}/profile`}>
+                                <UserRound className="size-3.5" /> Full guest profile
+                            </Link>
+                        </Button>
+                    ) : <span />}
                     <div className="flex flex-wrap items-center gap-2">
                         <Button variant="outline" onClick={onClose}>Close</Button>
                         <Button onClick={onEdit}>
@@ -691,11 +700,17 @@ function EditMemberDialog({ member, onClose }: { member: Rsvp | null; onClose: (
                     </div>
                     <p className="flex min-w-0 items-start gap-2 text-[11px] break-words text-muted-foreground">
                         <Lock className="mt-0.5 size-3 shrink-0" />
-                        Contact details belong to the guest, not to this response.{' '}
-                        <Link href={`/dashboard/guests/${g.id}`} className="font-medium text-primary hover:underline">
-                            Edit them on the guest
-                        </Link>
-                        .
+                        {member.phone_book_guest_id ? (
+                            <>
+                                Contact details belong to the guest, not to this response.{' '}
+                                <Link href={`/dashboard/guests/${member.phone_book_guest_id}`} className="font-medium text-primary hover:underline">
+                                    Edit them on the guest
+                                </Link>
+                                .
+                            </>
+                        ) : (
+                            'Contact details are the ones this person entered when they joined — they are not in your guest list.'
+                        )}
                     </p>
 
                     <Separator />

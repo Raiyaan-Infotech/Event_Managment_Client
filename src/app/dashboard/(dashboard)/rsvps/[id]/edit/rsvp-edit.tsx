@@ -235,11 +235,17 @@ function EditForm({ rsvpId, data, resetting, onReset }: {
                     </div>
                     <p className="flex min-w-0 items-start gap-2 text-[11px] break-words text-muted-foreground">
                         <Lock className="mt-0.5 size-3 shrink-0" />
-                        Contact details belong to the guest, not to this response.{' '}
-                        <Link href={`/dashboard/guests/${g.id}`} className="font-medium text-primary hover:underline">
-                            Edit them on the guest
-                        </Link>
-                        .
+                        {r.phone_book_guest_id ? (
+                            <>
+                                Contact details belong to the guest, not to this response.{' '}
+                                <Link href={`/dashboard/guests/${r.phone_book_guest_id}`} className="font-medium text-primary hover:underline">
+                                    Edit them on the guest
+                                </Link>
+                                .
+                            </>
+                        ) : (
+                            'Contact details are the ones this person entered when they joined — they are not in your guest list.'
+                        )}
                     </p>
 
                     <Separator />

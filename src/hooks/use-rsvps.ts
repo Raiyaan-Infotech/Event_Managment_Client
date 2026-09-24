@@ -39,6 +39,12 @@ export type ResponseType = 'none' | 'yes' | 'no' | 'maybe';
 
 export interface Rsvp {
     id: number;
+    /**
+     * The phone-book guest this participant IS, or null for someone who
+     * scanned the QR without being in the phone book. `id` and `guest.id` are
+     * the PARTICIPANT — guest-page links must use this, never those.
+     */
+    phone_book_guest_id: number | null;
     guest: {
         id: number;
         name: string;
@@ -140,7 +146,7 @@ export interface GroupDetail {
         no_response: number; no_response_pct: number;
     };
     members: Rsvp[];
-    activity: { guest_id: number; name: string; bucket: RsvpBucket; at: string }[];
+    activity: { guest_id: number; phone_book_guest_id: number | null; name: string; bucket: RsvpBucket; at: string }[];
 }
 
 export interface RsvpParams {

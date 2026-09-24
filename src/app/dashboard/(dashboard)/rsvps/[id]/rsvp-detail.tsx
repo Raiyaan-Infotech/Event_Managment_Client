@@ -98,13 +98,16 @@ export default function RsvpDetailScreen({ rsvpId }: { rsvpId: number }) {
                             <Send className="size-3.5" /> Send reminder
                         </Link>
                     </Button>
-                    <Button asChild size="sm" variant="outline">
-                        {/* The PERSON across every event, as opposed to this
-                            one invitation. Same id, different question. */}
-                        <Link href={`/dashboard/guests/${r.id}/profile`}>
-                            <UserRound className="size-3.5" /> Guest profile
-                        </Link>
-                    </Button>
+                    {/* The PERSON in the phone book, as opposed to this one
+                        invitation — a different id (§581). Absent for a
+                        stranger who has no phone-book entry. */}
+                    {r.phone_book_guest_id ? (
+                        <Button asChild size="sm" variant="outline">
+                            <Link href={`/dashboard/guests/${r.phone_book_guest_id}/profile`}>
+                                <UserRound className="size-3.5" /> Guest profile
+                            </Link>
+                        </Button>
+                    ) : null}
                     <Button asChild size="sm">
                         <Link href={`/dashboard/rsvps/${r.id}/edit`}>
                             <Pencil className="size-3.5" /> Edit response

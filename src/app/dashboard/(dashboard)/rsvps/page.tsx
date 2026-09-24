@@ -495,13 +495,18 @@ function Row({ rsvp: r, fmt, onReset }: {
                   break-all + line-clamp, never truncate: the table is
                   auto-layout, so truncate has nothing to truncate against.
                 */}
-                <Link
-                    href={`/dashboard/guests/${r.id}/profile`}
-                    title={`View ${r.guest.name}'s profile`}
-                    className="inline-block py-1.5 text-[12.5px] font-medium break-words hover:text-primary hover:underline"
-                >
-                    {r.guest.name}
-                </Link>
+                {r.phone_book_guest_id ? (
+                    <Link
+                        href={`/dashboard/guests/${r.phone_book_guest_id}/profile`}
+                        title={`View ${r.guest.name}'s profile`}
+                        className="inline-block py-1.5 text-[12.5px] font-medium break-words hover:text-primary hover:underline"
+                    >
+                        {r.guest.name}
+                    </Link>
+                ) : (
+                    /* Scanned the QR without being in the phone book — no guest profile to open. */
+                    <p className="py-1.5 text-[12.5px] font-medium break-words">{r.guest.name}</p>
+                )}
                 <p className="text-[11px] break-all text-muted-foreground">{r.guest.email || '—'}</p>
                 {r.guest.mobile ? (
                     <p className="text-[11px] text-muted-foreground">
@@ -558,14 +563,16 @@ function Row({ rsvp: r, fmt, onReset }: {
                                     <Eye className="size-3.5" /> View RSVP
                                 </Link>
                             </DropdownMenuItem>
-                            {/* The PERSON across every event, as opposed to
-                                this one invitation. Same id — an RSVP is a
-                                guest — but a different question. */}
-                            <DropdownMenuItem asChild>
-                                <Link href={`/dashboard/guests/${r.id}/profile`}>
-                                    <UserRound className="size-3.5" /> View guest profile
-                                </Link>
-                            </DropdownMenuItem>
+                            {/* The PERSON in the phone book, as opposed to this
+                                one invitation — a different id (§581). Absent
+                                for a stranger who has no phone-book entry. */}
+                            {r.phone_book_guest_id ? (
+                                <DropdownMenuItem asChild>
+                                    <Link href={`/dashboard/guests/${r.phone_book_guest_id}/profile`}>
+                                        <UserRound className="size-3.5" /> View guest profile
+                                    </Link>
+                                </DropdownMenuItem>
+                            ) : null}
                             <DropdownMenuItem asChild>
                                 <Link href={`/dashboard/rsvps/${r.id}/edit`}>
                                     <Pencil className="size-3.5" /> Edit response
