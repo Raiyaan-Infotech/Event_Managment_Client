@@ -54,7 +54,6 @@ import { TemplateArtwork } from "@/components/common/template-artwork";
 import { DownloadFormatButton, DownloadingOverlay, type DownloadKind } from "@/components/common/invitation-download";
 import { SignInPrompt } from '@/components/common/sign-in-prompt';
 import { ImageCropDialog } from '@/components/common/image-crop-dialog';
-import { isLockedMenu } from '@/lib/locked-menus';
 import { formatDate } from '@/lib/format';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 
@@ -111,12 +110,12 @@ const STEPS = [
 // render an event's artwork from the same list. They were two copies before,
 // which is how a card and its own preview showed different gradients.
 
-const MENU_GROUP_LABELS: Record<MenuOption["menu_group"], string> = {
-    core: "Core Menus",
-    additional: "Additional Menus",
-    custom: "Custom Menus",
-    app: "Mobile App Features",
-};
+/**
+ * A Default menu (Menu Management → Default) is always on and cannot be
+ * switched off; an Add-on can. Read from the menu, never from a slug list, so
+ * a menu added tomorrow follows the same rule without a code change.
+ */
+const isDefaultMenu = (m: Pick<MenuOption, "is_default">) => Number(m.is_default) === 1;
 
 const ALL_STYLES = "all";
 
@@ -218,8 +217,6 @@ export function EventWizard({
         onConfirm: () => void;
     } | null>(null);
     const [menus, setMenus] = useState<Record<number, boolean>>({});
-    /** App features switched OFF for this event (true = off). Absent = on. */
-    const [appOff, setAppOff] = useState<Record<number, boolean>>({});
     /** Step 4's own narrowing, on top of the plan + event-category scoping
      * `dbTemplates` already does — see the Design Style filter below. */
     const [styleFilter, setStyleFilter] = useState<string>(ALL_STYLES);
@@ -321,10 +318,6 @@ export function EventWizard({
         for (const id of row.menu_ids ?? []) picked[id] = true;
         setMenus(picked);
 
-        const off: Record<number, boolean> = {};
-        for (const id of row.disabled_app_menu_ids ?? []) off[id] = true;
-        setAppOff(off);
-
         // Restore an override only if the row HAS one. A null stays null, so
         // an event that was following its template carries on following it.
         if (row.components) {
@@ -366,13 +359,9 @@ export function EventWizard({
         [opts?.menus, categoryId]
     );
 
-    /** Core / Additional / Custom sections, in that fixed order, empty groups dropped. */
-    const menuGroups = useMemo(() => {
-        const order: MenuOption["menu_group"][] = ["core", "additional", "custom"];
-        return order
-            .map((group) => ({ group, rows: menuRows.filter((m) => m.menu_group === group) }))
-            .filter((g) => g.rows.length > 0);
-    }, [menuRows]);
+    /** Every menu the plan grants, split by its own Default flag. */
+    const defaultRows = useMemo(() => menuRows.filter(isDefaultMenu), [menuRows]);
+    const addonRows = useMemo(() => menuRows.filter((m) => !isDefaultMenu(m)), [menuRows]);
     useEffect(() => {
         if (!menuRows.length) return;
         // In edit mode the saved selection IS the answer — defaulting unknown
@@ -387,13 +376,6 @@ export function EventWizard({
             return changed ? next : prev;
         });
     }, [menuRows, isEdit]);
-
-    /**
-     * The plan's mobile app features. Every event gets them unless switched off
-     * here — so, unlike `menuRows`, a new event starts with all of them ON and
-     * nothing is filtered by category (the app does not filter them either).
-     */
-    const appFeatures = opts?.app_features ?? [];
 
     // Already plan-scoped by the backend; `?? []` only guards the pre-load render.
     const categoryRows = opts?.categories ?? [];
@@ -696,12 +678,7 @@ export function EventWizard({
                 // actually returned — a stale key from a previous plan would be
                 // rejected by the server rather than silently dropped.
                 menu_ids: menuRows
-                    .filter((m) => isLockedMenu(m.slug) || (menus[m.id] ?? true))
-                    .map((m) => m.id),
-                // The OFF list: an app feature the plan grants shows on every
-                // event unless it is named here. A locked feature never is.
-                disabled_app_menu_ids: appFeatures
-                    .filter((m) => appOff[m.id] && !isLockedMenu(m.slug))
+                    .filter((m) => isDefaultMenu(m) || (menus[m.id] ?? true))
                     .map((m) => m.id),
                 theme_id: form.theme_id,
                 primary_color: form.primary_color,
@@ -1139,89 +1116,54 @@ export function EventWizard({
                         {/* ── Step 3 — real event_menus ──────────────────────── */}
                         {step === 3 && (
                             <div className="grid gap-x-10 gap-y-8 lg:grid-cols-2">
-                                {/* ── Panel 1: Event Menus ───────────────────── */}
-                                <div className="flex min-w-0 flex-col gap-6">
-                                    {options.isLoading ? (
-                                        <div className="flex flex-col gap-3">
-                                            {Array.from({ length: 6 }).map((_, i) => (
-                                                <Skeleton key={i} className="h-11 w-full rounded-md" />
-                                            ))}
-                                        </div>
-                                    ) : menuRows.length === 0 ? (
-                                        <p className="py-10 text-center text-[13px] text-muted-foreground">
-                                            No menus are configured for this event type yet.
-                                        </p>
-                                    ) : (
-                                        <div className="flex flex-col gap-6">
-                                            {menuGroups.map(({ group, rows }) => (
-                                                <div key={group}>
-                                                    <ul className="flex flex-col divide-y divide-border">
-                                                        {rows.map((m) => {
-                                                            const locked = isLockedMenu(m.slug);
-                                                            return (
-                                                            <li key={m.id} className="flex items-center justify-between gap-4 py-3">
-                                                                <span className="min-w-0 text-[13.5px] font-medium text-foreground break-words">
-                                                                    {m.name}
-                                                                    {locked && (
-                                                                        <span className="block text-[11.5px] font-normal text-muted-foreground">
-                                                                            Always included
-                                                                        </span>
-                                                                    )}
-                                                                </span>
-                                                                <Switch
-                                                                    checked={locked || (menus[m.id] ?? true)}
-                                                                    disabled={locked}
-                                                                    onCheckedChange={(v) => setMenus((p) => ({ ...p, [m.id]: v }))}
-                                                                    aria-label={m.name}
-                                                                />
-                                                            </li>
-                                                            );
-                                                        })}
-                                                    </ul>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* ── Panel 2: Mobile App Features ───────────── */}
-                                <div className="flex min-w-0 flex-col gap-3">
-                                    {options.isLoading ? (
-                                        <div className="mt-3 flex flex-col gap-3">
-                                            {Array.from({ length: 6 }).map((_, i) => (
-                                                <Skeleton key={i} className="h-11 w-full rounded-md" />
-                                            ))}
-                                        </div>
-                                    ) : appFeatures.length === 0 ? (
-                                        <p className="py-10 text-center text-[13px] text-muted-foreground">
-                                            No mobile app features are configured for your plan.
-                                        </p>
-                                    ) : (
-                                        <ul className="mt-2 flex flex-col divide-y divide-border">
-                                            {appFeatures.map((m) => {
-                                                const locked = isLockedMenu(m.slug);
-                                                return (
-                                                <li key={m.id} className="flex items-center justify-between gap-4 py-3">
-                                                    <span className="min-w-0 text-[13.5px] font-medium text-foreground break-words">
-                                                        {m.name}
-                                                        {locked && (
-                                                            <span className="block text-[11.5px] font-normal text-muted-foreground">
-                                                                Always included
+                                {/*
+                                  Every menu the plan grants, in two panels by the
+                                  menu's own Default flag: Default = always on,
+                                  Add-on = the client switches it per event.
+                                */}
+                                {([
+                                    { key: "default", title: "Included Menus", rows: defaultRows, empty: "No menus are configured for this event type yet." },
+                                    { key: "addon", title: "Add-on Menus", rows: addonRows, empty: "No add-on menus in your plan." },
+                                ] as const).map((panel) => (
+                                    <div key={panel.key} className="flex min-w-0 flex-col gap-3">
+                                        <h3 className="text-[13px] font-semibold text-foreground">{panel.title}</h3>
+                                        {options.isLoading ? (
+                                            <div className="flex flex-col gap-3">
+                                                {Array.from({ length: 6 }).map((_, i) => (
+                                                    <Skeleton key={i} className="h-11 w-full rounded-md" />
+                                                ))}
+                                            </div>
+                                        ) : panel.rows.length === 0 ? (
+                                            <p className="py-10 text-center text-[13px] text-muted-foreground">
+                                                {panel.empty}
+                                            </p>
+                                        ) : (
+                                            <ul className="flex flex-col divide-y divide-border">
+                                                {panel.rows.map((m) => {
+                                                    const locked = isDefaultMenu(m);
+                                                    return (
+                                                        <li key={m.id} className="flex items-center justify-between gap-4 py-3">
+                                                            <span className="min-w-0 text-[13.5px] font-medium text-foreground break-words">
+                                                                {m.name}
+                                                                {locked && (
+                                                                    <span className="block text-[11.5px] font-normal text-muted-foreground">
+                                                                        Always included
+                                                                    </span>
+                                                                )}
                                                             </span>
-                                                        )}
-                                                    </span>
-                                                    <Switch
-                                                        checked={locked || !appOff[m.id]}
-                                                        disabled={locked}
-                                                        onCheckedChange={(v) => setAppOff((p) => ({ ...p, [m.id]: !v }))}
-                                                        aria-label={m.name}
-                                                    />
-                                                </li>
-                                                );
-                                            })}
-                                        </ul>
-                                    )}
-                                </div>
+                                                            <Switch
+                                                                checked={locked || (menus[m.id] ?? true)}
+                                                                disabled={locked}
+                                                                onCheckedChange={(v) => setMenus((p) => ({ ...p, [m.id]: v }))}
+                                                                aria-label={m.name}
+                                                            />
+                                                        </li>
+                                                    );
+                                                })}
+                                            </ul>
+                                        )}
+                                    </div>
+                                ))}
                             </div>
                         )}
 

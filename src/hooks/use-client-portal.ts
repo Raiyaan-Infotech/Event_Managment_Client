@@ -97,7 +97,10 @@ export interface TaxonomyOption {
 
 export interface MenuOption extends TaxonomyOption {
     slug: string;
-    menu_group: 'core' | 'additional' | 'custom' | 'app';
+    /** A label only (Core / Add-on); `is_default` decides the switch. */
+    menu_group: 'core' | 'addon';
+    /** 1 = Default: always on, the event cannot switch it off. 0 = Add-on. */
+    is_default?: number | boolean;
     /** The menu's category; NULL = suits every category. */
     event_category_id?: number | null;
 }
@@ -180,11 +183,7 @@ export interface EventOptions {
      * are event features. Undefined on an older backend — see `grantedSections`.
      */
     portal_sections?: string[];
-    /**
-     * The plan's mobile APP features (Chat, Wishes, …). Not per-event picks
-     * like `menus` — every event gets them — but each event can switch any of
-     * them off (`disabled_app_menu_ids`). Undefined on an older backend.
-     */
+    /** Always empty now — every granted menu is in `menus`. */
     app_features?: MenuOption[];
     /**
      * Admin-authored templates this plan allows. May be empty on an older
