@@ -92,6 +92,9 @@ export interface ClientEvent {
      */
     cover_image: string | null;
 
+    /** The finished invitation as a PNG, uploaded by the wizard after a save. */
+    invitation_image?: string | null;
+
     /**
      * The client's per-event override of the template's component set / order.
      *
@@ -387,6 +390,24 @@ export function useUploadEventCover() {
             return api.post<{ url: string }>(`${ENDPOINT}/cover-image`, form).then((r) => r.url);
         },
         onError: (e) => reportError(e, 'upload'),
+    });
+}
+
+/**
+ * Store the finished invitation (the card rendered to PNG) on a SAVED event.
+ *
+ * Silent by design: the wizard fires it after the save succeeds, with no toast
+ * either way. The app's View Invitation shows this image; if the upload fails
+ * the event is still saved and the app falls back to its drawn card, so an
+ * error here is logged, never shown.
+ */
+export function useUploadInvitationImage() {
+    return useMutation({
+        mutationFn: ({ eventId, image }: { eventId: number; image: Blob }) => {
+            const form = new FormData();
+            form.append('file', image, `invitation-${eventId}.png`);
+            return api.post<{ url: string }>(`${ENDPOINT}/${eventId}/invitation-image`, form).then((r) => r.url);
+        },
     });
 }
 

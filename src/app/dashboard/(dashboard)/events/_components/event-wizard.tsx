@@ -39,6 +39,7 @@ import {
     useUpdateEvent,
     useClientEvent,
     useUploadEventCover,
+    useUploadInvitationImage,
     type ClientEvent,
 } from "@/hooks/use-client-events";
 import { PRIMARY_SWATCHES } from "@/lib/event-themes";
@@ -47,7 +48,7 @@ import {
     suitsScope,
     templatesForEvent,
 } from "@/lib/event-templates";
-import { downloadNodeAsImage, downloadQrAsPng, downloadQrAsSvg, fileSlug } from "@/lib/export-invitation";
+import { downloadNodeAsImage, downloadQrAsPng, downloadQrAsSvg, fileSlug, nodeToPngBlob } from "@/lib/export-invitation";
 import { EventQr } from "@/components/common/event-qr";
 import { InvitationCard, type InvitationData } from "@/components/common/invitation-card";
 import { TemplateArtwork } from "@/components/common/template-artwork";
@@ -271,6 +272,38 @@ export function EventWizard({
         setStep(6);
     });
     const saving = createEvent.isPending || updateEvent.isPending;
+
+    /*
+      ── THE FINISHED INVITATION, STORED SILENTLY ─────────────────────────
+      Once the save lands, step 6 shows the real card (with its live QR). It is
+      rendered to PNG here and stored on the event (`invitation_image`), which
+      is what the mobile app's View Invitation shows. No toast, no spinner: the
+      event is already saved, and a failed upload only means the app falls back
+      to its drawn card until the next save. Once per saved version, keyed on
+      id + updated_at, so a re-render does not upload twice.
+    */
+    const uploadInvitation = useUploadInvitationImage();
+    const uploadedFor = useRef<string | null>(null);
+    useEffect(() => {
+        if (step !== 6 || !created?.id) return;
+        const key = `${created.id}:${created.updated_at ?? ""}`;
+        if (uploadedFor.current === key) return;
+        uploadedFor.current = key;
+
+        // A beat for the card's QR and artwork to mount before capturing.
+        const timer = window.setTimeout(async () => {
+            const card = exportCardRef.current?.querySelector<HTMLElement>("[data-invitation-card]");
+            if (!card) return;
+            try {
+                const image = await nodeToPngBlob(card);
+                await uploadInvitation.mutateAsync({ eventId: created.id, image });
+            } catch (error) {
+                console.error("[event-wizard] invitation image not stored", error);
+            }
+        }, 800);
+        return () => window.clearTimeout(timer);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [step, created?.id, created?.updated_at]);
 
     /**
      * Prefill from the loaded row, exactly once.

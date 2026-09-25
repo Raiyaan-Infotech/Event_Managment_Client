@@ -1,4 +1,4 @@
-import { toPng, toSvg } from 'html-to-image';
+import { toBlob, toPng, toSvg } from 'html-to-image';
 import { api } from '@/lib/api-client';
 
 /**
@@ -160,6 +160,20 @@ export async function downloadNodeAsImage(
                 : await toPng(node, { pixelRatio: options.pixelRatio ?? 5, cacheBust: true });
 
         triggerDownload(dataUrl, `${name}.${format}`);
+    });
+}
+
+/**
+ * Captures `node` as a PNG Blob — no download. For uploading the finished
+ * invitation after a save (`useUploadInvitationImage`). 3x rather than the
+ * download's 5x: this is shown on a phone screen, and 5x makes a file several
+ * times larger for no visible gain there.
+ */
+export async function nodeToPngBlob(node: HTMLElement, pixelRatio = 3): Promise<Blob> {
+    return withInlinedImages(node, async () => {
+        const blob = await toBlob(node, { pixelRatio, cacheBust: true });
+        if (!blob) throw new Error('The invitation could not be rendered.');
+        return blob;
     });
 }
 
