@@ -17,7 +17,7 @@ import {
     faGripVertical,
 } from "@fortawesome/free-solid-svg-icons";
 import { faWhatsapp as faWhatsappBrand } from "@fortawesome/free-brands-svg-icons";
-import { Loader2, Upload, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Loader2, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -141,6 +141,13 @@ interface FormState {
     timezone: string;
     venue_name: string;
     venue_address: string;
+    venue_landmark: string;
+    venue_map_link: string;
+    /** Stored URL of the venue photo; "" = none. */
+    venue_image: string;
+    /** Map pin, as typed; both blank = no pin. */
+    venue_lat: string;
+    venue_lng: string;
     organizer: string;
     contact_phone: string;
     contact_email: string;
@@ -159,6 +166,7 @@ const EMPTY: FormState = {
     start_date: "", end_date: "", start_time: "", end_time: "",
     timezone: TIME_ZONES[0],
     venue_name: "", venue_address: "",
+    venue_landmark: "", venue_map_link: "", venue_image: "", venue_lat: "", venue_lng: "",
     organizer: "", contact_phone: "", contact_email: "", footer_note: "",
     privacy: "private", status: "upcoming",
     // Blank, not a hardcoded slug: the theme catalogue is whatever the client's
@@ -218,6 +226,8 @@ export function EventWizard({
         onConfirm: () => void;
     } | null>(null);
     const [menus, setMenus] = useState<Record<number, boolean>>({});
+    /** Menu ids in the host's order (`menu_order`); [] = the admin's order. */
+    const [menuOrder, setMenuOrder] = useState<number[]>([]);
     /** Step 4's own narrowing, on top of the plan + event-category scoping
      * `dbTemplates` already does — see the Design Style filter below. */
     const [styleFilter, setStyleFilter] = useState<string>(ALL_STYLES);
@@ -336,6 +346,11 @@ export function EventWizard({
             timezone: row.timezone || TIME_ZONES[0],
             venue_name: row.venue_name ?? "",
             venue_address: row.venue_address ?? "",
+            venue_landmark: row.venue_landmark ?? "",
+            venue_map_link: row.venue_map_link ?? "",
+            venue_image: row.venue_image ?? "",
+            venue_lat: row.venue_lat != null ? String(Number(row.venue_lat)) : "",
+            venue_lng: row.venue_lng != null ? String(Number(row.venue_lng)) : "",
             organizer: row.organizer ?? "",
             contact_phone: row.contact_phone ?? "",
             contact_email: row.contact_email ?? "",
@@ -350,6 +365,7 @@ export function EventWizard({
         const picked: Record<number, boolean> = {};
         for (const id of row.menu_ids ?? []) picked[id] = true;
         setMenus(picked);
+        setMenuOrder(row.menu_order ?? []);
 
         // Restore an override only if the row HAS one. A null stays null, so
         // an event that was following its template carries on following it.
@@ -392,9 +408,34 @@ export function EventWizard({
         [opts?.menus, categoryId]
     );
 
+    /**
+     * menuRows in the host's order (`menu_order`): ids it names first, the
+     * rest after in the admin's order. This order is what the app's Explore
+     * grid shows.
+     */
+    const orderedMenuRows = useMemo(() => {
+        const rank = (id: number) => {
+            const i = menuOrder.indexOf(id);
+            return i < 0 ? menuOrder.length : i;
+        };
+        return [...menuRows].sort((a, b) => rank(a.id) - rank(b.id));
+    }, [menuRows, menuOrder]);
+
+    /** Move a menu one place up/down within its own panel. */
+    const moveMenu = (rows: readonly { id: number }[], id: number, dir: -1 | 1) => {
+        const i = rows.findIndex((r) => r.id === id);
+        const j = i + dir;
+        if (i < 0 || j < 0 || j >= rows.length) return;
+        const all = orderedMenuRows.map((m) => m.id);
+        const a = all.indexOf(rows[i].id);
+        const b = all.indexOf(rows[j].id);
+        [all[a], all[b]] = [all[b], all[a]];
+        setMenuOrder(all);
+    };
+
     /** Every menu the plan grants, split by its own Default flag. */
-    const defaultRows = useMemo(() => menuRows.filter(isDefaultMenu), [menuRows]);
-    const addonRows = useMemo(() => menuRows.filter((m) => !isDefaultMenu(m)), [menuRows]);
+    const defaultRows = useMemo(() => orderedMenuRows.filter(isDefaultMenu), [orderedMenuRows]);
+    const addonRows = useMemo(() => orderedMenuRows.filter((m) => !isDefaultMenu(m)), [orderedMenuRows]);
     useEffect(() => {
         if (!menuRows.length) return;
         // In edit mode the saved selection IS the answer — defaulting unknown
@@ -701,6 +742,12 @@ export function EventWizard({
                 timezone: form.timezone,
                 venue_name: form.venue_name.trim() || null,
                 venue_address: form.venue_address.trim() || null,
+                venue_landmark: form.venue_landmark.trim() || null,
+                venue_map_link: form.venue_map_link.trim() || null,
+                venue_image: form.venue_image || null,
+                // A pin is a pair; the server refuses half of one.
+                venue_lat: form.venue_lat.trim() && form.venue_lng.trim() ? Number(form.venue_lat) : null,
+                venue_lng: form.venue_lat.trim() && form.venue_lng.trim() ? Number(form.venue_lng) : null,
                 organizer: form.organizer.trim() || null,
                 contact_phone: form.contact_phone.trim() || null,
                 contact_email: form.contact_email.trim() || null,
@@ -713,6 +760,7 @@ export function EventWizard({
                 menu_ids: menuRows
                     .filter((m) => isDefaultMenu(m) || (menus[m.id] ?? true))
                     .map((m) => m.id),
+                menu_order: orderedMenuRows.map((m) => m.id),
                 theme_id: form.theme_id,
                 primary_color: form.primary_color,
                 // "" → null, so removing the photo in edit mode clears it.
@@ -1075,6 +1123,54 @@ export function EventWizard({
                                         <Counter value={form.venue_address.length} max={500} />
                                     </Field>
 
+                                    <Field label="Landmark (Optional)">
+                                        <Input
+                                            value={form.venue_landmark}
+                                            onChange={(e) => setField("venue_landmark", e.target.value.slice(0, 255))}
+                                            placeholder="e.g. Near Marina Beach"
+                                            className="h-11 rounded-md"
+                                        />
+                                    </Field>
+
+                                    <Field label="Google Map Link (Optional)">
+                                        <Input
+                                            value={form.venue_map_link}
+                                            onChange={(e) => setField("venue_map_link", e.target.value.slice(0, 500))}
+                                            placeholder="https://maps.google.com/..."
+                                            className="h-11 rounded-md"
+                                        />
+                                    </Field>
+
+                                    {/* The app drops this pin by tapping its map; here it is typed. */}
+                                    <div className="grid gap-5 sm:grid-cols-2">
+                                        <Field label="Latitude (Optional)">
+                                            <Input
+                                                inputMode="decimal"
+                                                value={form.venue_lat}
+                                                onChange={(e) => setField("venue_lat", e.target.value.replace(/[^0-9.-]/g, "").slice(0, 12))}
+                                                placeholder="13.0827"
+                                                className="h-11 rounded-md"
+                                            />
+                                        </Field>
+                                        <Field label="Longitude (Optional)">
+                                            <Input
+                                                inputMode="decimal"
+                                                value={form.venue_lng}
+                                                onChange={(e) => setField("venue_lng", e.target.value.replace(/[^0-9.-]/g, "").slice(0, 12))}
+                                                placeholder="80.2707"
+                                                className="h-11 rounded-md"
+                                            />
+                                        </Field>
+                                    </div>
+
+                                    <CoverImageField
+                                        label="Venue Image (Optional)"
+                                        required={false}
+                                        hint="JPG, PNG or WEBP. A photo of the venue, shown to guests in the app."
+                                        value={form.venue_image}
+                                        onChange={(url) => setField("venue_image", url)}
+                                    />
+
                                     {/* Each of these backs a component the template
                                         can switch on. Left blank, the invitation
                                         falls back to a placeholder — which is what
@@ -1172,7 +1268,7 @@ export function EventWizard({
                                             </p>
                                         ) : (
                                             <ul className="flex flex-col divide-y divide-border">
-                                                {panel.rows.map((m) => {
+                                                {panel.rows.map((m, idx) => {
                                                     const locked = isDefaultMenu(m);
                                                     return (
                                                         <li key={m.id} className="flex items-center justify-between gap-4 py-3">
@@ -1184,12 +1280,30 @@ export function EventWizard({
                                                                     </span>
                                                                 )}
                                                             </span>
-                                                            <Switch
-                                                                checked={locked || (menus[m.id] ?? true)}
-                                                                disabled={locked}
-                                                                onCheckedChange={(v) => setMenus((p) => ({ ...p, [m.id]: v }))}
-                                                                aria-label={m.name}
-                                                            />
+                                                            <div className="flex shrink-0 items-center gap-1">
+                                                                <Button
+                                                                    type="button" size="icon" variant="ghost" className="size-7"
+                                                                    aria-label={`Move ${m.name} up`}
+                                                                    disabled={idx === 0}
+                                                                    onClick={() => moveMenu(panel.rows, m.id, -1)}
+                                                                >
+                                                                    <ChevronUp className="size-4" />
+                                                                </Button>
+                                                                <Button
+                                                                    type="button" size="icon" variant="ghost" className="size-7"
+                                                                    aria-label={`Move ${m.name} down`}
+                                                                    disabled={idx === panel.rows.length - 1}
+                                                                    onClick={() => moveMenu(panel.rows, m.id, 1)}
+                                                                >
+                                                                    <ChevronDown className="size-4" />
+                                                                </Button>
+                                                                <Switch
+                                                                    checked={locked || (menus[m.id] ?? true)}
+                                                                    disabled={locked}
+                                                                    onCheckedChange={(v) => setMenus((p) => ({ ...p, [m.id]: v }))}
+                                                                    aria-label={m.name}
+                                                                />
+                                                            </div>
                                                         </li>
                                                     );
                                                 })}
@@ -1921,9 +2035,11 @@ function Field({
  * with the rest of the event on step 5.
  */
 function CoverImageField({
-    value, onChange, error,
+    value, onChange, error, label = "Event Image", required = true,
+    hint = "JPG, PNG or WEBP. Cropped to 16:9 before upload. Shown on the event card and event page in the app.",
 }: {
     value: string; onChange: (url: string) => void; error?: boolean;
+    label?: string; required?: boolean; hint?: string;
 }) {
     const upload = useUploadEventCover();
     const inputRef = useRef<HTMLInputElement>(null);
@@ -1932,7 +2048,7 @@ function CoverImageField({
     return (
         <div className="flex flex-col gap-2">
             <Label className="text-[12.5px] font-medium">
-                Event Image <span className="text-destructive">*</span>
+                {label} {required && <span className="text-destructive">*</span>}
             </Label>
             {value ? (
                 // Capped width so a wide 16:9 photo does not dominate the full-width
@@ -1975,7 +2091,7 @@ function CoverImageField({
                         {upload.isPending ? "Uploading…" : "Click to upload an image"}
                     </span>
                     <span className="text-[11px] text-muted-foreground">
-                        JPG, PNG or WEBP. Cropped to 16:9 before upload. Shown on the event card and event page in the app.
+                        {hint}
                     </span>
                 </button>
             )}

@@ -71,6 +71,12 @@ export interface ClientEvent {
     timezone: string | null;
     venue_name: string | null;
     venue_address: string | null;
+    venue_landmark?: string | null;
+    venue_map_link?: string | null;
+    venue_image?: string | null;
+    /** DECIMAL — arrives as a string, e.g. "13.0827000". */
+    venue_lat?: string | number | null;
+    venue_lng?: string | number | null;
     organizer: string | null;
     contact_phone: string | null;
     contact_email: string | null;
@@ -81,6 +87,8 @@ export interface ClientEvent {
     derived_status: DerivedStatus;
 
     menu_ids: number[];
+    /** Menu ids in the host's order; null = the admin's sort_order. */
+    menu_order?: number[] | null;
     /** The plan's app features switched OFF for this event; [] = all on. */
     disabled_app_menu_ids?: number[];
     theme_id: string | null;
@@ -137,10 +145,16 @@ export interface EventPayload {
     privacy?: string;
     status?: string;
     menu_ids?: number[];
+    menu_order?: number[] | null;
     disabled_app_menu_ids?: number[];
     theme_id?: string | null;
     primary_color?: string | null;
     cover_image?: string | null;
+    venue_landmark?: string | null;
+    venue_map_link?: string | null;
+    venue_image?: string | null;
+    venue_lat?: number | null;
+    venue_lng?: number | null;
 }
 
 export interface EventListParams {
