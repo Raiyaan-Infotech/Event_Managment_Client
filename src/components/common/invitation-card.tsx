@@ -321,9 +321,10 @@ export function InvitationCard({
      * same as one deliberately switched off.
      */
     const on = (key: ComponentKey) => {
-        // The QR code is on every invitation — a template or an older event
-        // that has it switched off still draws it.
-        if (key === 'event_qr_code') return true;
+        // The QR code is ON BY DEFAULT: an event that follows its template
+        // draws it whatever the template says. Only the client's own choice
+        // (an override) can switch it off.
+        if (key === 'event_qr_code' && !componentsOverride) return true;
         const source = componentsOverride ?? template.components;
         const v = source?.[key];
         return v === undefined || !!Number(v);

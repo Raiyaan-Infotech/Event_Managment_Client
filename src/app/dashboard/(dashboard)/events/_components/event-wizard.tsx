@@ -207,15 +207,18 @@ type ComponentKey = (typeof COMPONENT_KEYS)[number];
 
 
 /**
- * The invitation's on/off switches — SEVEN, the same seven the mobile app
+ * The invitation's on/off switches — EIGHT, the same eight the mobile app
  * offers (Jamal, 2026-10-05), over the eleven sections the admin's template
  * builder has. A switch that covers two sections reads on when either is on,
  * and sets both.
  *
- * Two sections have no switch here: the QR code (always on) and the
- * decorations (the admin's choice per template). The Component Order list
- * shows the same seven, so the two lists match; those two sections keep the
- * place the template gave them, and a merged pair moves together.
+ * The QR code is ON BY DEFAULT — it starts on whatever the template says —
+ * and the client may switch it off.
+ *
+ * One section has no switch here: the decorations (the admin's choice per
+ * template). The Component Order list shows the same eight, so the two lists
+ * match; the decorations keep the place the template gave them, and a merged
+ * pair moves together.
  */
 const COMPONENT_SWITCHES: { label: string; keys: ComponentKey[] }[] = [
     { label: "Event Photos", keys: ["event_photos"] },
@@ -223,6 +226,7 @@ const COMPONENT_SWITCHES: { label: string; keys: ComponentKey[] }[] = [
     { label: "Invitation Message", keys: ["invitation_message"] },
     { label: "Date & Time", keys: ["date_time"] },
     { label: "Venue", keys: ["venue"] },
+    { label: "Event QR Code", keys: ["event_qr_code"] },
     { label: "Organizer & Contact", keys: ["organizer", "contact_details"] },
     { label: "Footer (Thanks / Note)", keys: ["footer_note"] },
 ];
@@ -416,12 +420,11 @@ export function EventWizard({
         // Restore an override only if the row HAS one. A null stays null, so
         // an event that was following its template carries on following it.
         if (row.components) {
-            setCompOverride({
-                ...(Object.fromEntries(
+            setCompOverride(
+                Object.fromEntries(
                     COMPONENT_KEYS.map((k) => [k, !!Number(row.components?.[k] ?? 1)])
-                ) as Record<ComponentKey, boolean>),
-                event_qr_code: true,
-            });
+                ) as Record<ComponentKey, boolean>
+            );
         }
         if (row.component_order?.length) {
             const given = row.component_order.filter(
@@ -617,7 +620,7 @@ export function EventWizard({
             // Absent means on, matching every other renderer.
             map[key] = v === undefined || !!Number(v);
         }
-        // Always on, whatever the template says.
+        // On by default, whatever the template says; the client may turn it off.
         map.event_qr_code = true;
         return map;
     }, [artwork]);
@@ -1762,8 +1765,8 @@ export function EventWizard({
                                         </p>
                                         <p className="mb-3 text-[11.5px] text-muted-foreground">
                                             Drag the chips to arrange the order components appear on the
-                                            invitation. Components switched off keep their place. The QR
-                                            code and the decorations stay where the template puts them.
+                                            invitation. Components switched off keep their place. The
+                                            decorations stay where the template puts them.
                                         </p>
                                         <ul className="flex flex-wrap gap-2">
                                             {orderedSwitches.map((item, index) => (
