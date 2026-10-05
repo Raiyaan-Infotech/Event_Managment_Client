@@ -102,6 +102,8 @@ export interface ClientEvent {
      * of the invitation design.
      */
     cover_image: string | null;
+    /** The host's own picture for a custom-type template. Null = the template's own. */
+    custom_image?: string | null;
 
     /** The finished invitation as a PNG, uploaded by the wizard after a save. */
     invitation_image?: string | null;
@@ -155,6 +157,7 @@ export interface EventPayload {
     theme_id?: string | null;
     primary_color?: string | null;
     cover_image?: string | null;
+    custom_image?: string | null;
     venue_landmark?: string | null;
     venue_map_link?: string | null;
     venue_image?: string | null;

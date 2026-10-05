@@ -223,6 +223,7 @@ export function EventDetail({ eventId }: { eventId: number }) {
                 <CardContent className="flex flex-col gap-5 p-5 lg:flex-row">
                     <EventThumbnail
                         themeId={event.theme_id}
+                        customImage={event.custom_image}
                         name={event.name}
                         primaryColor={event.primary_color}
                         startDate={event.start_date}

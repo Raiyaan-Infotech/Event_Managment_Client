@@ -178,6 +178,8 @@ interface FormState {
     primary_color: string;
     /** Stored URL of the event's own photo; "" = none. See CoverImageField. */
     cover_image: string;
+    /** The host's own picture for a custom-type template. "" = the template's own. */
+    custom_image: string;
 }
 
 const EMPTY: FormState = {
@@ -194,6 +196,7 @@ const EMPTY: FormState = {
     // PLAN grants, so nothing can be preselected until those templates load.
     theme_id: "", primary_color: PRIMARY_SWATCHES[0],
     cover_image: "",
+    custom_image: "",
 };
 
 /** The invitation components, canonical order. Mirrors the backend's list. */
@@ -410,6 +413,7 @@ export function EventWizard({
             theme_id: row.theme_id || "",
             primary_color: row.primary_color || PRIMARY_SWATCHES[0],
             cover_image: row.cover_image ?? "",
+            custom_image: row.custom_image ?? "",
         });
 
         const picked: Record<number, boolean> = {};
@@ -571,7 +575,7 @@ export function EventWizard({
      * a blank card. What changed is that step 4 no longer OFFERS those — the
      * fallback is for rendering history, not for picking something new.
      */
-    const artwork = resolveArtwork(form.theme_id, opts?.templates);
+    const artwork = resolveArtwork(form.theme_id, opts?.templates, form.custom_image);
     const selectedTheme = artwork.kind === "legacy" ? artwork.theme : undefined;
 
     /**
@@ -863,6 +867,10 @@ export function EventWizard({
                 primary_color: form.primary_color,
                 // "" → null, so removing the photo in edit mode clears it.
                 cover_image: form.cover_image || null,
+                // Sent whatever the template's type, so switching away from a
+                // custom template and back does not lose the picture; only a
+                // custom template draws it. "" → null clears it.
+                custom_image: form.custom_image || null,
                 // null means "keep following the template". Sent explicitly so
                 // that clearing an override actually clears it server-side
                 // rather than leaving the old one in place.
@@ -1650,6 +1658,31 @@ export function EventWizard({
                                     </div>
                                 )}
 
+                                {/*
+                                  A CUSTOM-type template is a picture masked to a
+                                  shape, so choosing one asks for the host's own
+                                  picture (Jamal, 2026-10-05). Only then — the
+                                  other three types have nothing to put one in.
+                                  Optional: left empty, the template's own picture
+                                  stays. Cropped tall, the shape of the invitation
+                                  on a phone, so what is uploaded is what shows.
+                                */}
+                                {dbTemplates.find((t) => t.code === form.theme_id)?.background_type === "custom" && (
+                                    <div className="mt-6 rounded-md border border-primary/30 bg-primary/5 p-4">
+                                        <CoverImageField
+                                            value={form.custom_image}
+                                            onChange={(url) => setField("custom_image", url)}
+                                            label="Your Image for this Template"
+                                            required={false}
+                                            hint="This is a custom template — add your own picture and it is placed inside the template's shape. JPG, PNG or WEBP, cropped to the invitation's shape. Leave it empty to keep the template's own picture."
+                                            aspect={9 / 16}
+                                            outputSize={1080}
+                                            previewClassName="aspect-[9/16] max-w-[180px]"
+                                            cropTitle="Crop your image"
+                                        />
+                                    </div>
+                                )}
+
                                     {/* What this colour ACTUALLY drives: the
                                         event / host names on the invitation and on
                                         every thumbnail of it. Nothing else reads it —
@@ -2263,9 +2296,15 @@ function Field({
 function CoverImageField({
     value, onChange, error, label = "Event Image", required = true,
     hint = "JPG, PNG or WEBP. Cropped to 16:9 before upload. Shown on the event card and event page in the app.",
+    aspect = 16 / 9, outputSize = 1280,
+    previewClassName = "aspect-[16/9] max-w-sm", cropTitle = "Crop event image",
 }: {
     value: string; onChange: (url: string) => void; error?: boolean;
     label?: string; required?: boolean; hint?: string;
+    /** The crop's width / height, and the longest side of the saved file. */
+    aspect?: number; outputSize?: number;
+    /** The preview's shape and width — keep it the same shape as `aspect`. */
+    previewClassName?: string; cropTitle?: string;
 }) {
     const upload = useUploadEventCover();
     const inputRef = useRef<HTMLInputElement>(null);
@@ -2279,9 +2318,9 @@ function CoverImageField({
             {value ? (
                 // Capped width so a wide 16:9 photo does not dominate the full-width
                 // step — the raw <img> used to be shown at the card's full width.
-                <div className="relative max-w-sm overflow-hidden rounded-lg border">
+                <div className={cn("relative overflow-hidden rounded-lg border", previewClassName)}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={value} alt="Event image" className="aspect-[16/9] w-full object-cover" />
+                    <img src={value} alt={label} className="h-full w-full object-cover" />
                     <div className="absolute right-2 top-2 flex gap-1.5">
                         <Button
                             type="button" size="sm" variant="secondary" className="h-8"
@@ -2346,9 +2385,9 @@ function CoverImageField({
                 file={picked}
                 open={picked !== null}
                 onOpenChange={(o) => { if (!o) setPicked(null); }}
-                aspect={16 / 9}
-                outputSize={1280}
-                title="Crop event image"
+                aspect={aspect}
+                outputSize={outputSize}
+                title={cropTitle}
                 onCropped={(cropped) => {
                     setPicked(null);
                     upload.mutate(cropped, { onSuccess: onChange });

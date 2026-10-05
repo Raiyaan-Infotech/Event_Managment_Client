@@ -255,7 +255,7 @@ export function InvitationDownload({
     className?: string;
 }) {
     const { data: opts } = useEventOptions();
-    const artwork = resolveArtwork(event.theme_id, opts?.templates);
+    const artwork = resolveArtwork(event.theme_id, opts?.templates, event.custom_image);
 
     const cardRef = useRef<HTMLDivElement>(null);
     const qrRef = useRef<HTMLDivElement>(null);

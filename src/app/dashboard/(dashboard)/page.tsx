@@ -377,6 +377,7 @@ export default function DashboardPage() {
                             <div className="relative">
                                 <EventThumbnail
                                     themeId={event.theme_id}
+                                    customImage={event.custom_image}
                                     name={event.name}
                                     primaryColor={event.primary_color}
                                     className="aspect-[16/10] w-full rounded-none border-0"

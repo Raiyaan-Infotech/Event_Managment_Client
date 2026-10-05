@@ -502,6 +502,7 @@ function MyEventsContent() {
                                         <li key={event.id} className="flex flex-col gap-4 p-4 lg:flex-row lg:items-center">
                                             <EventThumbnail
                                                 themeId={event.theme_id}
+                                                customImage={event.custom_image}
                                                 name={event.name}
                                                 primaryColor={event.primary_color}
                                                 className="h-[74px] w-[104px]"

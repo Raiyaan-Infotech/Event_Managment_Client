@@ -97,12 +97,24 @@ export function isDarkTemplate(t: TemplateOption): boolean {
  * (or none at all) is fine and simply means everything resolves to the legacy
  * catalogue — which is exactly what happens on a backend that predates this.
  */
+/**
+ * `customImage` is the EVENT's own picture (`events.custom_image`). On a
+ * custom-type template it replaces the template's picture inside the
+ * template's shape, for that event only; on any other type it is ignored.
+ * Done here, once, so every place that draws an event's invitation — the
+ * wizard preview, the thumbnail, the download — shows the same picture.
+ */
 export function resolveArtwork(
     themeId: string | null | undefined,
-    templates?: TemplateOption[] | null
+    templates?: TemplateOption[] | null,
+    customImage?: string | null
 ): Artwork {
-    const match = (templates ?? []).find((t) => t.code === themeId);
-    if (match) {
+    const found = (templates ?? []).find((t) => t.code === themeId);
+    if (found) {
+        const match =
+            found.background_type === 'custom' && customImage
+                ? { ...found, background_image: customImage }
+                : found;
         return { kind: 'template', template: match, name: match.name, dark: isDarkTemplate(match) };
     }
     const theme = eventTheme(themeId);

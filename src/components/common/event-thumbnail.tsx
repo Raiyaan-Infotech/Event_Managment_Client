@@ -50,6 +50,8 @@ import { mediaUrl } from '@/lib/media-url';
 
 interface EventThumbnailProps {
     themeId: string | null | undefined;
+    /** The event's own picture for a custom-type template (`custom_image`). */
+    customImage?: string | null;
     /** Drawn under the "You're invited" line. Falls back to nothing. */
     name?: string | null;
     /** The event's chosen accent, used for the name. */
@@ -80,6 +82,7 @@ const formatDate = (value?: string | null) => {
 
 export function EventThumbnail({
     themeId,
+    customImage,
     name,
     primaryColor,
     startDate,
@@ -87,7 +90,7 @@ export function EventThumbnail({
     className,
 }: EventThumbnailProps) {
     const { data: opts } = useEventOptions();
-    const artwork = resolveArtwork(themeId, opts?.templates);
+    const artwork = resolveArtwork(themeId, opts?.templates, customImage);
     const dark = artwork.dark;
 
     const isTemplate = artwork.kind === 'template';
