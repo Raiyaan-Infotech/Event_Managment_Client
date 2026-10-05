@@ -121,6 +121,21 @@ const isDefaultMenu = (m: Pick<MenuOption, "is_default">) => Number(m.is_default
 
 const ALL_STYLES = "all";
 
+/**
+ * The four template types — a template's `background_type`, in the admin
+ * form's order. The same four the mobile app shows as tabs over its template
+ * list, so the two filter the same way (Jamal, 2026-10-05).
+ */
+const TEMPLATE_TYPES = [
+    { value: "color", label: "Color" },
+    { value: "image", label: "Image" },
+    { value: "gradient", label: "Gradient" },
+    { value: "custom", label: "Custom" },
+] as const;
+
+const templateTypeLabel = (type: string | null | undefined) =>
+    TEMPLATE_TYPES.find((t) => t.value === type)?.label ?? null;
+
 const TIME_ZONES = [
     "(GMT +05:30) India Standard Time",
     "(GMT +04:00) Gulf Standard Time",
@@ -191,20 +206,6 @@ const COMPONENT_KEYS = [
 type ComponentKey = (typeof COMPONENT_KEYS)[number];
 
 
-const COMPONENT_LABELS: Record<ComponentKey, string> = {
-    event_title: "Event Title",
-    host_names: "Host / Couple Names",
-    date_time: "Date & Time",
-    venue: "Venue",
-    event_qr_code: "Event QR Code",
-    organizer: "Organizer / Hosted By",
-    event_photos: "Event Photos",
-    contact_details: "Contact Details",
-    invitation_message: "Invitation Message",
-    footer_note: "Footer (Thanks / Note)",
-    decoration_elements: "Decoration Elements",
-};
-
 /**
  * The invitation's on/off switches — SEVEN, the same seven the mobile app
  * offers (Jamal, 2026-10-05), over the eleven sections the admin's template
@@ -212,8 +213,9 @@ const COMPONENT_LABELS: Record<ComponentKey, string> = {
  * and sets both.
  *
  * Two sections have no switch here: the QR code (always on) and the
- * decorations (the admin's choice per template). Both still appear in the
- * Component Order list, because they still take a place on the card.
+ * decorations (the admin's choice per template). The Component Order list
+ * shows the same seven, so the two lists match; those two sections keep the
+ * place the template gave them, and a merged pair moves together.
  */
 const COMPONENT_SWITCHES: { label: string; keys: ComponentKey[] }[] = [
     { label: "Event Photos", keys: ["event_photos"] },
@@ -260,7 +262,7 @@ export function EventWizard({
     /** Menu ids in the host's order (`menu_order`); [] = the admin's order. */
     const [menuOrder, setMenuOrder] = useState<number[]>([]);
     /** Step 4's own narrowing, on top of the plan + event-category scoping
-     * `dbTemplates` already does — see the Design Style filter below. */
+     * `dbTemplates` already does — see the Template Type filter below. */
     const [styleFilter, setStyleFilter] = useState<string>(ALL_STYLES);
 
     /**
@@ -273,7 +275,8 @@ export function EventWizard({
      */
     const [compOverride, setCompOverride] = useState<Record<ComponentKey, boolean> | null>(null);
     const [orderOverride, setOrderOverride] = useState<ComponentKey[] | null>(null);
-    const [dragKey, setDragKey] = useState<ComponentKey | null>(null);
+    /** The switch being dragged in Component Order, by its label. */
+    const [dragLabel, setDragLabel] = useState<string | null>(null);
 
     /**
      * Download.
@@ -516,11 +519,11 @@ export function EventWizard({
      * does not show up as a filter option with an empty result behind it.
      */
     const styleOptions = useMemo(
-        () => Array.from(new Set(dbTemplates.map((t) => t.style).filter(Boolean))).sort(),
+        () => TEMPLATE_TYPES.filter((type) => dbTemplates.some((t) => t.background_type === type.value)),
         [dbTemplates]
     );
     const styleFilteredTemplates = useMemo(
-        () => (styleFilter === ALL_STYLES ? dbTemplates : dbTemplates.filter((t) => t.style === styleFilter)),
+        () => (styleFilter === ALL_STYLES ? dbTemplates : dbTemplates.filter((t) => t.background_type === styleFilter)),
         [dbTemplates, styleFilter]
     );
 
@@ -529,7 +532,7 @@ export function EventWizard({
     // pointing at a style no longer on offer, which would silently hide
     // everything instead of showing the reset list.
     useEffect(() => {
-        if (styleFilter !== ALL_STYLES && !styleOptions.includes(styleFilter)) {
+        if (styleFilter !== ALL_STYLES && !styleOptions.some((o) => o.value === styleFilter)) {
             setStyleFilter(ALL_STYLES);
         }
     }, [styleOptions, styleFilter]);
@@ -616,16 +619,35 @@ export function EventWizard({
         }));
     };
 
-    /** Drop `dragKey` in front of `target`, seeding from the template's order. */
-    const moveComponent = (target: ComponentKey) => {
-        if (!dragKey || dragKey === target) return;
-        const base = [...(orderOverride ?? templateOrder)];
-        const from = base.indexOf(dragKey);
-        const to = base.indexOf(target);
-        if (from < 0 || to < 0) return;
-        base.splice(from, 1);
-        base.splice(to, 0, dragKey);
-        setOrderOverride(base);
+    /**
+     * Component Order is arranged as the SEVEN switches, not the eleven
+     * sections behind them. The stored order is still all eleven keys, so it
+     * is read as a row of units: a switch (its one or two sections, kept side
+     * by side) or a section that has no switch (QR code, decorations).
+     */
+    type OrderUnit = { label: string | null; keys: ComponentKey[] };
+    const orderUnits: OrderUnit[] = [];
+    for (const key of effectiveOrder) {
+        const owner = COMPONENT_SWITCHES.find((item) => item.keys.includes(key));
+        if (!owner) orderUnits.push({ label: null, keys: [key] });
+        else if (!orderUnits.some((u) => u.label === owner.label)) {
+            orderUnits.push({ label: owner.label, keys: owner.keys });
+        }
+    }
+    /** The seven, in the order they appear on the card. */
+    const orderedSwitches = orderUnits.filter((u): u is { label: string; keys: ComponentKey[] } => u.label !== null);
+
+    /** Drop the dragged switch in front of `target`; the rest keep their place. */
+    const moveSwitch = (target: string) => {
+        if (!dragLabel || dragLabel === target) return;
+        const units = [...orderUnits];
+        const from = units.findIndex((u) => u.label === dragLabel);
+        if (from < 0) return;
+        const [moved] = units.splice(from, 1);
+        const to = units.findIndex((u) => u.label === target);
+        if (to < 0) return;
+        units.splice(to, 0, moved);
+        setOrderOverride(units.flatMap((u) => u.keys));
     };
 
     const resetComponents = () => {
@@ -1459,13 +1481,13 @@ export function EventWizard({
                                     (or none) narrows nothing and just adds a click. */}
                                 {styleOptions.length > 1 && (
                                     <div className="max-w-[220px]">
-                                        <Label className="text-[11px] font-medium text-muted-foreground">Design Style</Label>
+                                        <Label className="text-[11px] font-medium text-muted-foreground">Template Type</Label>
                                         <Select value={styleFilter} onValueChange={setStyleFilter}>
                                             <SelectTrigger className="h-9 rounded-md text-[12.5px]"><SelectValue /></SelectTrigger>
                                             <SelectContent>
-                                                <SelectItem value={ALL_STYLES}>All Styles</SelectItem>
-                                                {styleOptions.map((s) => (
-                                                    <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>
+                                                <SelectItem value={ALL_STYLES}>All Types</SelectItem>
+                                                {styleOptions.map((o) => (
+                                                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
                                                 ))}
                                             </SelectContent>
                                         </Select>
@@ -1558,9 +1580,9 @@ export function EventWizard({
                                                     {/* Below the tile, not written across it —
                                                         the tile now holds the invitation, and a
                                                         label over it lands on the footer line. */}
-                                                    {t.style && (
+                                                    {templateTypeLabel(t.background_type) && (
                                                         <span className="mt-0.5 block break-words text-center text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
-                                                            {t.style}
+                                                            {templateTypeLabel(t.background_type)}
                                                         </span>
                                                     )}
                                                 </button>
@@ -1703,33 +1725,34 @@ export function EventWizard({
                                         </p>
                                         <p className="mb-3 text-[11.5px] text-muted-foreground">
                                             Drag the chips to arrange the order components appear on the
-                                            invitation. Components switched off keep their place.
+                                            invitation. Components switched off keep their place. The QR
+                                            code and the decorations stay where the template puts them.
                                         </p>
                                         <ul className="flex flex-wrap gap-2">
-                                            {effectiveOrder.map((key, index) => (
+                                            {orderedSwitches.map((item, index) => (
                                                 <li
-                                                    key={key}
+                                                    key={item.label}
                                                     draggable
-                                                    onDragStart={() => setDragKey(key)}
-                                                    onDragEnd={() => setDragKey(null)}
+                                                    onDragStart={() => setDragLabel(item.label)}
+                                                    onDragEnd={() => setDragLabel(null)}
                                                     // Both are required: without preventDefault on
                                                     // dragOver the browser refuses the drop outright.
                                                     onDragOver={(e) => e.preventDefault()}
                                                     onDrop={(e) => {
                                                         e.preventDefault();
-                                                        moveComponent(key);
-                                                        setDragKey(null);
+                                                        moveSwitch(item.label);
+                                                        setDragLabel(null);
                                                     }}
                                                     className={cn(
                                                         "flex cursor-grab items-center gap-2 rounded-md border px-2.5 py-1.5 text-[11.5px] transition-colors active:cursor-grabbing",
-                                                        dragKey === key
+                                                        dragLabel === item.label
                                                             ? "border-primary bg-primary/10"
                                                             : "border-border bg-card",
                                                         // Struck through rather than hidden: an off
                                                         // component keeps its place in the order, and
                                                         // dropping it from the list would make turning
                                                         // it back on land it somewhere unexpected.
-                                                        !effectiveComponents[key] && "opacity-50"
+                                                        !item.keys.some((k) => effectiveComponents[k]) && "opacity-50"
                                                     )}
                                                 >
                                                     <FontAwesomeIcon
@@ -1742,10 +1765,10 @@ export function EventWizard({
                                                     <span
                                                         className={cn(
                                                             "break-words",
-                                                            !effectiveComponents[key] && "line-through"
+                                                            !item.keys.some((k) => effectiveComponents[k]) && "line-through"
                                                         )}
                                                     >
-                                                        {COMPONENT_LABELS[key]}
+                                                        {item.label}
                                                     </span>
                                                 </li>
                                             ))}
