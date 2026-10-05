@@ -1594,7 +1594,10 @@ export function EventWizard({
                                                             a style word, which made every template
                                                             in the plan look like the same swatch. */}
                                                         <TemplateArtwork
-                                                            template={t}
+                                                            // The chosen tile draws the host's own
+                                                            // picture once one is added, so the
+                                                            // upload below visibly lands on it.
+                                                            template={active && artwork.kind === "template" ? artwork.template : t}
                                                             data={invitationData}
                                                             className="inset-2"
                                                             cardClassName="rounded-[3px] shadow-sm"
@@ -1668,7 +1671,7 @@ export function EventWizard({
                                   on a phone, so what is uploaded is what shows.
                                 */}
                                 {dbTemplates.find((t) => t.code === form.theme_id)?.background_type === "custom" && (
-                                    <div className="mt-6 rounded-md border border-primary/30 bg-primary/5 p-4">
+                                    <div className="mt-6 w-fit max-w-full self-start rounded-md border border-primary/30 bg-primary/5 p-4 sm:max-w-md">
                                         <CoverImageField
                                             value={form.custom_image}
                                             onChange={(url) => setField("custom_image", url)}
