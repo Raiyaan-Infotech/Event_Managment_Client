@@ -48,6 +48,7 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { EventThumbnail } from "@/components/common/event-thumbnail";
+import { eventCustomImage } from "@/lib/event-templates";
 import { EventQr } from "@/components/common/event-qr";
 import { useEventOptions } from "@/hooks/use-client-portal";
 import {
@@ -502,7 +503,7 @@ function MyEventsContent() {
                                         <li key={event.id} className="flex flex-col gap-4 p-4 lg:flex-row lg:items-center">
                                             <EventThumbnail
                                                 themeId={event.theme_id}
-                                                customImage={event.custom_image}
+                                                customImage={eventCustomImage(event)}
                                                 name={event.name}
                                                 primaryColor={event.primary_color}
                                                 className="h-[74px] w-[104px]"

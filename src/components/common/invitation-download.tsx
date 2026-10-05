@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { useEventOptions } from '@/hooks/use-client-portal';
-import { resolveArtwork } from '@/lib/event-templates';
+import { eventCustomImage, resolveArtwork } from '@/lib/event-templates';
 import { InvitationCard } from '@/components/common/invitation-card';
 import { EventQr } from '@/components/common/event-qr';
 import {
@@ -255,7 +255,7 @@ export function InvitationDownload({
     className?: string;
 }) {
     const { data: opts } = useEventOptions();
-    const artwork = resolveArtwork(event.theme_id, opts?.templates, event.custom_image);
+    const artwork = resolveArtwork(event.theme_id, opts?.templates, eventCustomImage(event));
 
     const cardRef = useRef<HTMLDivElement>(null);
     const qrRef = useRef<HTMLDivElement>(null);

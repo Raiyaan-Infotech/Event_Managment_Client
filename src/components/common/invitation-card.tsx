@@ -560,7 +560,11 @@ export function InvitationCard({
         ),
     };
 
-    const visible = order.filter(on);
+    // On a custom template the picture fills the card — it IS the event
+    // photo — so the Event Photos block is not drawn over it a second time.
+    const visible = order.filter(
+        (key) => on(key) && !(key === 'event_photos' && template.background_type === 'custom')
+    );
     // Extracted so the dependency array stays statically checkable.
     const visibleKey = visible.join(',');
 

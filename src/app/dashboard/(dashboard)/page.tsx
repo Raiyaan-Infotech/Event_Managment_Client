@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { EventThumbnail } from "@/components/common/event-thumbnail";
+import { eventCustomImage } from "@/lib/event-templates";
 import { useClientProfile } from "@/hooks/use-client-portal";
 import {
     useClientEvents,
@@ -377,7 +378,7 @@ export default function DashboardPage() {
                             <div className="relative">
                                 <EventThumbnail
                                     themeId={event.theme_id}
-                                    customImage={event.custom_image}
+                                    customImage={eventCustomImage(event)}
                                     name={event.name}
                                     primaryColor={event.primary_color}
                                     className="aspect-[16/10] w-full rounded-none border-0"

@@ -25,6 +25,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { themeName } from "@/lib/event-themes";
 import { EventThumbnail } from "@/components/common/event-thumbnail";
+import { eventCustomImage } from "@/lib/event-templates";
 import { EventQr } from "@/components/common/event-qr";
 import { InvitationDownload } from "@/components/common/invitation-download";
 import { downloadQrAsPng, fileSlug } from "@/lib/export-invitation";
@@ -223,7 +224,7 @@ export function EventDetail({ eventId }: { eventId: number }) {
                 <CardContent className="flex flex-col gap-5 p-5 lg:flex-row">
                     <EventThumbnail
                         themeId={event.theme_id}
-                        customImage={event.custom_image}
+                        customImage={eventCustomImage(event)}
                         name={event.name}
                         primaryColor={event.primary_color}
                         startDate={event.start_date}

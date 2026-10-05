@@ -575,7 +575,13 @@ export function EventWizard({
      * a blank card. What changed is that step 4 no longer OFFERS those — the
      * fallback is for rendering history, not for picking something new.
      */
-    const artwork = resolveArtwork(form.theme_id, opts?.templates, form.custom_image);
+    // On a custom template the Event Photos switch shows or hides the host's
+    // own picture (see `eventCustomImage`). Read from the override directly:
+    // the effective switches are worked out FROM the artwork, further down.
+    const photosOn =
+        compOverride?.event_photos ??
+        !!Number(opts?.templates?.find((t) => t.code === form.theme_id)?.components?.event_photos ?? 1);
+    const artwork = resolveArtwork(form.theme_id, opts?.templates, photosOn ? form.custom_image : null);
     const selectedTheme = artwork.kind === "legacy" ? artwork.theme : undefined;
 
     /**
