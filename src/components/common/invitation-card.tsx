@@ -7,6 +7,7 @@ import { StyledQrSvg, toQrStyle } from '@/components/common/styled-qr';
 import { cn } from '@/lib/utils';
 import type { TemplateOption } from '@/hooks/use-client-portal';
 import { mediaUrl } from '@/lib/media-url';
+import { useTemplateFonts } from '@/hooks/use-template-fonts';
 
 /**
  * The client's invitation, drawn from an admin template plus their own data.
@@ -294,6 +295,9 @@ export function InvitationCard({
     orderOverride?: string[] | null;
     className?: string;
 }) {
+    // A template may name a font the admin added; this tells the browser
+    // where it lives.
+    useTemplateFonts();
     /**
      * Scale the invitation down until it fits.
      *

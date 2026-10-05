@@ -175,6 +175,17 @@ export interface EventOptions {
     events_used?: number;
     /** Why the lists are empty — null when they are not. Show it verbatim. */
     reason: string | null;
+    /**
+     * Fonts the admin added for templates — where to load each from. See
+     * `use-template-fonts.ts`. Undefined on an older backend.
+     */
+    fonts?: {
+        id: number;
+        name: string;
+        source: 'upload' | 'link';
+        link_url: string | null;
+        link_kind: 'stylesheet' | 'file' | null;
+    }[];
     categories: TaxonomyOption[];
     menus: MenuOption[];
     /**
