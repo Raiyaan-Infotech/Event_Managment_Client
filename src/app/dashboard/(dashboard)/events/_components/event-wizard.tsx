@@ -264,6 +264,8 @@ export function EventWizard({
     /** Step 4's own narrowing, on top of the plan + event-category scoping
      * `dbTemplates` already does — see the Template Type filter below. */
     const [styleFilter, setStyleFilter] = useState<string>(ALL_STYLES);
+    /** The first of the two filters: the template's design style. */
+    const [designFilter, setDesignFilter] = useState<string>(ALL_STYLES);
 
     /**
      * The client's own component overrides for THIS event.
@@ -518,13 +520,28 @@ export function EventWizard({
      * list, so a style with nothing in it (for this plan + event category)
      * does not show up as a filter option with an empty result behind it.
      */
-    const styleOptions = useMemo(
-        () => TEMPLATE_TYPES.filter((type) => dbTemplates.some((t) => t.background_type === type.value)),
+    /**
+     * TWO filters (Jamal, 2026-10-05), the second inside the first:
+     *   1. Design Style  — the template's `style` (Classic, Royal, Floral, …)
+     *   2. Template Type — its `background_type` (Color, Image, Gradient,
+     *      Custom), offering only the types the chosen style actually has —
+     *      so "Classic" narrows to Classic Color / Classic Image / …
+     */
+    const designOptions = useMemo(
+        () => Array.from(new Set(dbTemplates.map((t) => t.style).filter((v): v is string => !!v))).sort(),
         [dbTemplates]
     );
+    const designTemplates = useMemo(
+        () => (designFilter === ALL_STYLES ? dbTemplates : dbTemplates.filter((t) => t.style === designFilter)),
+        [dbTemplates, designFilter]
+    );
+    const styleOptions = useMemo(
+        () => TEMPLATE_TYPES.filter((type) => designTemplates.some((t) => t.background_type === type.value)),
+        [designTemplates]
+    );
     const styleFilteredTemplates = useMemo(
-        () => (styleFilter === ALL_STYLES ? dbTemplates : dbTemplates.filter((t) => t.background_type === styleFilter)),
-        [dbTemplates, styleFilter]
+        () => (styleFilter === ALL_STYLES ? designTemplates : designTemplates.filter((t) => t.background_type === styleFilter)),
+        [designTemplates, styleFilter]
     );
 
     // The style filter only makes sense within the current category's
@@ -536,6 +553,11 @@ export function EventWizard({
             setStyleFilter(ALL_STYLES);
         }
     }, [styleOptions, styleFilter]);
+    useEffect(() => {
+        if (designFilter !== ALL_STYLES && !designOptions.includes(designFilter)) {
+            setDesignFilter(ALL_STYLES);
+        }
+    }, [designOptions, designFilter]);
 
     /**
      * Step 5's preview artwork.
@@ -1476,21 +1498,36 @@ export function EventWizard({
                                         Pick the invitation design. Your plan decides what is on offer.
                                     </p>
 
-                                {/* Only shown once there is more than one style to
-                                    choose between — a filter with a single option
-                                    (or none) narrows nothing and just adds a click. */}
-                                {styleOptions.length > 1 && (
-                                    <div className="max-w-[220px]">
-                                        <Label className="text-[11px] font-medium text-muted-foreground">Template Type</Label>
-                                        <Select value={styleFilter} onValueChange={setStyleFilter}>
-                                            <SelectTrigger className="h-9 rounded-md text-[12.5px]"><SelectValue /></SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value={ALL_STYLES}>All Types</SelectItem>
-                                                {styleOptions.map((o) => (
-                                                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
+                                {/* Both filters, side by side, whenever there are
+                                    templates to filter — shown even with a single
+                                    option, so it is plain which style and type the
+                                    designs below belong to. */}
+                                {dbTemplates.length > 0 && (
+                                    <div className="flex flex-wrap gap-3">
+                                        <div className="w-full max-w-[220px]">
+                                            <Label className="text-[11px] font-medium text-muted-foreground">Design Style</Label>
+                                            <Select value={designFilter} onValueChange={setDesignFilter}>
+                                                <SelectTrigger className="h-9 w-full rounded-md text-[12.5px]"><SelectValue /></SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value={ALL_STYLES}>All Styles</SelectItem>
+                                                    {designOptions.map((d) => (
+                                                        <SelectItem key={d} value={d} className="capitalize">{d}</SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div className="w-full max-w-[220px]">
+                                            <Label className="text-[11px] font-medium text-muted-foreground">Template Type</Label>
+                                            <Select value={styleFilter} onValueChange={setStyleFilter}>
+                                                <SelectTrigger className="h-9 w-full rounded-md text-[12.5px]"><SelectValue /></SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value={ALL_STYLES}>All Types</SelectItem>
+                                                    {styleOptions.map((o) => (
+                                                        <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
                                     </div>
                                 )}
 
@@ -1580,9 +1617,9 @@ export function EventWizard({
                                                     {/* Below the tile, not written across it —
                                                         the tile now holds the invitation, and a
                                                         label over it lands on the footer line. */}
-                                                    {templateTypeLabel(t.background_type) && (
+                                                    {(t.style || templateTypeLabel(t.background_type)) && (
                                                         <span className="mt-0.5 block break-words text-center text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
-                                                            {templateTypeLabel(t.background_type)}
+                                                            {[t.style, templateTypeLabel(t.background_type)].filter(Boolean).join(" · ")}
                                                         </span>
                                                     )}
                                                 </button>
