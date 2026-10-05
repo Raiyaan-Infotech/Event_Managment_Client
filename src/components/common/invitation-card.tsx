@@ -2,8 +2,8 @@
 
 import { useLayoutEffect, useRef, useState } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faLocationDot, faPhone, faCamera, faShareNodes, faWandMagicSparkles } from '@fortawesome/free-solid-svg-icons';
-import { QRCodeSVG } from 'qrcode.react';
+import { faLocationDot, faPhone, faCamera, faWandMagicSparkles } from '@fortawesome/free-solid-svg-icons';
+import { StyledQrSvg, toQrStyle } from '@/components/common/styled-qr';
 import { cn } from '@/lib/utils';
 import type { TemplateOption } from '@/hooks/use-client-portal';
 import { mediaUrl } from '@/lib/media-url';
@@ -65,11 +65,13 @@ export interface InvitationData {
      * the code that will actually be printed there.
      */
     qrToken?: string | null;
+    /** The event's `qr_style` (0 classic, 1 rounded, 2 heart). */
+    qrStyle?: number | null;
 }
 
 const COMPONENT_KEYS = [
     'event_title', 'host_names', 'date_time', 'venue', 'event_qr_code', 'organizer',
-    'event_photos', 'contact_details', 'invitation_message', 'social_icons',
+    'event_photos', 'contact_details', 'invitation_message',
     'footer_note', 'decoration_elements',
 ] as const;
 
@@ -319,6 +321,9 @@ export function InvitationCard({
      * same as one deliberately switched off.
      */
     const on = (key: ComponentKey) => {
+        // The QR code is on every invitation — a template or an older event
+        // that has it switched off still draws it.
+        if (key === 'event_qr_code') return true;
         const source = componentsOverride ?? template.components;
         const v = source?.[key];
         return v === undefined || !!Number(v);
@@ -326,7 +331,7 @@ export function InvitationCard({
 
     const headingFont = template.primary_font || 'Playfair Display';
     const bodyFont = template.secondary_font || 'Poppins';
-    const frameUrl = template.frame_url || null;
+    const frameUrl = mediaUrl(template.frame_url) || null;
     // Real artwork wins over the CSS fallback — drawing both gives a double edge.
     const borderClass = frameUrl ? 'border-0' : (BORDER_CLASS[template.border_style ?? 'none'] ?? 'border-0');
 
@@ -482,9 +487,10 @@ export function InvitationCard({
                 */}
                 <div className="flex h-14 w-14 items-center justify-center rounded-sm border bg-white"
                     style={{ borderColor: accentLine }}>
-                    <QRCodeSVG
+                    <StyledQrSvg
                         value={data.qrToken || PREVIEW_QR_VALUE}
                         size={56}
+                        qrStyle={toQrStyle(data.qrStyle)}
                         // Lowest error correction: the token is ~300 characters, which
                         // at level M needs an 85-module grid drawn in a 56px box —
                         // under a pixel per module on screen and too fine to scan off
@@ -497,8 +503,6 @@ export function InvitationCard({
                         // the code, so it stays correct at any printed size.
                         // A QR flush to its own edge scans poorly.
                         marginSize={2}
-                        bgColor="#ffffff"
-                        fgColor="#000000"
                         style={{ width: '100%', height: '100%' }}
                     />
                 </div>
@@ -534,16 +538,6 @@ export function InvitationCard({
             <div className="px-3 text-center text-[8px] italic leading-snug opacity-90 break-words"
                 style={{ fontFamily: bodyFont, color: ink }}>
                 {data.description || 'Together with our families, we request the honour of your presence.'}
-            </div>
-        ),
-        social_icons: (
-            <div className="flex items-center justify-center gap-1.5">
-                {[0, 1, 2].map((i) => (
-                    <span key={i} className="flex h-4 w-4 items-center justify-center rounded-full border"
-                        style={{ borderColor: accentLine }}>
-                        <FontAwesomeIcon icon={faShareNodes} className="!size-[7px]" style={{ color: accentLine }} />
-                    </span>
-                ))}
             </div>
         ),
         footer_note: (

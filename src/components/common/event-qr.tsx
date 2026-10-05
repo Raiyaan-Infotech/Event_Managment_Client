@@ -1,12 +1,13 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { QRCodeCanvas, QRCodeSVG } from 'qrcode.react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faDownload, faCopy, faCheck, faQrcode } from '@fortawesome/free-solid-svg-icons';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { downloadQrAsPng } from '@/lib/export-invitation';
+import { StyledQrSvg, toQrStyle } from '@/components/common/styled-qr';
 
 /**
  * An event's QR code.
@@ -33,6 +34,8 @@ interface EventQrProps {
     token: string | null | undefined;
     /** Used only to name the downloaded file. */
     eventName?: string | null;
+    /** The event's `qr_style` (0 classic, 1 rounded, 2 heart). */
+    qrStyle?: number | null;
     /** Rendered size in CSS pixels. */
     size?: number;
     /** Show the Download / Copy buttons. */
@@ -49,15 +52,10 @@ interface EventQrProps {
     className?: string;
 }
 
-/**
- * Drawn at 4x the displayed size so the downloaded PNG is worth printing.
- * A 200px canvas scaled up on paper is a blurry code that scanners give up on.
- */
-const EXPORT_SCALE = 4;
-
 export function EventQr({
     token,
     eventName,
+    qrStyle,
     size = 180,
     actions = true,
     showDownload = true,
@@ -84,23 +82,18 @@ export function EventQr({
         );
     }
 
-    const download = () => {
-        // qrcode.react renders a real <canvas>, so the PNG comes straight off it
-        // with no second render and no library to serialise SVG.
-        const canvas = wrapRef.current?.querySelector('canvas');
-        if (!canvas) {
-            toast.error('Could not read the QR image.');
-            return;
-        }
-        const link = document.createElement('a');
+    const download = async () => {
+        if (!wrapRef.current) return;
         const slug = (eventName || 'event')
             .toLowerCase()
             .replace(/[^a-z0-9]+/g, '-')
             .replace(/^-|-$/g, '')
             .slice(0, 60);
-        link.download = `${slug || 'event'}-qr.png`;
-        link.href = canvas.toDataURL('image/png');
-        link.click();
+        try {
+            await downloadQrAsPng(wrapRef.current, slug || 'event');
+        } catch {
+            toast.error('Could not read the QR image.');
+        }
     };
 
     const copy = async () => {
@@ -119,42 +112,23 @@ export function EventQr({
     return (
         <div className={cn('flex flex-col items-center gap-3', className)}>
             <div ref={wrapRef} className="rounded-md border border-border bg-white p-3">
-                <QRCodeCanvas
-                    value={token}
-                    size={size * EXPORT_SCALE}
-                    // Level M keeps the grid readable at ~300 characters without
-                    // pushing the version so high that the modules get too fine
-                    // to print small.
-                    level="M"
-                    marginSize={2}
-                    // Always black on white regardless of the app theme. A dark
-                    // mode QR inverts contrast and scanners reject it.
-                    bgColor="#ffffff"
-                    fgColor="#000000"
-                    style={{ width: size, height: size }}
-                />
-
                 {/*
-                  The SVG export source.
-
-                  `QRCodeCanvas` above is what the page shows — a canvas prints
-                  the modules crisply and reads straight into a PNG. But a
-                  canvas cannot become a vector, and "download as SVG" is asked
-                  for precisely when the size is not yet known (a banner, a
-                  press sheet), so a rasterised SVG would defeat the request.
-
-                  `hidden` is safe HERE, unlike the off-canvas capture targets
-                  elsewhere: this is serialised from the DOM, not rasterised, so
-                  it never needs a layout box.
+                  One vector code, in the host's chosen style. It is both what
+                  the page shows and the export source (`data-qr-svg`): the SVG
+                  download serialises it as-is, and the PNG download rasterises
+                  it at export size, so neither goes blurry when printed.
                 */}
-                <span data-qr-svg hidden aria-hidden>
-                    <QRCodeSVG
+                <span data-qr-svg className="block">
+                    <StyledQrSvg
                         value={token}
-                        size={size * EXPORT_SCALE}
+                        size={size}
+                        qrStyle={toQrStyle(qrStyle)}
+                        // Level M keeps the grid readable at ~300 characters without
+                        // pushing the version so high that the modules get too fine
+                        // to print small.
                         level="M"
                         marginSize={2}
-                        bgColor="#ffffff"
-                        fgColor="#000000"
+                        style={{ width: size, height: size, display: 'block' }}
                     />
                 </span>
             </div>

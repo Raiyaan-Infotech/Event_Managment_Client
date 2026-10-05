@@ -83,6 +83,8 @@ export interface Guest {
     postal_code: string | null;
     country: string | null;
     dietary_preference: string | null;
+    /** The row of the admin's Guest Food Preferences list behind the words. */
+    food_preference_option_id?: number | null;
     special_requirements: string | null;
     notes: string | null;
 
@@ -176,6 +178,7 @@ export interface GuestPayload {
     postal_code?: string | null;
     country?: string | null;
     dietary_preference?: string | null;
+    food_preference_option_id?: number | null;
     special_requirements?: string | null;
     notes?: string | null;
 }
@@ -374,6 +377,29 @@ export function useGuestGroups(params: { search?: string; visibility?: string; p
 }
 
 /** Unpaginated — for the pickers on Add Guest, the list filter and Send Message. */
+export interface GuestFormOption {
+    id: number;
+    name: string;
+}
+
+/**
+ * The admin's dropdown lists for a guest form — relationships and dietary
+ * (food) preferences. No event: a guest in the phone book has none, so the
+ * server answers with the default lists. The mobile app reads the same route.
+ */
+export function useGuestFormOptions() {
+    return useQuery({
+        queryKey: [...KEY, 'form-options'],
+        queryFn: () =>
+            api.get<{
+                relationship_options: GuestFormOption[];
+                food_preference_options: GuestFormOption[];
+            }>(`${ENDPOINT}/form-options`),
+        staleTime: 5 * 60 * 1000,
+        retry: false,
+    });
+}
+
 export function useAllGuestGroups() {
     return useQuery({
         queryKey: [...GROUP_KEY, 'all'],

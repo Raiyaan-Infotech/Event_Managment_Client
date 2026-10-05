@@ -326,12 +326,13 @@ export function InvitationDownload({
                                 // A saved event has its token, so the downloaded
                                 // invitation carries the code that actually scans.
                                 qrToken: event.qr_token,
+                                qrStyle: event.qr_style,
                             }}
                         />
                     </div>
                 )}
                 <div ref={qrRef}>
-                    <EventQr token={event.qr_token} eventName={event.name} size={512} />
+                    <EventQr token={event.qr_token} qrStyle={event.qr_style} eventName={event.name} size={512} />
                 </div>
             </div>
         </>

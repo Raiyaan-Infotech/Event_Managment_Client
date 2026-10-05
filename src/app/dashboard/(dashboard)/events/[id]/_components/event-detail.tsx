@@ -647,7 +647,7 @@ export function EventDetail({ eventId }: { eventId: number }) {
                         saved is the code being looked at rather than a second
                         one rendered somewhere off-screen. */}
                     <div ref={dialogQrRef} className="flex justify-center py-2">
-                        <EventQr token={event.qr_token} eventName={event.name} size={200} />
+                        <EventQr token={event.qr_token} qrStyle={event.qr_style} eventName={event.name} size={200} />
                     </div>
                     {event.qr_issued_at && (
                         <p className="text-center text-[10.5px] text-muted-foreground">

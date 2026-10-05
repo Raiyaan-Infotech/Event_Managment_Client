@@ -797,7 +797,7 @@ function MyEventsContent() {
                         </DialogDescription>
                     </DialogHeader>
                     <div className="flex justify-center py-2">
-                        <EventQr token={qrFor?.qr_token} eventName={qrFor?.name} size={200} />
+                        <EventQr token={qrFor?.qr_token} qrStyle={qrFor?.qr_style} eventName={qrFor?.name} size={200} />
                     </div>
                 </DialogContent>
             </Dialog>

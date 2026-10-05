@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
     faArrowLeft,
@@ -148,6 +149,10 @@ interface FormState {
     /** Map pin, as typed; both blank = no pin. */
     venue_lat: string;
     venue_lng: string;
+    /** The event's ONE ceremony; it has no date/time of its own. */
+    ceremony_title: string;
+    ceremony_venue: string;
+    ceremony_description: string;
     organizer: string;
     contact_phone: string;
     contact_email: string;
@@ -167,6 +172,7 @@ const EMPTY: FormState = {
     timezone: TIME_ZONES[0],
     venue_name: "", venue_address: "",
     venue_landmark: "", venue_map_link: "", venue_image: "", venue_lat: "", venue_lng: "",
+    ceremony_title: "", ceremony_venue: "", ceremony_description: "",
     organizer: "", contact_phone: "", contact_email: "", footer_note: "",
     privacy: "private", status: "upcoming",
     // Blank, not a hardcoded slug: the theme catalogue is whatever the client's
@@ -178,7 +184,7 @@ const EMPTY: FormState = {
 /** The invitation components, canonical order. Mirrors the backend's list. */
 const COMPONENT_KEYS = [
     "event_title", "host_names", "date_time", "venue", "event_qr_code", "organizer",
-    "event_photos", "contact_details", "invitation_message", "social_icons",
+    "event_photos", "contact_details", "invitation_message",
     "footer_note", "decoration_elements",
 ] as const;
 
@@ -195,10 +201,29 @@ const COMPONENT_LABELS: Record<ComponentKey, string> = {
     event_photos: "Event Photos",
     contact_details: "Contact Details",
     invitation_message: "Invitation Message",
-    social_icons: "Social Media Icons",
     footer_note: "Footer (Thanks / Note)",
     decoration_elements: "Decoration Elements",
 };
+
+/**
+ * The invitation's on/off switches — SEVEN, the same seven the mobile app
+ * offers (Jamal, 2026-10-05), over the eleven sections the admin's template
+ * builder has. A switch that covers two sections reads on when either is on,
+ * and sets both.
+ *
+ * Two sections have no switch here: the QR code (always on) and the
+ * decorations (the admin's choice per template). Both still appear in the
+ * Component Order list, because they still take a place on the card.
+ */
+const COMPONENT_SWITCHES: { label: string; keys: ComponentKey[] }[] = [
+    { label: "Event Photos", keys: ["event_photos"] },
+    { label: "Title & Names", keys: ["event_title", "host_names"] },
+    { label: "Invitation Message", keys: ["invitation_message"] },
+    { label: "Date & Time", keys: ["date_time"] },
+    { label: "Venue", keys: ["venue"] },
+    { label: "Organizer & Contact", keys: ["organizer", "contact_details"] },
+    { label: "Footer (Thanks / Note)", keys: ["footer_note"] },
+];
 
 export function EventWizard({
     eventId,
@@ -214,6 +239,12 @@ export function EventWizard({
     initialThemeId?: string;
 }) {
     const isEdit = !!eventId;
+    const router = useRouter();
+
+    /** The Exit button's question — new events only. */
+    const [exitOpen, setExitOpen] = useState(false);
+    /** Set by "Save as Draft" on that question: leave once the save lands. */
+    const exitAfterSave = useRef(false);
 
     const [step, setStep] = useState(1);
     const [form, setForm] = useState<FormState>(EMPTY);
@@ -274,6 +305,13 @@ export function EventWizard({
     // own — the step must not move until the server has actually written the
     // row, or a failed save leaves the user looking at a success screen.
     const createEvent = useCreateEvent((event) => {
+        // Saved as a draft from the Exit question: back to the list, not on
+        // to the "Event Created" step — a draft is not created yet.
+        if (exitAfterSave.current) {
+            exitAfterSave.current = false;
+            router.push("/dashboard/events");
+            return;
+        }
         setCreated(event);
         setStep(6);
     });
@@ -351,6 +389,9 @@ export function EventWizard({
             venue_image: row.venue_image ?? "",
             venue_lat: row.venue_lat != null ? String(Number(row.venue_lat)) : "",
             venue_lng: row.venue_lng != null ? String(Number(row.venue_lng)) : "",
+            ceremony_title: row.ceremony_title ?? "",
+            ceremony_venue: row.ceremony_venue ?? "",
+            ceremony_description: row.ceremony_description ?? "",
             organizer: row.organizer ?? "",
             contact_phone: row.contact_phone ?? "",
             contact_email: row.contact_email ?? "",
@@ -370,11 +411,12 @@ export function EventWizard({
         // Restore an override only if the row HAS one. A null stays null, so
         // an event that was following its template carries on following it.
         if (row.components) {
-            setCompOverride(
-                Object.fromEntries(
+            setCompOverride({
+                ...(Object.fromEntries(
                     COMPONENT_KEYS.map((k) => [k, !!Number(row.components?.[k] ?? 1)])
-                ) as Record<ComponentKey, boolean>
-            );
+                ) as Record<ComponentKey, boolean>),
+                event_qr_code: true,
+            });
         }
         if (row.component_order?.length) {
             const given = row.component_order.filter(
@@ -536,6 +578,7 @@ export function EventWizard({
         // one — which is correct, and is why the token is read from `created`
         // rather than from the form.
         qrToken: created?.qr_token,
+        qrStyle: created?.qr_style,
     };
 
     /**
@@ -549,6 +592,8 @@ export function EventWizard({
             // Absent means on, matching every other renderer.
             map[key] = v === undefined || !!Number(v);
         }
+        // Always on, whatever the template says.
+        map.event_qr_code = true;
         return map;
     }, [artwork]);
 
@@ -563,9 +608,12 @@ export function EventWizard({
     const effectiveOrder = orderOverride ?? templateOrder;
     const hasOverride = compOverride !== null || orderOverride !== null;
 
-    /** Switching one component starts an override from the template's baseline. */
-    const toggleComponent = (key: ComponentKey, value: boolean) => {
-        setCompOverride((prev) => ({ ...(prev ?? templateComponents), [key]: value }));
+    /** Switching a switch starts an override from the template's baseline. */
+    const toggleComponents = (keys: ComponentKey[], value: boolean) => {
+        setCompOverride((prev) => ({
+            ...(prev ?? templateComponents),
+            ...Object.fromEntries(keys.map((k) => [k, value])),
+        }));
     };
 
     /** Drop `dragKey` in front of `target`, seeding from the template's order. */
@@ -725,7 +773,7 @@ export function EventWizard({
     };
 
     /** Step 5's actual save, run only once the review screen is confirmed. */
-    const submitEvent = () => {
+    const submitEvent = (statusOverride?: string) => {
         if (saving) return;
         {
             const payload = {
@@ -748,12 +796,15 @@ export function EventWizard({
                 // A pin is a pair; the server refuses half of one.
                 venue_lat: form.venue_lat.trim() && form.venue_lng.trim() ? Number(form.venue_lat) : null,
                 venue_lng: form.venue_lat.trim() && form.venue_lng.trim() ? Number(form.venue_lng) : null,
+                ceremony_title: form.ceremony_title.trim() || null,
+                ceremony_venue: form.ceremony_venue.trim() || null,
+                ceremony_description: form.ceremony_description.trim() || null,
                 organizer: form.organizer.trim() || null,
                 contact_phone: form.contact_phone.trim() || null,
                 contact_email: form.contact_email.trim() || null,
                 footer_note: form.footer_note.trim() || null,
                 privacy: form.privacy,
-                status: form.status,
+                status: statusOverride ?? form.status,
                 // Only the menus still toggled on, and only ones the plan
                 // actually returned — a stale key from a previous plan would be
                 // rejected by the server rather than silently dropped.
@@ -778,6 +829,32 @@ export function EventWizard({
             else createEvent.mutate(payload);
             // onDone advances to step 6
         }
+    };
+
+    /**
+     * The Exit button. Editing an event, or a new one nothing has been entered
+     * on, simply leaves. A new event with something on it is saved nowhere
+     * yet, so it asks first (the mobile app asks the same): save a draft, exit
+     * without saving, or stay.
+     */
+    const started = !!form.category_id || step > 1;
+    const askExit = () => {
+        if (isEdit || !started || step === 6) {
+            router.push("/dashboard/events");
+            return;
+        }
+        setExitOpen(true);
+    };
+
+    /** What the server needs before it stores an event at all, draft included. */
+    const canDraft =
+        !!form.category_id && !!form.name.trim() &&
+        !!form.start_date && !!form.end_date && !!form.start_time && !!form.end_time;
+
+    const saveDraftAndExit = () => {
+        setExitOpen(false);
+        exitAfterSave.current = true;
+        submitEvent("draft");
     };
 
     const goNext = () => {
@@ -841,14 +918,28 @@ export function EventWizard({
     return (
         <div className="flex flex-col gap-6">
             <div>
-                <h1 className="text-[22px] font-bold tracking-tight text-foreground">
-                    {isEdit ? "Edit Event" : "Create New Event"}
-                </h1>
-                <p className="mt-1 text-[13.5px] text-muted-foreground">
-                    {isEdit
-                        ? "Update your event. Changes are saved on the last step."
-                        : "Follow the steps below to create your perfect event."}
-                </p>
+                <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                        <h1 className="text-[22px] font-bold tracking-tight text-foreground">
+                            {isEdit ? "Edit Event" : "Create New Event"}
+                        </h1>
+                        <p className="mt-1 text-[13.5px] text-muted-foreground">
+                            {isEdit
+                                ? "Update your event. Changes are saved on the last step."
+                                : "Follow the steps below to create your perfect event."}
+                        </p>
+                    </div>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        onClick={askExit}
+                        disabled={saving}
+                        className="h-9 shrink-0 rounded-md text-[12.5px] font-medium"
+                    >
+                        <X className="mr-1.5 size-4" />
+                        Exit
+                    </Button>
+                </div>
 
                 {/* Confirms the template came across. Without it the choice made
                     on the Templates screen is invisible until step 4, which reads
@@ -1062,7 +1153,20 @@ export function EventWizard({
                                         error={errors.cover_image}
                                     />
 
-                                    <SectionRule label="Date & Time" />
+                                    <SectionRule label="Ceremony & Date" />
+
+                                    {/* One ceremony per event, in this order: title,
+                                        the event's dates & times, venue, description.
+                                        It has no dates of its own. */}
+                                    <Field label="Ceremony Title">
+                                        <Input
+                                            value={form.ceremony_title}
+                                            onChange={(e) => setField("ceremony_title", e.target.value.slice(0, 150))}
+                                            placeholder="e.g. Haldi Ceremony"
+                                            className="h-11 rounded-md"
+                                        />
+                                    </Field>
+
 
                                     <div className="grid gap-5 sm:grid-cols-2">
                                         <Field label="Start Date" required error={errors.start_date}
@@ -1093,6 +1197,24 @@ export function EventWizard({
                                                 {TIME_ZONES.map((z) => <SelectItem key={z} value={z}>{z}</SelectItem>)}
                                             </SelectContent>
                                         </Select>
+                                    </Field>
+
+                                    <Field label="Venue">
+                                        <Input
+                                            value={form.ceremony_venue}
+                                            onChange={(e) => setField("ceremony_venue", e.target.value.slice(0, 255))}
+                                            placeholder="Leave blank for the main venue"
+                                            className="h-11 rounded-md"
+                                        />
+                                    </Field>
+
+                                    <Field label="Description">
+                                        <Textarea
+                                            value={form.ceremony_description}
+                                            onChange={(e) => setField("ceremony_description", e.target.value.slice(0, 2000))}
+                                            placeholder="Please enter the ceremony description"
+                                            className="min-h-[90px] rounded-md"
+                                        />
                                     </Field>
                                 </div>
 
@@ -1251,8 +1373,8 @@ export function EventWizard({
                                   Add-on = the client switches it per event.
                                 */}
                                 {([
-                                    { key: "default", title: "Included Menus", rows: defaultRows, empty: "No menus are configured for this event type yet." },
-                                    { key: "addon", title: "Add-on Menus", rows: addonRows, empty: "No add-on menus in your plan." },
+                                    { key: "addon", title: "Additional Menus", rows: addonRows, empty: "No additional menus in your plan." },
+                                    { key: "default", title: "Default Menus", rows: defaultRows, empty: "No menus are configured for this event type yet." },
                                 ] as const).map((panel) => (
                                     <div key={panel.key} className="flex min-w-0 flex-col gap-3">
                                         <h3 className="text-[13px] font-semibold text-foreground">{panel.title}</h3>
@@ -1559,18 +1681,18 @@ export function EventWizard({
                                         </div>
 
                                         <ul className="grid gap-x-6 sm:grid-cols-2">
-                                            {COMPONENT_KEYS.map((key) => (
+                                            {COMPONENT_SWITCHES.map((item) => (
                                                 <li
-                                                    key={key}
+                                                    key={item.label}
                                                     className="flex items-center justify-between gap-3 border-b border-border py-2.5"
                                                 >
                                                     <span className="min-w-0 text-[12.5px] text-foreground break-words">
-                                                        {COMPONENT_LABELS[key]}
+                                                        {item.label}
                                                     </span>
                                                     <Switch
-                                                        checked={effectiveComponents[key]}
-                                                        onCheckedChange={(v) => toggleComponent(key, v)}
-                                                        aria-label={COMPONENT_LABELS[key]}
+                                                        checked={item.keys.some((k) => effectiveComponents[k])}
+                                                        onCheckedChange={(v) => toggleComponents(item.keys, v)}
+                                                        aria-label={item.label}
                                                     />
                                                 </li>
                                             ))}
@@ -1788,6 +1910,7 @@ export function EventWizard({
                                             </p>
                                             <EventQr
                                                 token={created?.qr_token}
+                                                qrStyle={created?.qr_style}
                                                 eventName={created?.name}
                                                 size={190}
                                                 showDownload={false}
@@ -1966,6 +2089,46 @@ export function EventWizard({
                     .
                 </p>
             </div>
+
+            <Dialog open={exitOpen} onOpenChange={setExitOpen}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="text-[15px]">Exit Create Event?</DialogTitle>
+                        <DialogDescription className="text-[13px]">
+                            {canDraft
+                                ? "Your event is not saved yet. Save it as a draft to finish later, or exit without saving."
+                                : "Your event is not saved yet. A draft needs the event type, name, date and time — fill those in to save one. Exiting now will lose what you entered."}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter className="flex-col gap-2 sm:flex-col sm:gap-2">
+                        {canDraft && (
+                            <Button
+                                className="h-10 w-full rounded-md text-[13px] font-semibold"
+                                onClick={saveDraftAndExit}
+                            >
+                                Save as Draft
+                            </Button>
+                        )}
+                        <Button
+                            variant="outline"
+                            className="h-10 w-full rounded-md text-[13px] text-destructive hover:text-destructive"
+                            onClick={() => {
+                                setExitOpen(false);
+                                router.push("/dashboard/events");
+                            }}
+                        >
+                            Exit without Saving
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            className="h-10 w-full rounded-md text-[13px]"
+                            onClick={() => setExitOpen(false)}
+                        >
+                            Keep Editing
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             <Dialog open={!!confirm} onOpenChange={(open) => !open && setConfirm(null)}>
                 <DialogContent className="sm:max-w-md">

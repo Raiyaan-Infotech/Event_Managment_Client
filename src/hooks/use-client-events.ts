@@ -77,6 +77,9 @@ export interface ClientEvent {
     /** DECIMAL — arrives as a string, e.g. "13.0827000". */
     venue_lat?: string | number | null;
     venue_lng?: string | number | null;
+    ceremony_title?: string | null;
+    ceremony_venue?: string | null;
+    ceremony_description?: string | null;
     organizer: string | null;
     contact_phone: string | null;
     contact_email: string | null;
@@ -121,6 +124,8 @@ export interface ClientEvent {
     qr_token: string | null;
     qr_version: number;
     qr_issued_at: string | null;
+    /** How the QR is drawn: 0 classic, 1 rounded, 2 heart. Set from the app. */
+    qr_style?: number;
 
     created_at: string;
     updated_at: string;
@@ -155,6 +160,9 @@ export interface EventPayload {
     venue_image?: string | null;
     venue_lat?: number | null;
     venue_lng?: number | null;
+    ceremony_title?: string | null;
+    ceremony_venue?: string | null;
+    ceremony_description?: string | null;
 }
 
 export interface EventListParams {

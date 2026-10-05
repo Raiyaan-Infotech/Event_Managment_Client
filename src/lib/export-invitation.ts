@@ -194,8 +194,11 @@ export async function downloadQrAsPng(
     size = 900
 ): Promise<void> {
     const name = baseName.replace(/\.png$/i, '');
+    // The marked export source first: a bare `svg` lookup can match an icon.
     const canvasEl = container.querySelector('canvas');
-    const svgEl = container.querySelector('svg');
+    const svgEl =
+        container.querySelector<SVGElement>('[data-qr-svg] svg') ??
+        container.querySelector<SVGElement>('svg');
 
     const out = document.createElement('canvas');
     out.width = size;

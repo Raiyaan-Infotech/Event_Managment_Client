@@ -27,8 +27,10 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
     useAllGuestGroups, useCreateGuest, useUpdateGuest, useGuest, useGuestCapacity,
+    useGuestFormOptions,
     type GuestPayload,
 } from "@/hooks/use-guests";
+import { LocationPicker, locationPaths, useLocationId } from "@/components/common/location-picker";
 
 /**
  * Add / Edit Guest — the same form for both.
@@ -67,6 +69,8 @@ interface FormState {
     postal_code: string;
     country: string;
     dietary_preference: string;
+    /** "" = none chosen. */
+    food_preference_option_id: string;
     special_requirements: string;
     notes: string;
 }
@@ -75,7 +79,7 @@ const EMPTY: FormState = {
     group_id: "", title: "", date_of_birth: "", first_name: "", last_name: "", email: "",
     dial_code: "+91", mobile: "", whatsapp: "", company: "",
     address_line1: "", address_line2: "", city: "", state: "", postal_code: "", country: "India",
-    dietary_preference: "", special_requirements: "", notes: "",
+    dietary_preference: "", food_preference_option_id: "", special_requirements: "", notes: "",
 };
 
 export function GuestForm({ guestId }: { guestId?: number }) {
@@ -113,6 +117,32 @@ export function GuestForm({ guestId }: { guestId?: number }) {
     };
 
     /**
+     * Dietary preference is chosen from the admin's Guest Food Preferences
+     * list. A guest holds the option by id — or, from a CSV import or the old
+     * typed box, by the words alone, which are matched to an option by name.
+     * Words that match nothing stay shown and saved until another is chosen.
+     */
+    const formOptions = useGuestFormOptions();
+    const foodOptions = formOptions.data?.food_preference_options ?? [];
+    const chosenFood =
+        foodOptions.find((o) => String(o.id) === form.food_preference_option_id) ??
+        foodOptions.find((o) => o.name.toLowerCase() === form.dietary_preference.trim().toLowerCase()) ??
+        null;
+
+    /**
+     * Country → State → City → PIN, each read from the Locations tables and
+     * each depending on the one above. The guest stores the NAMES; these are
+     * the table ids behind them — handed over by a pick, looked up by name
+     * when an edit starts with names only.
+     */
+    const [picked, setPicked] = useState<{ country: number | null; state: number | null; city: number | null }>({
+        country: null, state: null, city: null,
+    });
+    const countryId = useLocationId(locationPaths.countries(), form.country, picked.country);
+    const stateId = useLocationId(countryId ? locationPaths.states(countryId) : null, form.state, picked.state);
+    const cityId = useLocationId(stateId ? locationPaths.cities(stateId) : null, form.city, picked.city);
+
+    /**
      * Prefill once. Without the guard this re-ran on every background refetch
      * and threw away whatever had been typed since.
      */
@@ -140,6 +170,7 @@ export function GuestForm({ guestId }: { guestId?: number }) {
             postal_code: g.postal_code ?? "",
             country: g.country ?? "India",
             dietary_preference: g.dietary_preference ?? "",
+            food_preference_option_id: g.food_preference_option_id ? String(g.food_preference_option_id) : "",
             special_requirements: g.special_requirements ?? "",
             notes: g.notes ?? "",
         });
@@ -188,7 +219,10 @@ export function GuestForm({ guestId }: { guestId?: number }) {
             state: form.state.trim() || null,
             postal_code: form.postal_code.trim() || null,
             country: form.country.trim() || null,
-            dietary_preference: form.dietary_preference.trim() || null,
+            // The chosen option's id and its words, both — the id joins back
+            // to the admin's list, the words survive the option being renamed.
+            food_preference_option_id: chosenFood?.id ?? null,
+            dietary_preference: chosenFood?.name ?? (form.dietary_preference.trim() || null),
             special_requirements: form.special_requirements.trim() || null,
             notes: form.notes.trim() || null,
         };
@@ -360,25 +394,71 @@ export function GuestForm({ guestId }: { guestId?: number }) {
                                                 onChange={(e) => setField("address_line2", e.target.value.slice(0, 255))}
                                                 placeholder="Apartment, Suite, Floor, etc." className="h-11 rounded-md" />
                                         </Field>
-                                        <Field label="City">
-                                            <Input value={form.city}
-                                                onChange={(e) => setField("city", e.target.value.slice(0, 120))}
-                                                placeholder="Enter city" className="h-11 rounded-md" />
+                                        {/* Country first: each field below reads the list
+                                            of the one above, and changing one clears those
+                                            below it. */}
+                                        <Field label="Country">
+                                            <LocationPicker
+                                                value={form.country}
+                                                placeholder="Select country"
+                                                path={locationPaths.countries()}
+                                                onPick={(row) => {
+                                                    setForm((prev) => ({
+                                                        ...prev,
+                                                        country: row.name.slice(0, 100),
+                                                        state: "", city: "", postal_code: "",
+                                                    }));
+                                                    setPicked({ country: row.id || null, state: null, city: null });
+                                                }}
+                                            />
                                         </Field>
                                         <Field label="State / Province">
-                                            <Input value={form.state}
-                                                onChange={(e) => setField("state", e.target.value.slice(0, 120))}
-                                                placeholder="Enter state / province" className="h-11 rounded-md" />
+                                            <LocationPicker
+                                                value={form.state}
+                                                placeholder="Select state"
+                                                path={countryId ? locationPaths.states(countryId) : null}
+                                                needs={form.country.trim() ? null : "Select a country first."}
+                                                onPick={(row) => {
+                                                    setForm((prev) => ({
+                                                        ...prev,
+                                                        state: row.name.slice(0, 120),
+                                                        city: "", postal_code: "",
+                                                    }));
+                                                    setPicked((prev) => ({ ...prev, state: row.id || null, city: null }));
+                                                }}
+                                            />
+                                        </Field>
+                                        <Field label="City">
+                                            <LocationPicker
+                                                value={form.city}
+                                                placeholder="Select city"
+                                                path={stateId ? locationPaths.cities(stateId) : null}
+                                                needs={form.state.trim() ? null : "Select a state first."}
+                                                onPick={(row) => {
+                                                    setForm((prev) => ({
+                                                        ...prev,
+                                                        city: row.name.slice(0, 120),
+                                                        postal_code: "",
+                                                    }));
+                                                    setPicked((prev) => ({ ...prev, city: row.id || null }));
+                                                }}
+                                            />
                                         </Field>
                                         <Field label="PIN / Zip Code">
-                                            <Input value={form.postal_code}
-                                                onChange={(e) => setField("postal_code", e.target.value.replace(/[^\dA-Za-z\s-]/g, "").slice(0, 20))}
-                                                placeholder="Enter PIN / Zip code" className="h-11 rounded-md" />
-                                        </Field>
-                                        <Field label="Country">
-                                            <Input value={form.country}
-                                                onChange={(e) => setField("country", e.target.value.slice(0, 100))}
-                                                placeholder="Country" className="h-11 rounded-md" />
+                                            <LocationPicker
+                                                value={form.postal_code}
+                                                placeholder="Select PIN / Zip code"
+                                                searchPlaceholder="Search by area or PIN code"
+                                                showPincode
+                                                path={cityId ? locationPaths.pincodes(cityId) : null}
+                                                needs={form.city.trim() ? null : "Select a city first."}
+                                                onPick={(row) =>
+                                                    setField(
+                                                        "postal_code",
+                                                        (row.pincode || row.name).replace(/[^\dA-Za-z\s-]/g, "").slice(0, 20)
+                                                    )
+                                                }
+                                            />
                                         </Field>
                                     </div>
 
@@ -407,10 +487,43 @@ export function GuestForm({ guestId }: { guestId?: number }) {
                                                 className="h-11 rounded-md" />
                                         </Field>
 
-                                        <Field label="Dietary Preferences (Optional)">
-                                            <Input value={form.dietary_preference}
-                                                onChange={(e) => setField("dietary_preference", e.target.value.slice(0, 255))}
-                                                placeholder="E.g., Vegetarian, Vegan, Gluten-free..." className="h-11 rounded-md" />
+                                        <Field label="Dietary Preference (Optional)">
+                                            <Select
+                                                value={chosenFood ? String(chosenFood.id) : "none"}
+                                                onValueChange={(v) => {
+                                                    const option = foodOptions.find((o) => String(o.id) === v);
+                                                    setForm((prev) => ({
+                                                        ...prev,
+                                                        food_preference_option_id: option ? String(option.id) : "",
+                                                        dietary_preference: option?.name ?? "",
+                                                    }));
+                                                }}
+                                            >
+                                                <SelectTrigger className="h-11 w-full rounded-md text-[13px]">
+                                                    <SelectValue
+                                                        placeholder={
+                                                            formOptions.isLoading
+                                                                ? "Loading..."
+                                                                : foodOptions.length === 0
+                                                                    ? "No dietary preferences set up"
+                                                                    : "Select dietary preference"
+                                                        }
+                                                    />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {/* Words stored earlier that match no option
+                                                        read as "Not set" would lose them, so they
+                                                        are named here until another is chosen. */}
+                                                    <SelectItem value="none">
+                                                        {!chosenFood && form.dietary_preference.trim()
+                                                            ? form.dietary_preference.trim()
+                                                            : "Not set"}
+                                                    </SelectItem>
+                                                    {foodOptions.map((o) => (
+                                                        <SelectItem key={o.id} value={String(o.id)}>{o.name}</SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
                                         </Field>
 
                                         <Field label="Notes (Optional)">
