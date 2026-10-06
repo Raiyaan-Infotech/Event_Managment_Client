@@ -1,8 +1,8 @@
 'use client';
 
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useId, useLayoutEffect, useRef, useState } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faLocationDot, faPhone, faCamera, faWandMagicSparkles } from '@fortawesome/free-solid-svg-icons';
+import { faWandMagicSparkles } from '@fortawesome/free-solid-svg-icons';
 import { StyledQrSvg, toQrStyle } from '@/components/common/styled-qr';
 import { cn } from '@/lib/utils';
 import type { TemplateOption } from '@/hooks/use-client-portal';
@@ -252,6 +252,10 @@ function shapeStyle(t: TemplateOption): React.CSSProperties {
     const radius = `${Math.min(Math.max(Number(t.corner_radius) || 0, 0), 100) / 2}%`;
     switch (t.image_shape) {
         case 'circle': return { borderRadius: '50%' };
+        // A heart as wide as the card and as tall as it is wide, centred in
+        // the card's box — the box itself keeps its size, so everything that
+        // scales or measures this card is unaffected. See `invHeartClip`.
+        case 'heart': return { clipPath: 'url(#invHeartClip)' };
         // Arch as a border-radius, not a clip-path, so frame artwork drawn on
         // top follows the same silhouette instead of disagreeing at the curve.
         case 'arch': return { borderRadius: `999px 999px ${radius} ${radius}` };
@@ -353,9 +357,35 @@ export function InvitationCard({
      * against the containing block's WIDTH on all four sides, so `padding-top:
      * 8%` on a 9:16 card is 8% of the width — about half what it should be.
      */
-    const safeX = frameUrl ? 11 : 6;
-    const safeTop = Math.max(frameUrl ? 9 : 4, hasTopArt ? 10 : 0);
-    const safeBottom = Math.max(frameUrl ? 9 : 4, hasBottomArt ? 10 : 0);
+    /**
+     * A Custom template masks the card to a SHAPE, and the words have to stay
+     * inside it (Jamal, 2026-10-06: on Heart the text ran outside the shape and
+     * was cut off). The rectangle that fits inside each shape, as insets:
+     *   heart  — (admin preview only; not drawn on this card, see below)
+     *   circle — the square inside it;
+     *   arch   — the curve takes the top corners.
+     * Rectangle and square need nothing extra. Same numbers in the admin
+     * preview and the client portal card.
+     */
+    const shapeBox =
+        template.background_type === 'custom'
+            ? ({
+                  // The heart is drawn in the middle 56% of a portrait card's
+                  // height, so its text box is measured inside that band.
+                  heart: template.orientation === 'landscape'
+                      ? { x: 28, top: 16, bottom: 13 }
+                      : { x: 15, top: 31, bottom: 29 },
+                  circle: { x: 17, top: 17, bottom: 17 },
+                  arch: { x: 11, top: 17, bottom: 6 },
+              } as Record<string, { x: number; top: number; bottom: number }>)[template.image_shape ?? ''] ?? null
+            : null;
+    // A shape leaves less room, so its card may shrink further before giving up.
+    const minFit = shapeBox ? 0.3 : 0.45;
+    const safeX = Math.max(frameUrl ? 11 : 6, shapeBox?.x ?? 0);
+    // 13, not 9 (2026-10-06): many frames carry corner fans, an arch or a
+    // head / foot ornament deeper than their rule, and the words ran into them.
+    const safeTop = Math.max(frameUrl ? 13 : 4, hasTopArt ? 10 : 0, shapeBox?.top ?? 0);
+    const safeBottom = Math.max(frameUrl ? 13 : 4, hasBottomArt ? 10 : 0, shapeBox?.bottom ?? 0);
 
     const overlay = Math.min(Math.max(Number(template.overlay_opacity) || 0, 0), 100) / 100;
     const overlayTint = hexToRgbString(template.overlay_color) ?? '0,0,0';
@@ -387,10 +417,22 @@ export function InvitationCard({
 
     // Compared, not thresholded: a threshold gets mid-tones wrong in both
     // directions, picking light ink where dark would have contrasted more.
+    const plainInk = [INK_DARK, INK_LIGHT]
+        .map((candidate) => ({ candidate, ratio: contrastRatio(candidate, effective) }))
+        .sort((a, b) => b.ratio - a.ratio)[0].candidate;
+
+    /**
+     * The words follow the template's Secondary Color (2026-10-06): the picked
+     * colour in a shade strong enough to read (7:1, hue kept), not one of the
+     * two fixed inks. The fixed ink is the fallback when no colour is set or
+     * it cannot be made readable here. Same rule as the admin's
+     * `template-preview.tsx` and the app's `designInk` — change all three
+     * together.
+     */
+    const pickedAccent = rgbTriple(template.secondary_color);
+    const tintedInk = pickedAccent ? readableOn(pickedAccent, effective, 7) : null;
     const ink = toHexString(
-        [INK_DARK, INK_LIGHT]
-            .map((candidate) => ({ candidate, ratio: contrastRatio(candidate, effective) }))
-            .sort((a, b) => b.ratio - a.ratio)[0].candidate
+        tintedInk && contrastRatio(tintedInk, effective) >= 4.5 ? tintedInk : plainInk
     );
 
     const accent = hex(template.secondary_color, '#8A6A3B');
@@ -415,10 +457,35 @@ export function InvitationCard({
     const start = hhmm(data.startTime);
     const end = hhmm(data.endTime);
 
+    const dividerArt = placed('divider')[0] ?? null;
+
+    // The template's Border Color and font sizes (2026-10-06) — the same rules
+    // as the admin's `template-preview.tsx`; change both together.
+    const frameTint = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(template.frame_color ?? '')
+        ? (template.frame_color as string)
+        : null;
+    const frameTintId = `frame-tint-${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
+
+    // Decoration Color: the decorations in one colour, the same way as the frame.
+    const decorationTint = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(template.decoration_color ?? '')
+        ? (template.decoration_color as string)
+        : null;
+    const decorationTintId = `${frameTintId}-decor`;
+    const decoStyle = decorationTint ? { filter: `url(#${decorationTintId})` } : undefined;
+    const pct = (value: number | null | undefined) => Math.min(Math.max(Number(value) || 100, 60), 160) / 100;
+    // Names take the Primary Font's size, every other line of words the
+    // Secondary Font's; the QR code and the decoration row are not text.
+    const blockZoom = (key: ComponentKey) =>
+        key === 'host_names'
+            ? pct(template.primary_font_size)
+            : key === 'event_qr_code' || key === 'decoration_elements'
+              ? 1
+              : pct(template.secondary_font_size);
+
     const blocks: Record<ComponentKey, React.ReactNode> = {
         event_title: (
             <div className="text-center">
-                <div className="text-[8px] font-semibold uppercase tracking-[0.22em]"
+                <div className="text-[9.5px] font-semibold uppercase tracking-[0.22em]"
                     style={{ color: accentInk, fontFamily: bodyFont }}>
                     You&rsquo;re invited to
                 </div>
@@ -431,25 +498,25 @@ export function InvitationCard({
                     name stands in — which is all an older event has. */}
                 {data.hostOne || data.hostTwo ? (
                     <>
-                        <div className="text-[20px] font-bold italic break-words" style={{ color: nameColour }}>
+                        <div className="text-[26px] font-bold italic break-words" style={{ color: nameColour }}>
                             {data.hostOne || data.hostTwo}
                         </div>
                         {data.hostOne && data.hostTwo && (
                             <>
-                                <div className="my-0.5 text-[10px]" style={{ color: accentInk }}>&amp;</div>
-                                <div className="text-[20px] font-bold italic break-words" style={{ color: nameColour }}>
+                                <div className="my-0.5 text-[12px]" style={{ color: accentInk }}>&amp;</div>
+                                <div className="text-[26px] font-bold italic break-words" style={{ color: nameColour }}>
                                     {data.hostTwo}
                                 </div>
                             </>
                         )}
                     </>
                 ) : (
-                    <div className="text-[22px] font-bold italic break-words" style={{ color: nameColour }}>
+                    <div className="text-[28px] font-bold italic break-words" style={{ color: nameColour }}>
                         {data.name || 'Your Event Name'}
                     </div>
                 )}
                 {data.tagline && (
-                    <div className="mt-1 text-[8.5px] break-words" style={{ color: ink, opacity: 0.8, fontFamily: bodyFont }}>
+                    <div className="mt-1 text-[9.5px] break-words" style={{ color: ink, opacity: 0.8, fontFamily: bodyFont }}>
                         {data.tagline}
                     </div>
                 )}
@@ -457,22 +524,21 @@ export function InvitationCard({
         ),
         date_time: (
             <div className="text-center" style={{ fontFamily: bodyFont, color: ink }}>
-                <div className="text-[11px] font-bold tracking-[0.14em]">
+                <div className="text-[13.5px] font-bold tracking-[0.14em]">
                     {date ? `${date.day} · ${date.month} · ${date.year}` : '-- · --- · ----'}
                 </div>
-                <div className="text-[8px] tracking-[0.12em] opacity-80">
+                <div className="text-[9.5px] tracking-[0.12em] opacity-80">
                     {start || '--:--'} &ndash; {end || '--:--'}
                 </div>
             </div>
         ),
         venue: (
             <div className="text-center" style={{ fontFamily: bodyFont, color: ink }}>
-                <div className="text-[10px] font-semibold break-words">{data.venueName || 'Venue to be confirmed'}</div>
+                <div className="text-[12px] font-semibold break-words">{data.venueName || 'Venue to be confirmed'}</div>
                 {data.venueAddress && (
-                    <div className="flex items-center justify-center gap-1 text-[8px] opacity-80">
-                        <FontAwesomeIcon icon={faLocationDot} className="!size-[8px]" />
-                        <span className="break-words">{data.venueAddress}</span>
-                    </div>
+                    // Words only — no location pin, no phone icon, no camera
+                    // boxes on this card (2026-10-06, as the admin preview).
+                    <div className="text-[9.5px] opacity-80 break-words">{data.venueAddress}</div>
                 )}
             </div>
         ),
@@ -511,47 +577,40 @@ export function InvitationCard({
                         style={{ width: '100%', height: '100%' }}
                     />
                 </div>
-                <div className="rounded-sm border px-1.5 py-px text-[6px] font-semibold"
-                    style={{ borderColor: accentLine, color: accentInk, fontFamily: bodyFont }}>
-                    Event QR Code
-                </div>
             </div>
         ),
         organizer: (
-            <div className="text-center text-[8px] opacity-80" style={{ fontFamily: bodyFont, color: ink }}>
+            <div className="text-center text-[9.5px] opacity-80" style={{ fontFamily: bodyFont, color: ink }}>
                 {data.organizer || 'Hosted by the family'}
             </div>
         ),
-        event_photos: (
-            <div className="flex items-center justify-center gap-1">
-                {[0, 1, 2].map((i) => (
-                    <span key={i} className="flex h-7 w-7 items-center justify-center rounded-sm border bg-white/60"
-                        style={{ borderColor: accentLine }}>
-                        <FontAwesomeIcon icon={faCamera} className="!size-[10px]" style={{ color: accentLine }} />
-                    </span>
-                ))}
-            </div>
-        ),
+        // Never a block of its own: the three camera boxes are gone. On a
+        // Custom template the section still decides whether the host's own
+        // picture is shown — that is worked out where the artwork is resolved.
+        event_photos: null,
         contact_details: (
-            <div className="flex items-center justify-center gap-1 text-[8px] opacity-80"
-                style={{ fontFamily: bodyFont, color: ink }}>
-                <FontAwesomeIcon icon={faPhone} className="!size-[8px]" />
+            <div className="text-center text-[9.5px] opacity-80" style={{ fontFamily: bodyFont, color: ink }}>
                 {data.contact || '+91 00000 00000'}
             </div>
         ),
         invitation_message: (
-            <div className="px-3 text-center text-[8px] italic leading-snug opacity-90 break-words"
+            <div className="px-3 text-center text-[9.5px] italic leading-snug opacity-90 break-words"
                 style={{ fontFamily: bodyFont, color: ink }}>
                 {data.description || 'Together with our families, we request the honour of your presence.'}
             </div>
         ),
         footer_note: (
-            <div className="text-center text-[7px] tracking-wide opacity-70 break-words"
+            <div className="text-center text-[8.5px] tracking-wide opacity-80 break-words"
                 style={{ fontFamily: bodyFont, color: ink }}>
                 {data.footerNote || 'Thank you for being part of our story.'}
             </div>
         ),
-        decoration_elements: (
+        // A chosen divider decoration is this row: its own line between two
+        // sections, placed by Component Order. Same as the admin preview.
+        decoration_elements: dividerArt ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={mediaUrl(dividerArt.file_url)} alt="" style={decoStyle} data-tint={decorationTint ?? undefined} className="pointer-events-none mx-auto block w-24 opacity-80" />
+        ) : (
             <div className="flex items-center justify-center gap-1.5" style={{ color: accentLine }}>
                 <FontAwesomeIcon icon={faWandMagicSparkles} className="!size-[10px]" />
                 <span className="h-px w-8" style={{ backgroundColor: accentLine }} />
@@ -562,9 +621,9 @@ export function InvitationCard({
 
     // On a custom template the picture fills the card — it IS the event
     // photo — so the Event Photos block is not drawn over it a second time.
-    const visible = order.filter(
-        (key) => on(key) && !(key === 'event_photos' && template.background_type === 'custom')
-    );
+    // The divider is the Decoration Elements row, so that switch (the
+    // client's own, since 2026-10-06) shows and hides it.
+    const visible = order.filter((key) => on(key) && key !== 'event_photos');
     // Extracted so the dependency array stays statically checkable.
     const visibleKey = visible.join(',');
 
@@ -582,7 +641,7 @@ export function InvitationCard({
             const ratio = Math.min(availH / naturalH, availW / naturalW, 1);
             // Never shrink past legibility — below this the honest answer is
             // that too much is switched on.
-            setFit(Math.max(ratio, 0.45));
+            setFit(Math.max(ratio, minFit));
         };
 
         measure();
@@ -592,7 +651,10 @@ export function InvitationCard({
         ro.observe(box);
         ro.observe(content);
         return () => ro.disconnect();
-    }, [visibleKey, template.orientation, template.primary_font, template.secondary_font, safeX, safeTop, safeBottom]);
+    }, [
+        visibleKey, template.orientation, template.primary_font, template.secondary_font,
+        template.primary_font_size, template.secondary_font_size, safeX, safeTop, safeBottom,
+    ]);
 
     return (
         <div
@@ -606,6 +668,22 @@ export function InvitationCard({
             )}
             style={{ ...backgroundStyle(template), ...shapeStyle(template), borderColor: accent }}
         >
+            {/* Zero-size: only referenced by the Heart shape's clip-path. The
+                path is drawn for a square and placed in the middle of the card. */}
+            {template.background_type === 'custom' && template.image_shape === 'heart' && (
+                <svg width="0" height="0" aria-hidden className="absolute">
+                    <defs>
+                        <clipPath id="invHeartClip" clipPathUnits="objectBoundingBox">
+                            <path
+                                transform={template.orientation === 'landscape'
+                                    ? 'translate(0.1875 0) scale(0.625 1)'
+                                    : 'translate(0 0.21875) scale(1 0.5625)'}
+                                d="M0.5,0.97 C0.22,0.76 0.01,0.56 0.01,0.31 C0.01,0.14 0.14,0.03 0.28,0.03 C0.38,0.03 0.46,0.08 0.5,0.16 C0.54,0.08 0.62,0.03 0.72,0.03 C0.86,0.03 0.99,0.14 0.99,0.31 C0.99,0.56 0.78,0.76 0.5,0.97 Z"
+                            />
+                        </clipPath>
+                    </defs>
+                </svg>
+            )}
             {overlayDrawn && (
                 <div className="pointer-events-none absolute inset-0"
                     style={{ backgroundColor: `rgba(${overlayTint},${overlay})` }} />
@@ -615,44 +693,64 @@ export function InvitationCard({
                 couple's names is not a decoration. */}
             {placed('motif').slice(0, 1).map((d) => (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img key={d.id} src={mediaUrl(d.file_url)} alt=""
+                <img key={d.id} src={mediaUrl(d.file_url)} alt="" style={decoStyle} data-tint={decorationTint ?? undefined}
                     className="pointer-events-none absolute left-1/2 top-1/2 w-2/3 -translate-x-1/2 -translate-y-1/2 opacity-20" />
             ))}
             {placed('top').slice(0, 1).map((d) => (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img key={d.id} src={mediaUrl(d.file_url)} alt="" className="pointer-events-none absolute inset-x-0 top-0 w-full" />
+                <img key={d.id} src={mediaUrl(d.file_url)} alt="" style={decoStyle} data-tint={decorationTint ?? undefined} className="pointer-events-none absolute inset-x-0 top-0 w-full" />
             ))}
             {placed('bottom').slice(0, 1).map((d) => (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img key={d.id} src={mediaUrl(d.file_url)} alt="" className="pointer-events-none absolute inset-x-0 bottom-0 w-full" />
+                <img key={d.id} src={mediaUrl(d.file_url)} alt="" style={decoStyle} data-tint={decorationTint ?? undefined} className="pointer-events-none absolute inset-x-0 bottom-0 w-full" />
             ))}
             {/* One uploaded corner, mirrored into all four. */}
             {placed('corner').slice(0, 1).map((d) =>
                 (['left-0 top-0', 'right-0 top-0 -scale-x-100', 'left-0 bottom-0 -scale-y-100', 'right-0 bottom-0 -scale-100'] as const).map((pos) => (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img key={`${d.id}-${pos}`} src={mediaUrl(d.file_url)} alt=""
+                    <img key={`${d.id}-${pos}`} src={mediaUrl(d.file_url)} alt="" style={decoStyle} data-tint={decorationTint ?? undefined}
                         className={cn('pointer-events-none absolute w-2/5', pos)} />
                 ))
             )}
             {placed('ornament').slice(0, 1).map((d) => (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img key={d.id} src={mediaUrl(d.file_url)} alt=""
+                <img key={d.id} src={mediaUrl(d.file_url)} alt="" style={decoStyle} data-tint={decorationTint ?? undefined}
                     className="pointer-events-none absolute inset-x-0 top-0 mx-auto w-3/5" />
             ))}
-            {/* A divider is a short centred rule — stretched edge to edge its end
-                ornaments land out at the margins and read as two stray shapes. */}
-            {placed('divider').slice(0, 1).map((d) => (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img key={d.id} src={mediaUrl(d.file_url)} alt=""
-                    className="pointer-events-none absolute left-1/2 top-1/2 w-2/5 -translate-x-1/2 -translate-y-1/2 opacity-70" />
-            ))}
+            {/* The divider is not drawn here any more (2026-10-06): pinned to
+                the centre of the card it ran through whichever line of text was
+                there. It is a row of the content — see `decoration_elements`. */}
 
             {/* The frame is drawn LAST, over the content: it occupies the margin,
                 and a border under the text would be half-hidden by whatever
                 component reaches the edge. */}
+            {/* An SVG filter floods the frame's shape with the one colour — a
+                CSS mask would need the image served with CORS headers. */}
+            {decorationTint ? (
+                <svg width="0" height="0" aria-hidden className="absolute">
+                    <defs>
+                        <filter id={decorationTintId} colorInterpolationFilters="sRGB">
+                            <feFlood floodColor={decorationTint} result="colour" />
+                            <feComposite in="colour" in2="SourceAlpha" operator="in" />
+                        </filter>
+                    </defs>
+                </svg>
+            ) : null}
+            {frameUrl && frameTint && (
+                <svg width="0" height="0" aria-hidden className="absolute">
+                    <defs>
+                        <filter id={frameTintId} colorInterpolationFilters="sRGB">
+                            <feFlood floodColor={frameTint} result="colour" />
+                            <feComposite in="colour" in2="SourceAlpha" operator="in" />
+                        </filter>
+                    </defs>
+                </svg>
+            )}
             {frameUrl && (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={frameUrl} alt="" className="pointer-events-none absolute inset-0 z-10 h-full w-full object-fill" />
+                <img src={frameUrl} alt="" className="pointer-events-none absolute inset-0 z-10 h-full w-full object-fill"
+                    style={frameTint ? { filter: `url(#${frameTintId})` } : undefined}
+                    data-tint={frameTint ?? undefined} />
             )}
 
             <div
@@ -660,17 +758,26 @@ export function InvitationCard({
                 className="absolute flex items-center justify-center overflow-hidden"
                 style={{ left: `${safeX}%`, right: `${safeX}%`, top: `${safeTop}%`, bottom: `${safeBottom}%` }}
             >
+                {/* The sections are spread down the card, not bunched in the
+                    middle: a card with seven sections left the top and bottom
+                    thirds empty. `min-height` only matters while the content is
+                    SHORTER than the card — a taller one still scales to fit.
+                    Admin preview and client portal use the same numbers. */}
                 <div
                     ref={contentRef}
-                    className="flex w-full flex-col items-center justify-center gap-1.5"
-                    style={{ transform: `scale(${fit})`, transformOrigin: 'center center' }}
+                    className="flex w-full flex-col items-center justify-evenly gap-1.5"
+                    style={{ minHeight: '86%', transform: `scale(${fit})`, transformOrigin: 'center center' }}
                 >
                     {visible.length === 0 ? (
                         <div className="px-4 text-center text-[10px]" style={{ color: ink }}>
                             This template has every component switched off.
                         </div>
                     ) : (
-                        visible.map((key) => <div key={key}>{blocks[key]}</div>)
+                        visible.map((key) => (
+                            <div key={key} style={{ zoom: blockZoom(key) }}>
+                                {blocks[key]}
+                            </div>
+                        ))
                     )}
                 </div>
             </div>

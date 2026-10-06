@@ -87,12 +87,20 @@ async function withInlinedImages<T>(node: HTMLElement, capture: () => Promise<T>
 
     const originalImgSrc = new Map<HTMLImageElement, string>();
     const originalBg = new Map<HTMLElement, string>();
+    const originalFilter = new Map<HTMLImageElement, string>();
 
     try {
         await Promise.all([
             ...imgs.map(async (img) => {
                 originalImgSrc.set(img, img.src);
-                img.src = await toDataUri(img.src, cache);
+                const inlined = await toDataUri(img.src, cache);
+                // `data-tint`: the card draws this image in one colour.
+                const tinted = img.dataset.tint ? await tintDataUri(inlined, img.dataset.tint) : null;
+                if (tinted) {
+                    originalFilter.set(img, img.style.filter);
+                    img.style.filter = 'none';
+                }
+                img.src = tinted ?? inlined;
             }),
             ...bgEls.map(async (el) => {
                 const original = el.style.backgroundImage;
@@ -112,7 +120,43 @@ async function withInlinedImages<T>(node: HTMLElement, capture: () => Promise<T>
         // Restored even if the capture threw partway through, or the card the
         // user is still looking at would be left holding data URIs.
         for (const [img, src] of originalImgSrc) img.src = src;
+        for (const [img, filter] of originalFilter) img.style.filter = filter;
         for (const [el, bg] of originalBg) el.style.backgroundImage = bg;
+    }
+}
+
+/**
+ * A data-URI image redrawn in ONE colour — what the card's Border Color and
+ * Decoration Color do on screen with an SVG filter.
+ *
+ * The filter is a reference to an element elsewhere in the page
+ * (`filter: url(#…)`), and whether that reference survives the page being
+ * re-rendered as an image is up to the browser. Baking the colour into the
+ * pixels at capture time does not depend on it. Returns null when the image
+ * cannot be read (it was not inlined), and the filter is then left in place.
+ */
+async function tintDataUri(src: string, colour: string): Promise<string | null> {
+    if (!src.startsWith('data:')) return null;
+    try {
+        const image = new Image();
+        image.src = src;
+        await image.decode();
+        // An SVG with no size of its own reports 0 — draw it at card size.
+        const width = image.naturalWidth || 1080;
+        const height = image.naturalHeight || 1920;
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return null;
+        ctx.drawImage(image, 0, 0, width, height);
+        // Keep the drawing's shape (its alpha), replace its colour.
+        ctx.globalCompositeOperation = 'source-in';
+        ctx.fillStyle = colour;
+        ctx.fillRect(0, 0, width, height);
+        return canvas.toDataURL('image/png');
+    } catch {
+        return null;
     }
 }
 

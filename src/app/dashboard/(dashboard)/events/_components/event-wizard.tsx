@@ -218,9 +218,12 @@ type ComponentKey = (typeof COMPONENT_KEYS)[number];
  * The QR code is ON BY DEFAULT — it starts on whatever the template says —
  * and the client may switch it off.
  *
- * One section has no switch here: the decorations (the admin's choice per
- * template). The Component Order list shows the same eight, so the two lists
- * match; the decorations keep the place the template gave them, and a merged
+ * The client gets the SAME rows the admin's template builder shows for that
+ * template (Jamal, 2026-10-06), and may switch each on or off and reorder
+ * them: Decoration Elements has NO switch (the admin's builder has none either: it is
+ * on when the template has a decoration), and Event Photos is offered
+ * only on a template that has a picture (Image / Custom) — see
+ * `shownSwitches`. The Component Order list shows the same rows; a merged
  * pair moves together.
  */
 const COMPONENT_SWITCHES: { label: string; keys: ComponentKey[] }[] = [
@@ -581,6 +584,15 @@ export function EventWizard({
     const photosOn =
         compOverride?.event_photos ??
         !!Number(opts?.templates?.find((t) => t.code === form.theme_id)?.components?.event_photos ?? 1);
+    // Event Photos is offered on a CUSTOM template only (Jamal, 2026-10-06):
+    // that is the one type where the host adds a picture of their own, and the
+    // switch shows or hides it. On every other type there is no photo to show
+    // — the card no longer draws photo boxes — so the switch would do nothing.
+    const templateType = opts?.templates?.find((t) => t.code === form.theme_id)?.background_type;
+    const photosOffered = templateType === "custom";
+    const shownSwitches = COMPONENT_SWITCHES.filter(
+        (item) => photosOffered || !item.keys.includes("event_photos")
+    );
     const artwork = resolveArtwork(form.theme_id, opts?.templates, photosOn ? form.custom_image : null);
     const selectedTheme = artwork.kind === "legacy" ? artwork.theme : undefined;
 
@@ -670,7 +682,10 @@ export function EventWizard({
         }
     }
     /** The seven, in the order they appear on the card. */
-    const orderedSwitches = orderUnits.filter((u): u is { label: string; keys: ComponentKey[] } => u.label !== null);
+    const orderedSwitches = orderUnits.filter(
+        (u): u is { label: string; keys: ComponentKey[] } =>
+            u.label !== null && shownSwitches.some((item) => item.label === u.label)
+    );
 
     /** Drop the dragged switch in front of `target`; the rest keep their place. */
     const moveSwitch = (target: string) => {
@@ -1785,7 +1800,7 @@ export function EventWizard({
                                         </div>
 
                                         <ul className="grid gap-x-6 sm:grid-cols-2">
-                                            {COMPONENT_SWITCHES.map((item) => (
+                                            {shownSwitches.map((item) => (
                                                 <li
                                                     key={item.label}
                                                     className="flex items-center justify-between gap-3 border-b border-border py-2.5"

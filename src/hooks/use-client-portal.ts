@@ -145,6 +145,13 @@ export interface TemplateOption {
     orientation: 'portrait' | 'landscape';
     primary_font: string | null;
     secondary_font: string | null;
+    /** Font sizes as a percentage of the standard size (60-160; 100 = unchanged). */
+    primary_font_size?: number | null;
+    secondary_font_size?: number | null;
+    /** Draw the frame in this one colour; null = the frame's own colours. */
+    frame_color?: string | null;
+    /** Draw the decorations in this one colour; null = their own colours. */
+    decoration_color?: string | null;
     border_style: string | null;
     /**
      * The chosen Frame Style's artwork, resolved server-side.
