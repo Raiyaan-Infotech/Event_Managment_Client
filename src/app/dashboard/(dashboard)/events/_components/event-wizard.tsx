@@ -555,12 +555,10 @@ export function EventWizard({
         [designTemplates, styleFilter]
     );
 
-    // The picture is asked for while the Custom type is being browsed, or the
-    // selected tile ON SCREEN is a custom one — never beside Color / Image /
-    // Gradient tiles it has nothing to do with.
-    const customImageAsked =
-        styleFilter === "custom" ||
-        styleFilteredTemplates.find((t) => t.code === form.theme_id)?.background_type === "custom";
+    // The picture is asked for ONLY while Template Type is set to Custom
+    // (Jamal, 2026-10-07) — not on All Types, and not on Color / Image /
+    // Gradient, whatever template happens to be selected.
+    const customImageAsked = styleFilter === "custom";
 
     // The style filter only makes sense within the current category's
     // catalogue — switching categories (or a plan change) can leave it
@@ -1576,9 +1574,8 @@ export function EventWizard({
                                           2026-10-07), as a third control in this
                                           row, the dropdowns' size (2026-10-07).
                                           No preview of its own: every custom tile
-                                          below draws the picture. Shown while the
-                                          Custom type is being browsed, or the
-                                          selected tile on screen is a custom one.
+                                          below draws the picture. Shown ONLY while
+                                          Template Type is Custom.
                                         */}
                                         {customImageAsked && (
                                             <CustomImageButton
