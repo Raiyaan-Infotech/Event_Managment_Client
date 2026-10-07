@@ -106,21 +106,16 @@ export function isDarkTemplate(t: TemplateOption): boolean {
  */
 /**
  * On a custom-type template the host's picture IS the event photo: it fills
- * the card, so the separate Event Photos block is not drawn on top of it, and
- * the **Event Photos** switch is what shows or hides it (Jamal, 2026-10-05).
- * Switched off, the template's own picture comes back.
+ * the card, and it is ALWAYS drawn (Jamal, 2026-10-07) — the Event Photos
+ * switch that used to hide it is gone, so an older event saved with that
+ * switch off shows its picture again.
  *
- * Returns the picture to hand to `resolveArtwork`, or null when the event's
- * own switches have Event Photos off. An event that follows its template
- * (`components` null) shows it.
+ * Returns the picture to hand to `resolveArtwork`.
  */
 export function eventCustomImage(event: {
     custom_image?: string | null;
-    components?: Record<string, number | boolean> | null;
 }): string | null {
-    if (!event.custom_image) return null;
-    const photos = event.components?.event_photos;
-    return photos === undefined || !!Number(photos) ? event.custom_image : null;
+    return event.custom_image || null;
 }
 
 export function resolveArtwork(

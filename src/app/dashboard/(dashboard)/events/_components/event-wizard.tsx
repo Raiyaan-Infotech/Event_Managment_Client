@@ -222,13 +222,13 @@ type ComponentKey = (typeof COMPONENT_KEYS)[number];
  * The client gets the SAME rows the admin's template builder shows for that
  * template (Jamal, 2026-10-06), and may switch each on or off and reorder
  * them: Decoration Elements has NO switch (the admin's builder has none either: it is
- * on when the template has a decoration), and Event Photos is offered
- * only on a template that has a picture (Image / Custom) — see
- * `shownSwitches`. The Component Order list shows the same rows; a merged
- * pair moves together.
+ * on when the template has a decoration), and neither has Event Photos
+ * (Jamal, 2026-10-07): on a Custom template the host MUST upload their own
+ * picture and it is always drawn; every other type's picture comes from the
+ * template. The Component Order list shows the same rows; a merged pair
+ * moves together.
  */
 const COMPONENT_SWITCHES: { label: string; keys: ComponentKey[] }[] = [
-    { label: "Event Photos", keys: ["event_photos"] },
     { label: "Title & Names", keys: ["event_title", "host_names"] },
     { label: "Invitation Message", keys: ["invitation_message"] },
     { label: "Date & Time", keys: ["date_time"] },
@@ -555,6 +555,13 @@ export function EventWizard({
         [designTemplates, styleFilter]
     );
 
+    // The picture is asked for while the Custom type is being browsed, or the
+    // selected tile ON SCREEN is a custom one — never beside Color / Image /
+    // Gradient tiles it has nothing to do with.
+    const customImageAsked =
+        styleFilter === "custom" ||
+        styleFilteredTemplates.find((t) => t.code === form.theme_id)?.background_type === "custom";
+
     // The style filter only makes sense within the current category's
     // catalogue — switching categories (or a plan change) can leave it
     // pointing at a style no longer on offer, which would silently hide
@@ -579,25 +586,15 @@ export function EventWizard({
      * a blank card. What changed is that step 4 no longer OFFERS those — the
      * fallback is for rendering history, not for picking something new.
      */
-    // On a custom template the Event Photos switch shows or hides the host's
-    // own picture (see `eventCustomImage`). Read from the override directly:
-    // the effective switches are worked out FROM the artwork, further down.
-    const photosOn =
-        compOverride?.event_photos ??
-        !!Number(opts?.templates?.find((t) => t.code === form.theme_id)?.components?.event_photos ?? 1);
-    // Event Photos is offered on a CUSTOM template only (Jamal, 2026-10-06):
-    // that is the one type where the host adds a picture of their own, and the
-    // switch shows or hides it. On every other type there is no photo to show
-    // — the card no longer draws photo boxes — so the switch would do nothing.
-    const templateType = opts?.templates?.find((t) => t.code === form.theme_id)?.background_type;
     // What the Primary Colour's Reset goes back to.
     const templatePrimary =
         opts?.templates?.find((t) => t.code === form.theme_id)?.secondary_color || PRIMARY_SWATCHES[0];
-    const photosOffered = templateType === "custom";
-    const shownSwitches = COMPONENT_SWITCHES.filter(
-        (item) => photosOffered || !item.keys.includes("event_photos")
-    );
-    const artwork = resolveArtwork(form.theme_id, opts?.templates, photosOn ? form.custom_image : null);
+    // A CUSTOM template is the one type the host adds a picture to — and must
+    // (Jamal, 2026-10-07). It is always drawn; there is no switch for it.
+    const isCustomTemplate =
+        opts?.templates?.find((t) => t.code === form.theme_id)?.background_type === "custom";
+    const shownSwitches = COMPONENT_SWITCHES;
+    const artwork = resolveArtwork(form.theme_id, opts?.templates, form.custom_image);
     const selectedTheme = artwork.kind === "legacy" ? artwork.theme : undefined;
 
     /**
@@ -791,6 +788,15 @@ export function EventWizard({
             if (!form.start_time) next.start_time = true;
             if (!form.end_time) next.end_time = true;
             if (!form.cover_image) next.cover_image = true;
+        }
+        if (target > 4) {
+            if (isCustomTemplate && !form.custom_image) {
+                next.custom_image = true;
+                // The upload control shows while Custom is being browsed —
+                // the filters may have been left on another type.
+                setDesignFilter(ALL_STYLES);
+                setStyleFilter("custom");
+            }
         }
         if (Object.keys(next).length) {
             setErrors(next);
@@ -1564,6 +1570,23 @@ export function EventWizard({
                                                 </SelectContent>
                                             </Select>
                                         </div>
+                                        {/*
+                                          The host's own picture for a CUSTOM
+                                          template (Jamal, 2026-10-05; required
+                                          2026-10-07), as a third control in this
+                                          row, the dropdowns' size (2026-10-07).
+                                          No preview of its own: every custom tile
+                                          below draws the picture. Shown while the
+                                          Custom type is being browsed, or the
+                                          selected tile on screen is a custom one.
+                                        */}
+                                        {customImageAsked && (
+                                            <CustomImageButton
+                                                value={form.custom_image}
+                                                onChange={(url) => setField("custom_image", url)}
+                                                error={errors.custom_image}
+                                            />
+                                        )}
                                     </div>
                                 )}
 
@@ -1619,10 +1642,14 @@ export function EventWizard({
                                                             a style word, which made every template
                                                             in the plan look like the same swatch. */}
                                                         <TemplateArtwork
-                                                            // The chosen tile draws the host's own
-                                                            // picture once one is added, so the
-                                                            // upload below visibly lands on it.
-                                                            template={active && artwork.kind === "template" ? artwork.template : t}
+                                                            // EVERY custom tile draws the host's own
+                                                            // picture once one is added — it is what
+                                                            // each of them would look like if picked.
+                                                            template={
+                                                                t.background_type === "custom" && form.custom_image
+                                                                    ? { ...t, background_image: form.custom_image }
+                                                                    : t
+                                                            }
                                                             data={invitationData}
                                                             className="inset-2"
                                                             cardClassName="rounded-[3px] shadow-sm"
@@ -1683,35 +1710,6 @@ export function EventWizard({
                                         <p className="mt-3 text-[11.5px] text-muted-foreground/80">
                                             You can still continue — a template can be chosen later by editing the event.
                                         </p>
-                                    </div>
-                                )}
-
-                                {/*
-                                  A CUSTOM-type template is a picture masked to a
-                                  shape, so choosing one asks for the host's own
-                                  picture (Jamal, 2026-10-05). Only then — the
-                                  other three types have nothing to put one in.
-                                  Optional: left empty, the template's own picture
-                                  stays. Cropped tall, the shape of the invitation
-                                  on a phone, so what is uploaded is what shows.
-                                  Looked up in the FILTERED list: with the filters
-                                  moved to another type the selected custom tile
-                                  is not on screen, and the uploader would sit
-                                  under templates it has nothing to do with.
-                                */}
-                                {styleFilteredTemplates.find((t) => t.code === form.theme_id)?.background_type === "custom" && (
-                                    <div className="mt-6 w-fit max-w-full self-start rounded-md border border-primary/30 bg-primary/5 p-4 sm:max-w-md">
-                                        <CoverImageField
-                                            value={form.custom_image}
-                                            onChange={(url) => setField("custom_image", url)}
-                                            label="Your Image for this Template"
-                                            required={false}
-                                            hint="This is a custom template — add your own picture and it is placed inside the template's shape. JPG, PNG or WEBP, cropped to the invitation's shape. Leave it empty to keep the template's own picture."
-                                            aspect={9 / 16}
-                                            outputSize={1080}
-                                            previewClassName="aspect-[9/16] max-w-[180px]"
-                                            cropTitle="Crop your image"
-                                        />
                                     </div>
                                 )}
 
@@ -2433,6 +2431,80 @@ function CoverImageField({
                 aspect={aspect}
                 outputSize={outputSize}
                 title={cropTitle}
+                onCropped={(cropped) => {
+                    setPicked(null);
+                    upload.mutate(cropped, { onSuccess: onChange });
+                }}
+            />
+        </div>
+    );
+}
+
+/**
+ * The host's own picture for a custom template, as one control the size of
+ * the filter dropdowns beside it: Upload / Change, a thumbnail of what is
+ * there, and the same crop (tall, the invitation's shape) as before.
+ * No Remove — the picture is required on a custom template.
+ */
+function CustomImageButton({
+    value, onChange, error,
+}: { value: string; onChange: (url: string) => void; error?: boolean }) {
+    const upload = useUploadEventCover();
+    const inputRef = useRef<HTMLInputElement>(null);
+    const [picked, setPicked] = useState<File | null>(null);
+
+    return (
+        <div className="w-full max-w-[220px]">
+            <Label className="text-[11px] font-medium text-muted-foreground">
+                Your Image <span className="text-destructive">*</span>
+            </Label>
+            <button
+                type="button"
+                disabled={upload.isPending}
+                onClick={() => inputRef.current?.click()}
+                className={cn(
+                    "flex h-9 w-full items-center gap-2 rounded-md border border-input bg-transparent px-3 text-left text-[12.5px] shadow-xs transition-colors hover:bg-muted/40 disabled:opacity-60",
+                    error && "border-destructive"
+                )}
+            >
+                {upload.isPending ? (
+                    <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />
+                ) : value ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={value} alt="" className="h-6 w-6 shrink-0 rounded object-cover" />
+                ) : (
+                    <Upload className="size-4 shrink-0 text-muted-foreground" />
+                )}
+                <span className="min-w-0 flex-1 truncate">
+                    {upload.isPending ? "Uploading…" : value ? "Change Image" : "Upload Image"}
+                </span>
+            </button>
+            {error && <p className="mt-1 text-[11.5px] text-destructive">This field is required.</p>}
+            <input
+                ref={inputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    // Reset FIRST, so re-picking the same file after cancelling a
+                    // crop still fires `change`.
+                    e.target.value = "";
+                    if (!file) return;
+                    if (file.size > 25 * 1024 * 1024) {
+                        toast.error("That image is larger than 25MB.");
+                        return;
+                    }
+                    setPicked(file);
+                }}
+            />
+            <ImageCropDialog
+                file={picked}
+                open={picked !== null}
+                onOpenChange={(o) => { if (!o) setPicked(null); }}
+                aspect={9 / 16}
+                outputSize={1080}
+                title="Crop your image"
                 onCropped={(cropped) => {
                     setPicked(null);
                     upload.mutate(cropped, { onSuccess: onChange });
