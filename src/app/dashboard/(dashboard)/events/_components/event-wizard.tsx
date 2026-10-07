@@ -1690,8 +1690,12 @@ export function EventWizard({
                                   Optional: left empty, the template's own picture
                                   stays. Cropped tall, the shape of the invitation
                                   on a phone, so what is uploaded is what shows.
+                                  Looked up in the FILTERED list: with the filters
+                                  moved to another type the selected custom tile
+                                  is not on screen, and the uploader would sit
+                                  under templates it has nothing to do with.
                                 */}
-                                {dbTemplates.find((t) => t.code === form.theme_id)?.background_type === "custom" && (
+                                {styleFilteredTemplates.find((t) => t.code === form.theme_id)?.background_type === "custom" && (
                                     <div className="mt-6 w-fit max-w-full self-start rounded-md border border-primary/30 bg-primary/5 p-4 sm:max-w-md">
                                         <CoverImageField
                                             value={form.custom_image}
