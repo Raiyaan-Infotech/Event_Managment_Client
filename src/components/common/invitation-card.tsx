@@ -453,6 +453,16 @@ export function InvitationCard({
         ? toHexString(readableOn(rgbTriple(data.primaryColor)!, effective))
         : ink;
 
+    /**
+     * The QR code is drawn in the client's Primary Colour too (Jamal,
+     * 2026-10-07). It sits on its own WHITE tile whatever the design, so the
+     * colour is darkened against white until 7:1 — a pale code does not scan.
+     * No colour picked = black, as before.
+     */
+    const qrColour = data.primaryColor && rgbTriple(data.primaryColor)
+        ? toHexString(readableOn(rgbTriple(data.primaryColor)!, [255, 255, 255], 7))
+        : '#000000';
+
     const date = splitDate(data.startDate);
     const start = hhmm(data.startTime);
     const end = hhmm(data.endTime);
@@ -551,10 +561,9 @@ export function InvitationCard({
                   fit its box and exported at 3x for print, and a vector survives
                   both. A canvas would be resampled twice.
 
-                  Black on white regardless of the invitation's palette, and it
-                  keeps its own white tile on a dark design — an inverted or
-                  tinted QR is rejected by most scanners, so this is the one
-                  element that does NOT follow the template's colours.
+                  Always on its own white tile, even on a dark design — an
+                  inverted QR is rejected by most scanners. The modules are the
+                  client's Primary Colour, darkened to scan (`qrColour`).
                 */}
                 <div className="flex h-14 w-14 items-center justify-center rounded-sm border bg-white"
                     style={{ borderColor: accentLine }}>
@@ -562,6 +571,7 @@ export function InvitationCard({
                         value={data.qrToken || PREVIEW_QR_VALUE}
                         size={56}
                         qrStyle={toQrStyle(data.qrStyle)}
+                        color={qrColour}
                         // Lowest error correction: the token is ~300 characters, which
                         // at level M needs an 85-module grid drawn in a 56px box —
                         // under a pixel per module on screen and too fine to scan off

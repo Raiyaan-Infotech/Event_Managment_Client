@@ -16,6 +16,7 @@ import {
     faEnvelope,
     faPalette,
     faGripVertical,
+    faRotateLeft,
 } from "@fortawesome/free-solid-svg-icons";
 import { faWhatsapp as faWhatsappBrand } from "@fortawesome/free-brands-svg-icons";
 import { ChevronDown, ChevronUp, Loader2, Upload, X } from "lucide-react";
@@ -589,6 +590,9 @@ export function EventWizard({
     // switch shows or hides it. On every other type there is no photo to show
     // — the card no longer draws photo boxes — so the switch would do nothing.
     const templateType = opts?.templates?.find((t) => t.code === form.theme_id)?.background_type;
+    // What the Primary Colour's Reset goes back to.
+    const templatePrimary =
+        opts?.templates?.find((t) => t.code === form.theme_id)?.secondary_color || PRIMARY_SWATCHES[0];
     const photosOffered = templateType === "custom";
     const shownSwitches = COMPONENT_SWITCHES.filter(
         (item) => photosOffered || !item.keys.includes("event_photos")
@@ -1721,7 +1725,7 @@ export function EventWizard({
                                         about the design behind it. */}
                                     <p className="mb-1 mt-6 text-[12.5px] font-semibold text-foreground">Primary Colour</p>
                                     <p className="mb-3 text-[12px] text-muted-foreground">
-                                        Used for the names printed on your invitation.
+                                        Used for the names and the QR code printed on your invitation.
                                     </p>
                                 <div className="flex flex-wrap items-center gap-3">
                                     {PRIMARY_SWATCHES.map((c) => (
@@ -1755,6 +1759,19 @@ export function EventWizard({
                                             aria-label="Custom primary colour"
                                         />
                                     </label>
+                                    {/* Back to the colour the selected template
+                                        starts with (what clicking its tile sets);
+                                        the first swatch when it has none. Always
+                                        shown, greyed when there is nothing to undo. */}
+                                    <button
+                                        type="button"
+                                        onClick={() => setField("primary_color", templatePrimary)}
+                                        disabled={form.primary_color.toLowerCase() === templatePrimary.toLowerCase()}
+                                        className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-3 text-[12.5px] font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                        <FontAwesomeIcon icon={faRotateLeft} className="!size-[11px]" />
+                                        Reset
+                                    </button>
                                 </div>
                                 </div>
 

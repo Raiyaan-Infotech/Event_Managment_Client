@@ -37,12 +37,18 @@ interface StyledQrSvgProps {
     level?: QrLevel;
     /** Quiet zone, in modules. Drawn inside the code so it scales with it. */
     marginSize?: number;
+    /**
+     * Colour of the modules. The tile behind them is always white, so the
+     * caller must pass a shade DARK enough to scan against white.
+     */
+    color?: string;
     style?: CSSProperties;
 }
 
 /**
- * A QR code as a single vector `<svg>`, black on white regardless of theme —
- * an inverted or tinted code is rejected by most scanners.
+ * A QR code as a single vector `<svg>`, dark on white regardless of theme —
+ * an inverted or pale code is rejected by most scanners. Black unless the
+ * caller passes a `color`.
  */
 export function StyledQrSvg({
     value,
@@ -50,6 +56,7 @@ export function StyledQrSvg({
     qrStyle = 0,
     level = 'M',
     marginSize = 2,
+    color = '#000000',
     style,
 }: StyledQrSvgProps) {
     const shape = useMemo(() => {
@@ -89,22 +96,22 @@ export function StyledQrSvg({
             style={style}
         >
             <rect width={total} height={total} fill="#ffffff" />
-            {squares && <path d={squares} fill="#000000" />}
+            {squares && <path d={squares} fill={color} />}
             {dots.map(([x, y]) => (
-                <circle key={`${x}-${y}`} cx={x + 0.5} cy={y + 0.5} r={0.5} fill="#000000" />
+                <circle key={`${x}-${y}`} cx={x + 0.5} cy={y + 0.5} r={0.5} fill={color} />
             ))}
             {eyes.map(([er, ec]) => {
                 const x = ec + marginSize;
                 const y = er + marginSize;
                 return qrStyle === 1 ? (
                     <g key={`${er}-${ec}`}>
-                        <circle cx={x + 3.5} cy={y + 3.5} r={3} fill="none" stroke="#000000" strokeWidth={1} />
-                        <circle cx={x + 3.5} cy={y + 3.5} r={1.5} fill="#000000" />
+                        <circle cx={x + 3.5} cy={y + 3.5} r={3} fill="none" stroke={color} strokeWidth={1} />
+                        <circle cx={x + 3.5} cy={y + 3.5} r={1.5} fill={color} />
                     </g>
                 ) : (
                     <path
                         key={`${er}-${ec}`}
-                        fill="#000000"
+                        fill={color}
                         fillRule="evenodd"
                         d={`M${x} ${y}h7v7h-7z M${x + 1} ${y + 1}v5h5v-5z M${x + 2} ${y + 2}h3v3h-3z`}
                     />
